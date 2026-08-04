@@ -1,0 +1,22 @@
+{
+  "name": "ngjs-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun esbuild.config.ts",
+    "demo": "bun esbuild.demo.config.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "biome check .",
+    "format": "biome check --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.6",
+    "@types/angular": "^1.8.9",
+    "esbuild": "^0.28.1",
+    "typescript": "~6.0.3"
+  },
+  "dependencies": {
+    "angular": "1.8.3"
+  }
+}

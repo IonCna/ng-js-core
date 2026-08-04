@@ -1,0 +1,168 @@
+<main class="demo-shell">
+    <header class="hero">
+        <p class="eyebrow">ngjs-core playground</p>
+        <h1>Templates y proyección sobre AngularJS</h1>
+        <p>
+            Cada bloque fuerza un escenario distinto del ciclo de vida.
+        </p>
+    </header>
+
+    <ng-template
+        ng-ref="$ctrl.personTemplate"
+        ng-ref-read="ngTemplate"
+        let-person
+        let-position="index"
+        let-title="heading"
+    >
+        <article class="rendered-template rendered-template--let">
+            <span class="template-kind">{{title}}</span>
+            <strong>{{person.name}}</strong>
+            <span>{{person.role}}</span>
+            <span>Posición: {{position}}</span>
+        </article>
+    </ng-template>
+
+    <section class="test-card test-card--featured">
+        <div class="test-heading">
+            <div>
+                <span class="step">Escenario 1</span>
+                <h2>Variables locales con let-*</h2>
+            </div>
+            <span class="status">Aliases del contexto</span>
+        </div>
+
+        <p>
+            Este caso valida <code>let-person</code> y propiedades nombradas mediante
+            <code>let-position="index"</code> y
+            <code>let-title="heading"</code>.
+        </p>
+
+        <div class="outlet-grid">
+            <div
+                ng-template-outlet="$ctrl.personTemplate"
+                ng-template-outlet-context="$ctrl.firstPersonContext"
+            ></div>
+            <div
+                ng-template-outlet="$ctrl.personTemplate"
+                ng-template-outlet-context="$ctrl.secondPersonContext"
+            ></div>
+        </div>
+
+        <p class="expectation">
+            Deben aparecer Ada/1 y Grace/2. <code>person</code> debe tomar el valor de
+            <code>$implicit</code> en cada contexto.
+        </p>
+    </section>
+
+    <ng-template ng-ref="$ctrl.primaryTemplate" ng-ref-read="ngTemplate">
+        <article class="rendered-template rendered-template--primary">
+            <span class="template-kind">Template principal</span>
+            <strong>{{$implicit}}</strong>
+            <span>Conteo: {{count}}</span>
+        </article>
+    </ng-template>
+
+    <ng-template ng-ref="$ctrl.alternateTemplate" ng-ref-read="ngTemplate">
+        <article class="rendered-template rendered-template--alternate">
+            <span class="template-kind">Template alternativo</span>
+            <strong>{{$implicit}}</strong>
+            <span>Conteo alternativo: {{count}}</span>
+        </article>
+    </ng-template>
+
+    <section class="test-card">
+        <div class="test-heading">
+            <div>
+                <span class="step">Escenario 2</span>
+                <h2>Captura sin render inicial</h2>
+            </div>
+            <span class="status status--pass">Esperado: ambos ocultos arriba</span>
+        </div>
+        <p>
+            Los dos <code>&lt;ng-template&gt;</code> se capturan como referencias y no
+            deben producir contenido por sí mismos.
+        </p>
+    </section>
+
+    <section class="test-card">
+        <div class="test-heading">
+            <div>
+                <span class="step">Escenario 3</span>
+                <h2>Cambio dinámico y destrucción</h2>
+            </div>
+            <span class="status">Template/contexto reactivos</span>
+        </div>
+
+        <div class="controls">
+            <button type="button" ng-click="$ctrl.usePrimaryTemplate()">Principal</button>
+            <button type="button" ng-click="$ctrl.useAlternateTemplate()">Alternativo</button>
+            <button type="button" ng-click="$ctrl.replaceContext()">Reemplazar contexto</button>
+            <button type="button" ng-click="$ctrl.clearTemplate()">Template nulo</button>
+            <button type="button" ng-click="$ctrl.toggleOutlet()">
+                {{$ctrl.showOutlet ? "Destruir outlet" : "Crear outlet"}}
+            </button>
+        </div>
+
+        <div class="outlet-stage" ng-if="$ctrl.showOutlet">
+            <div
+                class="outlet-anchor"
+                ng-template-outlet="$ctrl.activeTemplate"
+                ng-template-outlet-context="$ctrl.outletContext"
+            ></div>
+        </div>
+
+        <p class="expectation">
+            Debe existir una sola vista. Cambiar template o contexto debe reemplazarla;
+            “Template nulo” y “Destruir outlet” deben retirarla completamente.
+        </p>
+    </section>
+
+    <section class="test-card">
+        <div class="test-heading">
+            <div>
+                <span class="step">Escenario 4</span>
+                <h2>Dos vistas del mismo template</h2>
+            </div>
+            <span class="status">Scopes independientes</span>
+        </div>
+
+        <div class="outlet-grid">
+            <div ng-template-outlet="$ctrl.primaryTemplate"
+                 ng-template-outlet-context="{ $implicit: 'Instancia A', count: 10 }"></div>
+            <div ng-template-outlet="$ctrl.primaryTemplate"
+                 ng-template-outlet-context="{ $implicit: 'Instancia B', count: 20 }"></div>
+        </div>
+
+        <p class="expectation">
+            Deben aparecer A/10 y B/20 sin que una instancia sobrescriba a la otra.
+        </p>
+    </section>
+
+    <section class="test-card">
+        <div class="test-heading">
+            <div>
+                <span class="step">Escenario 5</span>
+                <h2>Proyección mediante ng-content</h2>
+            </div>
+            <span class="status">Scope del consumidor</span>
+        </div>
+
+        <projection-card title="Contenido proyectado">
+            <p class="projected-message">{{$ctrl.projectionMessage}}</p>
+            <button type="button" ng-click="$ctrl.renameProjection()">
+                Actualizar desde el contenido proyectado
+            </button>
+            <div class="projected-outlet">
+                <div
+                    ng-template-outlet="$ctrl.primaryTemplate"
+                    ng-template-outlet-context="{ $implicit: 'Outlet proyectado', count: 99 }"
+                ></div>
+            </div>
+        </projection-card>
+
+        <p class="expectation">
+            El texto, el botón y el outlet anidado deben seguir usando el controller
+            de esta demo, no el controller interno de la tarjeta.
+        </p>
+    </section>
+</main>
