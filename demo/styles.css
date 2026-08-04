@@ -159,6 +159,36 @@ code {
     background: #dcfce7;
 }
 
+.rendered-template--container {
+    color: #854d0e;
+    background: #fef3c7;
+}
+
+.binding-test {
+    display: grid;
+    gap: 0.6rem;
+    margin-top: 0.5rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #facc15;
+}
+
+.binding-test label {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.binding-test input,
+.binding-test button {
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #d6a814;
+    border-radius: 0.5rem;
+    background: #fff;
+}
+
+.binding-test button {
+    cursor: pointer;
+}
+
 .template-kind {
     font-size: 0.72rem;
     font-weight: 800;

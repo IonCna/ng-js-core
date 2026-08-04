@@ -55,6 +55,59 @@
     </section>
 
     <ng-template
+        ng-ref="$ctrl.containerTemplate"
+        ng-ref-read="ngTemplate"
+        let-message
+        let-count="count"
+    >
+        <article class="rendered-template rendered-template--container">
+            <span class="template-kind">NgContainer + NgTemplateOutlet</span>
+            <strong>{{message}}</strong>
+            <span>Conteo: {{count}}</span>
+            <div class="binding-test">
+                <label>
+                    Binding con el controller
+                    <input type="text" ng-model="$ctrl.containerBoundValue">
+                </label>
+                <span>Eco: {{$ctrl.containerBoundValue}}</span>
+                <button type="button" ng-click="$ctrl.incrementContainerCounter()">
+                    Clicks desde la vista: {{$ctrl.containerClickCount}}
+                </button>
+            </div>
+        </article>
+    </ng-template>
+
+    <section class="test-card">
+        <div class="test-heading">
+            <div>
+                <span class="step">Escenario 2</span>
+                <h2>Outlet sin elemento contenedor</h2>
+            </div>
+            <span class="status">Sin wrapper en el DOM</span>
+        </div>
+
+        <p>
+            El template se instancia declarativamente sobre
+            <code>&lt;ng-container&gt;</code>. Debe renderizar su contenido sin dejar
+            el elemento contenedor en el DOM.
+        </p>
+
+        <div class="outlet-stage">
+            <ng-container
+                ng-template-outlet="$ctrl.containerTemplate"
+                ng-template-outlet-context="$ctrl.containerContext"
+            ></ng-container>
+        </div>
+
+        <p class="expectation">
+            Debe mostrar el mensaje y el conteo 42. Escribir en el input debe
+            actualizar el eco y el botón debe incrementar su contador. Al inspeccionar
+            el DOM no debe existir un elemento
+            <code>&lt;ng-container&gt;</code>.
+        </p>
+    </section>
+
+    <ng-template
         ng-ref="$ctrl.primaryTemplate"
         ng-ref-read="ngTemplate"
         let-message
@@ -83,7 +136,7 @@
     <section class="test-card">
         <div class="test-heading">
             <div>
-                <span class="step">Escenario 2</span>
+                <span class="step">Escenario 3</span>
                 <h2>Captura sin render inicial</h2>
             </div>
             <span class="status status--pass">Esperado: ambos ocultos arriba</span>
@@ -97,7 +150,7 @@
     <section class="test-card">
         <div class="test-heading">
             <div>
-                <span class="step">Escenario 3</span>
+                <span class="step">Escenario 4</span>
                 <h2>Cambio dinámico y destrucción</h2>
             </div>
             <span class="status">Template/contexto reactivos</span>
@@ -130,7 +183,7 @@
     <section class="test-card">
         <div class="test-heading">
             <div>
-                <span class="step">Escenario 4</span>
+                <span class="step">Escenario 5</span>
                 <h2>Dos vistas del mismo template</h2>
             </div>
             <span class="status">Scopes independientes</span>
@@ -151,7 +204,7 @@
     <section class="test-card">
         <div class="test-heading">
             <div>
-                <span class="step">Escenario 5</span>
+                <span class="step">Escenario 6</span>
                 <h2>Proyección mediante ng-content</h2>
             </div>
             <span class="status">Scope del consumidor</span>

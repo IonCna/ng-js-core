@@ -1,6 +1,5 @@
 import type { IComponentController, IComponentOptions } from "angular";
-import type { NgTemplateRef } from "../../src/common/ng-template";
-import { viewChild } from "../../src/core/viewChild";
+import type { TemplateRef } from "../../src/common/ng-template";
 
 interface TemplateContext {
   $implicit: string;
@@ -19,9 +18,10 @@ interface PersonTemplateContext {
 }
 
 export class DemoAppController implements IComponentController {
-  personTemplate!: NgTemplateRef<PersonTemplateContext>;
-  primaryTemplate!: NgTemplateRef<TemplateContext>;
-  alternateTemplate!: NgTemplateRef<TemplateContext>;
+  personTemplate!: TemplateRef<PersonTemplateContext>;
+  containerTemplate!: TemplateRef<TemplateContext>;
+  primaryTemplate!: TemplateRef<TemplateContext>;
+  alternateTemplate!: TemplateRef<TemplateContext>;
 
   readonly firstPersonContext: PersonTemplateContext = {
     $implicit: {
@@ -41,9 +41,16 @@ export class DemoAppController implements IComponentController {
     heading: "Segunda instancia",
   };
 
-  test = viewChild.required("test");
+  readonly containerContext: TemplateContext = {
+    $implicit: "Renderizado desde ng-container",
+    count: 42,
+  };
+  containerBoundValue = "Binding del controller activo";
+  containerClickCount = 0;
 
-  activeTemplate: NgTemplateRef<TemplateContext> | null = null;
+  //test = viewChild.required("test");
+
+  activeTemplate: TemplateRef<TemplateContext> | null = null;
   outletContext: TemplateContext = {
     $implicit: "Contexto inicial",
     count: 1,
@@ -76,6 +83,10 @@ export class DemoAppController implements IComponentController {
 
   toggleOutlet() {
     this.showOutlet = !this.showOutlet;
+  }
+
+  incrementContainerCounter() {
+    this.containerClickCount++;
   }
 
   renameProjection() {

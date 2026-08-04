@@ -6,6 +6,7 @@ await esbuild.build({
   format: "esm",
   outfile: "dist/index.js",
   platform: "browser",
+  external: ["angular"],
   sourcemap: true,
   target: ["es2022"],
 });

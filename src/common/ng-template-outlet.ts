@@ -1,10 +1,10 @@
 import angular, {type IAugmentedJQuery, type IController, type IDirective} from "angular";
-import { NgTemplateRef } from "@/common/ng-template";
-import type {EmbeddedViewRef} from "@/core/refs.ts";
+import { TemplateRef } from "@/common/ng-template";
+import type {EmbeddedViewRef} from "@/core/refs";
 
 export class NgTemplateOutlet<C> implements IController {
     private ngTemplateOutletContext?: C | null = null;
-    private ngTemplateOutlet?: NgTemplateRef<C> | null = null;
+    private ngTemplateOutlet?: TemplateRef<C> | null = null;
 
     private _embedViewRef: EmbeddedViewRef<C> | undefined
     constructor(private $element: IAugmentedJQuery) {}

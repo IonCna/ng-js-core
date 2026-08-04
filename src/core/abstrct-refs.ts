@@ -1,8 +1,9 @@
+import type {ElementRef} from "@/core";
+import type {TemplateRef} from "@/common/ng-template.ts";
+
 export abstract class Refs {
     abstract markForCheck(): void;
-    abstract detach(): void;
     abstract detectChanges(): void;
-    abstract reattach(): void;
 }
 
 export abstract class ViewRef extends Refs {
@@ -10,9 +11,7 @@ export abstract class ViewRef extends Refs {
     abstract readonly destroyed: boolean;
     abstract onDestroy(callback: Function): void;
     abstract override markForCheck(): void;
-    abstract override detach(): void;
     abstract override detectChanges(): void;
-    abstract override reattach(): void;
 }
 
 export abstract class EmbeddedViewRef<C = ContextObject> extends ViewRef {
@@ -22,9 +21,20 @@ export abstract class EmbeddedViewRef<C = ContextObject> extends ViewRef {
     abstract override readonly destroyed: boolean;
     abstract override onDestroy(callback: Function): void;
     abstract override markForCheck(): void;
-    abstract override detach(): void;
     abstract override detectChanges(): void;
-    abstract override reattach(): void;
+}
+
+export abstract class ViewContainerRef {
+    abstract readonly element: ElementRef;
+    abstract clear(): void;
+    abstract get(index: number): ViewRef | null;
+    abstract readonly length: number;
+    abstract createEmbeddedView<C>(templateRef: TemplateRef<C>, context?: C | undefined, options?: { index?: number | undefined; } | undefined): EmbeddedViewRef<C>;
+    abstract createEmbeddedView<C>(templateRef: TemplateRef<C>, context?: C | undefined, index?: number | undefined): EmbeddedViewRef<C>;
+    abstract insert(viewRef: ViewRef, index?: number | undefined): ViewRef;
+    abstract move(viewRef: ViewRef, currentIndex: number): ViewRef;
+    abstract indexOf(viewRef: ViewRef): number;
+    abstract remove(index?: number | undefined): void;
 }
 
 export interface ContextObject {

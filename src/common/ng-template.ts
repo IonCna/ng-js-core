@@ -6,9 +6,9 @@ import angular, {
     type ITranscludeFunction
 } from "angular";
 import { EmbeddedViewRef } from "@/core/refs"
-import type {ContextObject} from "@/core/abstrct-refs.ts";
+import type {ContextObject} from "@/core/abstrct-refs";
 
-export class NgTemplateRef<C = ContextObject> implements IController {
+export class TemplateRef<C = ContextObject> implements IController {
     private declarations!: Map<string, string>
     private static DECLARATION_PREFIX = "let"
 
@@ -48,9 +48,9 @@ export class NgTemplateRef<C = ContextObject> implements IController {
         const declarationMap = new Map<string, string>()
 
         for (const [name, value] of Object.entries(attrs)) {
-            if(!name.startsWith(NgTemplateRef.DECLARATION_PREFIX)) continue;
+            if(!name.startsWith(TemplateRef.DECLARATION_PREFIX)) continue;
 
-            let start = NgTemplateRef.DECLARATION_PREFIX.length;
+            let start = TemplateRef.DECLARATION_PREFIX.length;
             const nameWithoutPrefix = name.slice(start)
 
             if(!nameWithoutPrefix) continue
@@ -66,7 +66,7 @@ export class NgTemplateRef<C = ContextObject> implements IController {
 
         return {
             pre: (_scope, _el, _attrs, ctrl) => {
-                const templateRef = ctrl as NgTemplateRef
+                const templateRef = ctrl as TemplateRef
                 templateRef.registerDeclarationMap(declarationMap)
             }
         }
@@ -74,12 +74,11 @@ export class NgTemplateRef<C = ContextObject> implements IController {
 
     static $factory(): IDirective {
         return {
-            controller: NgTemplateRef,
+            controller: TemplateRef,
             bindToController: true,
             restrict: "E",
-            compile: NgTemplateRef.compileFn,
-            transclude: true,
-            priority: -2,
+            compile: TemplateRef.compileFn,
+            transclude: "element",
         }
     }
 }
