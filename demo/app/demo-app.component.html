@@ -54,18 +54,28 @@
         </p>
     </section>
 
-    <ng-template ng-ref="$ctrl.primaryTemplate" ng-ref-read="ngTemplate">
+    <ng-template
+        ng-ref="$ctrl.primaryTemplate"
+        ng-ref-read="ngTemplate"
+        let-message
+        let-count="count"
+    >
         <article class="rendered-template rendered-template--primary">
             <span class="template-kind">Template principal</span>
-            <strong>{{$implicit}}</strong>
+            <strong>{{message}}</strong>
             <span>Conteo: {{count}}</span>
         </article>
     </ng-template>
 
-    <ng-template ng-ref="$ctrl.alternateTemplate" ng-ref-read="ngTemplate">
+    <ng-template
+        ng-ref="$ctrl.alternateTemplate"
+        ng-ref-read="ngTemplate"
+        let-message
+        let-count="count"
+    >
         <article class="rendered-template rendered-template--alternate">
             <span class="template-kind">Template alternativo</span>
-            <strong>{{$implicit}}</strong>
+            <strong>{{message}}</strong>
             <span>Conteo alternativo: {{count}}</span>
         </article>
     </ng-template>

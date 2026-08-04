@@ -23,7 +23,7 @@ export class NgTemplateRef<C = ContextObject> implements IController {
 
     public createEmbeddedView(context: C, scope?: IScope): EmbeddedViewRef<C> {
         const targetScope = (scope ?? this.$scope).$new()
-        const locals: Record<string, string> = {}
+        const locals: Record<string, string> = Object.create(null)
 
         angular.extend(locals, context)
 
@@ -47,36 +47,28 @@ export class NgTemplateRef<C = ContextObject> implements IController {
     private static compileFn: IDirectiveCompileFn = (_el, attrs) => {
         const declarationMap = new Map<string, string>()
 
-        let implicitUsed = false
-
-        const markAsImplicit = () => {
-            if(implicitUsed) return
-            implicitUsed = true
-        }
-
         for (const [name, value] of Object.entries(attrs)) {
             if(!name.startsWith(NgTemplateRef.DECLARATION_PREFIX)) continue;
-            const [firstChar] = name
-            const [, ...body] = name
+
+            let start = NgTemplateRef.DECLARATION_PREFIX.length;
+            const nameWithoutPrefix = name.slice(start)
+
+            if(!nameWithoutPrefix) continue
+
+            const [firstChar] = nameWithoutPrefix
+            const [, ...body] = nameWithoutPrefix
 
             const normalized = firstChar.toLowerCase() + body.join("")
-
             if(!normalized.length) continue
 
-            if(!value && !implicitUsed) {
-                declarationMap.set("$implicit", normalized);
-                markAsImplicit()
-                continue
-            }
-
-            declarationMap.set(value, normalized)
+            declarationMap.set(normalized, value || "$implicit")
         }
 
         return {
             pre: (_scope, _el, _attrs, ctrl) => {
                 const templateRef = ctrl as NgTemplateRef
                 templateRef.registerDeclarationMap(declarationMap)
-            },
+            }
         }
     }
 
