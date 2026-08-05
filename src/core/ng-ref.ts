@@ -1,44 +1,69 @@
 import type {IDirective, IDirectiveCompileFn, IParseService} from "angular";
+import type {TemplateRef} from "@/common";
+import type {ViewContainerRef} from "@/core/refs";
+import {ElementRef} from "@/core";
 
-class TemplateNgRef implements IDirective{
+class TemplateNgRef implements IDirective {
     private static TEMPLATE_REF_NODE_NAME = "ng-template"
+    private static CONTAINER_REF_NODE_NAME = "ng-container";
 
-   static $compileFn($parse: IParseService): IDirectiveCompileFn {
-     return (el, attrs) => {
-       const [native] = Array.from(el)
-       const nodeName = native.nodeName.toLowerCase();
+    static $compileFn($parse: IParseService): IDirectiveCompileFn {
+        return (el, attrs) => {
+            const [native] = Array.from(el)
+            const nodeName = native.nodeName.toLowerCase();
 
-       if(nodeName != TemplateNgRef.TEMPLATE_REF_NODE_NAME) return;
+            const isTemplate = nodeName == TemplateNgRef.TEMPLATE_REF_NODE_NAME;
+            const isContainer = nodeName == TemplateNgRef.CONTAINER_REF_NODE_NAME;
 
-       const getter = $parse(attrs.ngRef);
-       const setter = getter.assign
+            if (!isTemplate && !isContainer) return;
 
-       if(!setter) return;
+            const read = attrs.ngRefRead;
+            const getter = $parse(attrs.ngRef);
+            const setter = getter.assign
 
-       el.removeAttr("ng-ref")
-       el.removeAttr("ng-ref-read")
+            if (!setter) return;
 
-       return {
-           pre: (scope, _anchor, _attrs, templateRef) => {
-               setter(scope, templateRef);
+            el.removeAttr("ng-ref")
+            el.removeAttr("ng-ref-read")
 
-               scope.$on("$destroy", () => {
-                   const isCtrl = getter(scope) == templateRef;
-                   if(!isCtrl) return;
+            return {
+                pre: (scope, _el, _attrs, controllers) => {
+                    const nativeEl = new ElementRef(native);
+                    const cases: Record<string, TemplateRef | ViewContainerRef | ElementRef | undefined> = {
+                        "ngTemplate": controllers?.ngTemplate as TemplateRef,
+                        "viewContainerRef": controllers?.ngContainer?.viewContainerRef as ViewContainerRef,
+                        "$element": nativeEl
+                    }
 
-                   setter(scope, null);
-               });
-           }
-       }
-     }
-   }
+                    const value = cases[read];
+
+                    scope.$on("$destroy", () => {
+                        const isCtrl = getter(scope) == value;
+                        if (!isCtrl) return;
+
+                        setter(scope, null);
+                    });
+
+                    if(!value) {
+                        setter(scope, nativeEl);
+                        return
+                    }
+
+                    setter(scope, value);
+                }
+            }
+        }
+    }
 
     static $factory(extraProps: IDirective, $parse: IParseService): IDirective {
         return {
             ...extraProps,
             restrict: "A",
             bindToController: true,
-            require: "?ngTemplate",
+            require: {
+                ngTemplate: "?ngTemplate",
+                ngContainer: "?ngContainer",
+            },
             compile: TemplateNgRef.$compileFn($parse),
             priority: 1
         }

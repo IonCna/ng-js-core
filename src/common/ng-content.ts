@@ -3,11 +3,11 @@ import type {IAugmentedJQuery, IController, IDirective, ITranscludeFunction} fro
 export class NgContent implements IController {
     constructor(
         private $element: IAugmentedJQuery,
-        private $translcude?: ITranscludeFunction
+        private $transclude?: ITranscludeFunction
     ) {}
 
     $postLink() {
-        this.$translcude?.((clone) => {
+        this.$transclude?.(clone => {
             if(!clone) return
             this.$element.after(clone)
         })

@@ -13,7 +13,7 @@ export class TemplateRef<C = ContextObject> implements IController {
     private static DECLARATION_PREFIX = "let"
 
     constructor(
-        private $trasnclude: ITranscludeFunction,
+        private $transclude: ITranscludeFunction,
         private $scope: IScope,
     ) {}
 
@@ -33,7 +33,7 @@ export class TemplateRef<C = ContextObject> implements IController {
             })
         }
 
-        return new EmbeddedViewRef(context, targetScope, this.$trasnclude)
+        return new EmbeddedViewRef(context, targetScope, this.$transclude)
     }
 
     static get $name() {

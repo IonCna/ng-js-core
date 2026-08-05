@@ -9,17 +9,17 @@ export abstract class Refs {
 export abstract class ViewRef extends Refs {
     abstract destroy(): void;
     abstract readonly destroyed: boolean;
-    abstract onDestroy(callback: Function): void;
+    abstract onDestroy(callback: () => void): void;
     abstract override markForCheck(): void;
     abstract override detectChanges(): void;
 }
 
 export abstract class EmbeddedViewRef<C = ContextObject> extends ViewRef {
     abstract context: C;
-    abstract readonly rootNodes: any[];
+    abstract readonly rootNodes: Node[];
     abstract override destroy(): void;
     abstract override readonly destroyed: boolean;
-    abstract override onDestroy(callback: Function): void;
+    abstract override onDestroy(callback: () => void): void;
     abstract override markForCheck(): void;
     abstract override detectChanges(): void;
 }
@@ -35,6 +35,7 @@ export abstract class ViewContainerRef {
     abstract move(viewRef: ViewRef, currentIndex: number): ViewRef;
     abstract indexOf(viewRef: ViewRef): number;
     abstract remove(index?: number | undefined): void;
+    abstract detach(index?: number | undefined): ViewRef | null;
 }
 
 export interface ContextObject {

@@ -3,11 +3,11 @@ import {ElementRef} from "@/core";
 import { ViewContainerRef } from "@/core/refs"
 
 export class ContentRef implements IController {
-     private _viewContainerRef: ViewContainerRef;
+     private readonly _viewContainerRef: ViewContainerRef;
 
     constructor(
         $element: IAugmentedJQuery,
-        private $trasnclude: ITranscludeFunction,
+        private $transclude: ITranscludeFunction,
         private $scope: IScope
     ) {
         const [native] = Array.from($element)
@@ -21,10 +21,14 @@ export class ContentRef implements IController {
     }
 
     $postLink() {
-        this.$trasnclude(this.$scope, clone => {
+        this.$transclude(this.$scope, clone => {
             if (!clone) return
             clone.remove()
         })
+    }
+
+    $onDestroy() {
+        this._viewContainerRef.clear()
     }
 
     static $factory(): IDirective {

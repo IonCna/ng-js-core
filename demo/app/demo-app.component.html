@@ -55,6 +55,65 @@
     </section>
 
     <ng-template
+        ng-ref="$ctrl.managedTemplate"
+        ng-ref-read="ngTemplate"
+        let-message
+        let-count="count"
+    >
+        <article class="rendered-template rendered-template--managed">
+            <span class="template-kind">EmbeddedViewRef #{{count}}</span>
+            <strong>{{message}}</strong>
+            <span>Binding del controller: {{$ctrl.containerBoundValue}}</span>
+        </article>
+    </ng-template>
+
+    <section class="test-card test-card--featured">
+        <div class="test-heading">
+            <div>
+                <span class="step">Escenario 2</span>
+                <h2>Administración con ViewContainerRef</h2>
+            </div>
+            <span class="status">{{$ctrl.managedContainerRef.length || 0}} vistas conectadas</span>
+        </div>
+
+        <p>
+            Este escenario crea, mueve, separa, reinserta y destruye vistas respecto
+            al comentario ancla de <code>&lt;ng-container&gt;</code>.
+        </p>
+
+        <div class="controls">
+            <button type="button" ng-click="$ctrl.appendManagedView()">Agregar al final</button>
+            <button type="button" ng-click="$ctrl.prependManagedView()">Insertar al inicio</button>
+            <button type="button" ng-click="$ctrl.moveFirstManagedViewToEnd()">Mover primera al final</button>
+            <button type="button" ng-click="$ctrl.detachLastManagedView()">Separar última</button>
+            <button type="button" ng-click="$ctrl.insertDetachedManagedView()">Reinsertar separada</button>
+            <button type="button" ng-click="$ctrl.destroyDetachedManagedView()">Destruir separada</button>
+            <button type="button" ng-click="$ctrl.removeLastManagedView()">Eliminar última</button>
+            <button type="button" ng-click="$ctrl.clearManagedContainer()">Limpiar</button>
+        </div>
+
+        <div class="container-state">
+            <span>Conectadas: {{$ctrl.managedContainerRef.length || 0}}</span>
+            <span>Separada viva: {{$ctrl.detachedManagedView ? "sí" : "no"}}</span>
+            <span>Última operación: {{$ctrl.managedContainerLog}}</span>
+        </div>
+
+        <div class="outlet-stage managed-container-stage">
+            <ng-container
+                ng-ref="$ctrl.managedContainerRef"
+                ng-ref-read="viewContainerRef"
+            ></ng-container>
+        </div>
+
+        <p class="expectation">
+            <code>detach()</code> debe retirar una vista sin destruirla;
+            <code>insert()</code> debe recuperarla. <code>remove()</code> y
+            <code>clear()</code> deben destruir las vistas. Cada operación deja su
+            detalle en la consola.
+        </p>
+    </section>
+
+    <ng-template
         ng-ref="$ctrl.containerTemplate"
         ng-ref-read="ngTemplate"
         let-message
@@ -80,7 +139,7 @@
     <section class="test-card">
         <div class="test-heading">
             <div>
-                <span class="step">Escenario 2</span>
+                <span class="step">Escenario 3</span>
                 <h2>Outlet sin elemento contenedor</h2>
             </div>
             <span class="status">Sin wrapper en el DOM</span>
@@ -94,6 +153,8 @@
 
         <div class="outlet-stage">
             <ng-container
+                ng-ref="$ctrl.containerViewRef"
+                ng-ref-read="viewContainerRef"
                 ng-template-outlet="$ctrl.containerTemplate"
                 ng-template-outlet-context="$ctrl.containerContext"
             ></ng-container>
@@ -136,7 +197,7 @@
     <section class="test-card">
         <div class="test-heading">
             <div>
-                <span class="step">Escenario 3</span>
+                <span class="step">Escenario 4</span>
                 <h2>Captura sin render inicial</h2>
             </div>
             <span class="status status--pass">Esperado: ambos ocultos arriba</span>
@@ -150,7 +211,7 @@
     <section class="test-card">
         <div class="test-heading">
             <div>
-                <span class="step">Escenario 4</span>
+                <span class="step">Escenario 5</span>
                 <h2>Cambio dinámico y destrucción</h2>
             </div>
             <span class="status">Template/contexto reactivos</span>
@@ -183,7 +244,7 @@
     <section class="test-card">
         <div class="test-heading">
             <div>
-                <span class="step">Escenario 5</span>
+                <span class="step">Escenario 6</span>
                 <h2>Dos vistas del mismo template</h2>
             </div>
             <span class="status">Scopes independientes</span>
@@ -204,7 +265,7 @@
     <section class="test-card">
         <div class="test-heading">
             <div>
-                <span class="step">Escenario 6</span>
+                <span class="step">Escenario 7</span>
                 <h2>Proyección mediante ng-content</h2>
             </div>
             <span class="status">Scope del consumidor</span>

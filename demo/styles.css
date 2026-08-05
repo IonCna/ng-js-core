@@ -164,6 +164,26 @@ code {
     background: #fef3c7;
 }
 
+.rendered-template--managed {
+    color: #155e75;
+    background: #cffafe;
+}
+
+.managed-container-stage {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.container-state {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    margin-bottom: 1rem;
+    color: #475569;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.85rem;
+}
+
 .binding-test {
     display: grid;
     gap: 0.6rem;
