@@ -6,7 +6,7 @@ import angular, {
     type ITranscludeFunction
 } from "angular";
 import { EmbeddedViewRef } from "@/core/refs"
-import type {ContextObject} from "@/core/abstrct-refs";
+import type {ContextObject} from "@/core/abstracts";
 
 export class TemplateRef<C = ContextObject> implements IController {
     private declarations!: Map<string, string>

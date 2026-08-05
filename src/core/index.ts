@@ -1,11 +1,13 @@
 import angular from "angular";
 import { decorNgRef } from "@/core/ng-ref"
+import { decorNgController } from "@/core/ng-controller"
 
-export { EmbeddedViewRef } from "@/core/refs"
-export type { ContextObject } from "@/core/abstrct-refs"
+export { EmbeddedViewRef, ViewContainerRef } from "@/core/refs"
+export type { ContextObject } from "@/core/abstracts"
 
 export const CoreModule = angular.module("ng.core", [])
-//CoreModule.decorator("$controller", decorateController)
+
+CoreModule.decorator("$controller", decorNgController)
 CoreModule.decorator("ngRefDirective", decorNgRef)
 
 export class ElementRef<T = any> {

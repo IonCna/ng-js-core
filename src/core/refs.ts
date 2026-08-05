@@ -2,7 +2,7 @@ import {
     type ContextObject,
     EmbeddedViewRef as AbstractViewRef,
     ViewContainerRef as AbstractViewContainerRef, type ViewRef
-} from "@/core/abstrct-refs"
+} from "@/core/abstracts"
 
 import angular, {type IScope, type ITranscludeFunction} from "angular";
 import type {ElementRef} from "@/core/index.ts";
