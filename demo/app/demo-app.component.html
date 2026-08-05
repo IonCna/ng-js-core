@@ -7,9 +7,16 @@
         </p>
     </header>
 
+    <ng-template let-message>
+        <span>{{message}}</span>
+    </ng-template>
+
+    <ng-template ng-ref="decoratedTemplate" let-message>
+        <span>{{message}}</span>
+    </ng-template>
+
     <ng-template
-        ng-ref="$ctrl.personTemplate"
-        ng-ref-read="ngTemplate"
+        ng-ref="personTemplate"
         let-person
         let-position="index"
         let-title="heading"
@@ -22,20 +29,67 @@
         </article>
     </ng-template>
 
+    <div class="outlet-stage" ng-ref="plainElement">
+        Elemento consultado mediante <code>read: ElementRef</code>.
+    </div>
+
+    <div class="outlet-stage" ng-ref="defaultElement">
+        Elemento consultado sin indicar <code>read</code>.
+    </div>
+
+    <ng-container ng-ref="queriedContainer"></ng-container>
+
+    <div ng-if="$ctrl.showDynamicViewChild">
+        <ng-template ng-ref="dynamicTemplate" let-message>
+            <span>{{message}}</span>
+        </ng-template>
+    </div>
+
+    <div class="outlet-grid">
+        <span ng-if="$ctrl.showFirstDuplicate" ng-ref="duplicateElement">Primer resultado</span>
+        <span ng-ref="duplicateElement">Segundo resultado</span>
+    </div>
+
     <section class="test-card test-card--featured">
         <div class="test-heading">
             <div>
                 <span class="step">Escenario 1</span>
-                <h2>Variables locales con let-*</h2>
+                <h2>viewChild.required y variables let-*</h2>
             </div>
-            <span class="status">Aliases del contexto</span>
+            <span class="status">TemplateRef directo en el controller</span>
         </div>
 
         <p>
-            Este caso valida <code>let-person</code> y propiedades nombradas mediante
+            <code>viewChild.required&lt;TemplateRef&gt;("personTemplate")</code>
+            obtiene directamente el template. El mismo caso valida <code>let-person</code>
+            y propiedades nombradas mediante
             <code>let-position="index"</code> y
             <code>let-title="heading"</code>.
         </p>
+
+        <div class="container-state">
+            <span>Por nombre: {{$ctrl.personTemplate ? "TemplateRef" : "sin resolver"}}</span>
+            <span>Con decorador: {{$ctrl.decoratedTemplate ? "TemplateRef" : "sin resolver"}}</span>
+            <span>Por tipo sin ng-ref: {{$ctrl.firstTemplateByType !== $ctrl.personTemplate ? "primer TemplateRef" : "ERROR"}}</span>
+            <span>Optional ausente: {{$ctrl.optionalMissingTemplate === undefined ? "undefined" : "ERROR"}}</span>
+            <span>Required ausente: {{$ctrl.requiredMissingResult}}</span>
+            <span>ElementRef por defecto: {{$ctrl.defaultElement.nativeElement.nodeName}}</span>
+            <span>read ElementRef: {{$ctrl.plainElement.nativeElement.nodeName}}</span>
+            <span>read ElementRef del template: {{$ctrl.personTemplateElement.nativeElement.nodeName}}</span>
+            <span>read ViewContainerRef: {{$ctrl.queriedContainer.length}} vistas</span>
+            <span>DinÃ¡mico: {{$ctrl.dynamicTemplate ? "resuelto" : "undefined"}}</span>
+            <span>Primer match: {{$ctrl.firstDuplicateElement.nativeElement.textContent}}</span>
+        </div>
+
+        <div class="controls">
+            <button type="button" ng-click="$ctrl.toggleDynamicViewChild()">
+                {{$ctrl.showDynamicViewChild ? "Destruir referencia dinÃ¡mica" : "Crear referencia dinÃ¡mica"}}
+            </button>
+            <button type="button" ng-click="$ctrl.toggleFirstDuplicate()">
+                {{$ctrl.showFirstDuplicate ? "Destruir primer match" : "Restaurar primer match"}}
+            </button>
+            <button type="button" ng-click="$ctrl.logViewChildCases()">Registrar casos en consola</button>
+        </div>
 
         <div class="outlet-grid">
             <div

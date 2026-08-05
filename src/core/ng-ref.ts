@@ -1,21 +1,33 @@
-import type {IDirective, IDirectiveCompileFn, IParseService} from "angular";
-import type {TemplateRef} from "@/common";
-import type {ViewContainerRef} from "@/core/refs";
+import type {IDirective, IDirectiveCompileFn, IParseService, IScope} from "angular";
+import {TemplateRef} from "@/common/ng-template";
+import {getScopeViewQueryRegistries, type ViewQueryRegistry} from "@/core/ng-controller";
+import {ViewContainerRef} from "@/core/refs";
+import type {ProviderToken} from "@/core/viewChild";
 import {ElementRef} from "@/core";
 
-class TemplateNgRef implements IDirective {
-    private static TEMPLATE_REF_NODE_NAME = "ng-template"
-    private static CONTAINER_REF_NODE_NAME = "ng-container";
+function findViewQueryRegistry(
+    scope: IScope,
+    locator: string,
+    candidates: ReadonlyMap<ProviderToken<unknown>, unknown>,
+): ViewQueryRegistry | undefined {
+    let current: IScope | null = scope;
 
+    while (current) {
+        const registry = getScopeViewQueryRegistries(current).find((candidate) =>
+            candidate.acceptsReference(locator, candidates),
+        );
+        if (registry) return registry;
+
+        current = current.$parent;
+    }
+
+    return undefined;
+}
+
+class TemplateNgRef implements IDirective {
     static $compileFn($parse: IParseService): IDirectiveCompileFn {
         return (el, attrs) => {
             const [native] = Array.from(el)
-            const nodeName = native.nodeName.toLowerCase();
-
-            const isTemplate = nodeName == TemplateNgRef.TEMPLATE_REF_NODE_NAME;
-            const isContainer = nodeName == TemplateNgRef.CONTAINER_REF_NODE_NAME;
-
-            if (!isTemplate && !isContainer) return;
 
             const read = attrs.ngRefRead;
             const getter = $parse(attrs.ngRef);
@@ -27,17 +39,46 @@ class TemplateNgRef implements IDirective {
             el.removeAttr("ng-ref-read")
 
             return {
-                pre: (scope, _el, _attrs, controllers) => {
-                    const nativeEl = new ElementRef(native);
+                pre: (scope, linkedElement, _attrs, controllers) => {
+                    const [linkedNative = native] = Array.from(linkedElement);
+                    const nativeEl = new ElementRef(linkedNative);
+                    const templateRef = controllers?.ngTemplate as TemplateRef | undefined;
+                    const viewContainerRef = controllers?.ngContainer?.viewContainerRef as ViewContainerRef | undefined;
                     const cases: Record<string, TemplateRef | ViewContainerRef | ElementRef | undefined> = {
-                        "ngTemplate": controllers?.ngTemplate as TemplateRef,
-                        "viewContainerRef": controllers?.ngContainer?.viewContainerRef as ViewContainerRef,
+                        "ngTemplate": templateRef,
+                        "viewContainerRef": viewContainerRef,
                         "$element": nativeEl
                     }
 
                     const value = cases[read];
+                    const candidates = new Map<ProviderToken<unknown>, unknown>([
+                        [ElementRef, nativeEl],
+                        ["$element", nativeEl],
+                    ]);
+
+                    if (templateRef) {
+                        candidates.set(TemplateRef, templateRef);
+                        candidates.set("ngTemplate", templateRef);
+                    }
+
+                    if (viewContainerRef) {
+                        candidates.set(ViewContainerRef, viewContainerRef);
+                        candidates.set("viewContainerRef", viewContainerRef);
+                    }
+
+                    const defaultValue = templateRef ?? nativeEl;
+                    const disconnect = findViewQueryRegistry(
+                        scope,
+                        attrs.ngRef,
+                        candidates,
+                    )?.connectReference(
+                        attrs.ngRef,
+                        defaultValue,
+                        candidates,
+                    );
 
                     scope.$on("$destroy", () => {
+                        disconnect?.();
                         const isCtrl = getter(scope) == value;
                         if (!isCtrl) return;
 

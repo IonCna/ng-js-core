@@ -1,6 +1,8 @@
 import type { IComponentController, IComponentOptions } from "angular";
-import type { TemplateRef } from "../../src/common/ng-template";
+import { TemplateRef } from "../../src/common/ng-template";
+import { ElementRef } from "../../src/core";
 import { type EmbeddedViewRef, ViewContainerRef } from "../../src/core/refs";
+import { ViewChild, viewChild } from "../../src/core/viewChild";
 
 interface TemplateContext {
   $implicit: string;
@@ -19,7 +21,19 @@ interface PersonTemplateContext {
 }
 
 export class DemoAppController implements IComponentController {
-  personTemplate!: TemplateRef<PersonTemplateContext>;
+  @ViewChild("decoratedTemplate")
+  decoratedTemplate?: TemplateRef<TemplateContext>;
+
+  personTemplate = viewChild.required<TemplateRef<PersonTemplateContext>>("personTemplate");
+  firstTemplateByType = viewChild.required(TemplateRef);
+  optionalMissingTemplate = viewChild<TemplateRef>("optionalMissingTemplate");
+  requiredMissingTemplate = viewChild.required<TemplateRef>("requiredMissingTemplate");
+  defaultElement = viewChild.required<ElementRef<HTMLElement>>("defaultElement");
+  plainElement = viewChild.required("plainElement", { read: ElementRef });
+  personTemplateElement = viewChild.required("personTemplate", { read: ElementRef });
+  queriedContainer = viewChild.required("queriedContainer", { read: ViewContainerRef });
+  dynamicTemplate = viewChild<TemplateRef<TemplateContext>>("dynamicTemplate");
+  firstDuplicateElement = viewChild.required("duplicateElement", { read: ElementRef });
   containerTemplate!: TemplateRef<TemplateContext>;
   containerViewRef: ViewContainerRef | null = null;
   managedTemplate!: TemplateRef<TemplateContext>;
@@ -55,8 +69,6 @@ export class DemoAppController implements IComponentController {
   containerClickCount = 0;
   private managedViewSequence = 0;
 
-  //test = viewChild.required("test");
-
   activeTemplate: TemplateRef<TemplateContext> | null = null;
   outletContext: TemplateContext = {
     $implicit: "Contexto inicial",
@@ -64,8 +76,27 @@ export class DemoAppController implements IComponentController {
   };
   showOutlet = true;
   projectionMessage = "Este texto pertenece al scope del consumidor";
+  showDynamicViewChild = true;
+  showFirstDuplicate = true;
+  requiredMissingResult = "Sin comprobar";
 
   $postLink() {
+    this.requiredMissingResult = this.readRequiredMissingQuery();
+
+    console.group("viewChild: valor directo");
+    console.log("TemplateRef:", this.personTemplate);
+    console.log("@ViewChild TemplateRef:", this.decoratedTemplate);
+    console.log("Es TemplateRef:", this.personTemplate instanceof TemplateRef);
+    console.log("Primer TemplateRef por tipo:", this.firstTemplateByType);
+    console.log("El query por tipo no depende de ng-ref:", this.firstTemplateByType !== this.personTemplate);
+    console.log("Opcional ausente:", this.optionalMissingTemplate);
+    console.log("Required ausente:", this.requiredMissingResult);
+    console.log("ElementRef por defecto:", this.defaultElement);
+    console.log("ElementRef:", this.plainElement);
+    console.log("ElementRef del template:", this.personTemplateElement);
+    console.log("ViewContainerRef:", this.queriedContainer);
+    console.groupEnd();
+
     this.activeTemplate = this.primaryTemplate;
     this.activeTemplate.createEmbeddedView;
 
@@ -78,6 +109,30 @@ export class DemoAppController implements IComponentController {
     console.groupEnd();
 
     this.logManagedContainer("ViewContainerRef listo");
+  }
+
+  toggleDynamicViewChild() {
+    this.showDynamicViewChild = !this.showDynamicViewChild;
+  }
+
+  toggleFirstDuplicate() {
+    this.showFirstDuplicate = !this.showFirstDuplicate;
+  }
+
+  logViewChildCases() {
+    console.group("viewChild: casos de paridad");
+    console.log("Por nombre:", this.personTemplate);
+    console.log("Con decorador:", this.decoratedTemplate);
+    console.log("Por tipo:", this.firstTemplateByType);
+    console.log("Optional ausente:", this.optionalMissingTemplate);
+    console.log("Required ausente:", this.readRequiredMissingQuery());
+    console.log("ElementRef por defecto:", this.defaultElement);
+    console.log("read ElementRef:", this.plainElement);
+    console.log("read ElementRef sobre ng-template:", this.personTemplateElement);
+    console.log("read ViewContainerRef:", this.queriedContainer);
+    console.log("Referencia dinÃ¡mica:", this.dynamicTemplate);
+    console.log("Primer duplicado:", this.firstDuplicateElement);
+    console.groupEnd();
   }
 
   appendManagedView() {
@@ -193,6 +248,15 @@ export class DemoAppController implements IComponentController {
     );
 
     this.logManagedContainer(index === 0 ? `Vista ${id} insertada al inicio` : `Vista ${id} agregada`);
+  }
+
+  private readRequiredMissingQuery(): string {
+    try {
+      void this.requiredMissingTemplate;
+      return "ERROR: no lanzÃ³ una excepciÃ³n";
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
   }
 
   private logManagedContainer(operation: string) {
