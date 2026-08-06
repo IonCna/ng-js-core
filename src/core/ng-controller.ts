@@ -1,6 +1,9 @@
 import type { IAugmentedJQuery, IControllerService, IScope } from "angular";
+import { ChangeDetectorRef } from "@/core/change-detector-ref";
 import { ContentChildQuery, createDecoratedContentChildQueries } from "@/core/contentChild";
+import { ContentChildrenQuery, createDecoratedContentChildrenQueries } from "@/core/contentChildren";
 import { createDecoratedViewChildQueries, type ProviderToken, ViewChildQuery } from "@/core/viewChild";
+import { createDecoratedViewChildrenQueries, ViewChildrenQuery } from "@/core/viewChildren";
 
 type ControllerExpression = unknown;
 
@@ -37,6 +40,37 @@ interface ViewReference {
   readonly node?: Node;
 }
 
+interface QueryReference {
+  readonly locator: ProviderToken<unknown>;
+  readonly read?: ProviderToken<unknown>;
+}
+
+function queryAcceptsReference(
+  query: QueryReference,
+  locator: string,
+  candidates: ReadonlyMap<ProviderToken<unknown>, unknown>,
+): boolean {
+  const matchesLocator = typeof query.locator === "string" ? query.locator === locator : candidates.has(query.locator);
+  return matchesLocator || (query.read !== undefined && candidates.has(query.read));
+}
+
+function sortReferencesByDocumentOrder(references: readonly ViewReference[]): ViewReference[] {
+  return references
+    .map((reference, index) => ({ index, reference }))
+    .sort((left, right) => {
+      const leftNode = left.reference.node;
+      const rightNode = right.reference.node;
+      if (!leftNode || !rightNode || leftNode === rightNode) return left.index - right.index;
+
+      const position = leftNode.compareDocumentPosition(rightNode);
+      if (position & 1) return left.index - right.index;
+      if (position & 4) return -1;
+      if (position & 2) return 1;
+      return left.index - right.index;
+    })
+    .map(({ reference }) => reference);
+}
+
 const controllerRegistries = new WeakMap<object, ViewQueryRegistry>();
 const scopeRegistries = new WeakMap<IScope, ViewQueryRegistry[]>();
 const activeRegistries: ViewQueryRegistry[] = [];
@@ -45,6 +79,33 @@ const activeContentOwners: Array<readonly ViewQueryRegistry[]> = [];
 
 function isObject(value: unknown): value is object {
   return (typeof value === "object" && value !== null) || typeof value === "function";
+}
+
+function createControllerLocals(locals?: ControllerLocals): ControllerLocals | undefined {
+  if (!locals?.$scope || Object.hasOwn(locals, ChangeDetectorRef.$name)) return locals;
+
+  return {
+    ...locals,
+    [ChangeDetectorRef.$name]: new ChangeDetectorRef(locals.$scope),
+  };
+}
+
+function getControllerTokens(controller: object): readonly ProviderToken<unknown>[] {
+  const tokens: ProviderToken<unknown>[] = [];
+  const capturedTokens = new Set<ProviderToken<unknown>>();
+  let prototype = Object.getPrototypeOf(controller) as { constructor?: ProviderToken<unknown> } | null;
+
+  while (prototype && prototype !== Object.prototype) {
+    const token = prototype.constructor;
+    if (token && !capturedTokens.has(token)) {
+      capturedTokens.add(token);
+      tokens.push(token);
+    }
+
+    prototype = Object.getPrototypeOf(prototype) as { constructor?: ProviderToken<unknown> } | null;
+  }
+
+  return tokens;
 }
 
 function pushActiveViewQueryRegistry(registry: ViewQueryRegistry): void {
@@ -114,11 +175,14 @@ export function getContentQueryOwners(scope: IScope): readonly ViewQueryRegistry
 export class ViewQueryRegistry {
   private controller?: object;
   private readonly queries: ViewChildQuery<unknown>[] = [];
+  private readonly viewChildrenQueries: ViewChildrenQuery<unknown>[] = [];
   private readonly references: ViewReference[] = [];
   private readonly contentQueries: ContentChildQuery<unknown>[] = [];
+  private readonly contentChildrenQueries: ContentChildrenQuery<unknown>[] = [];
   private readonly contentReferences: ViewReference[] = [];
   private readonly contentRoots = new Set<Node>();
   private readonly disconnectFromOwners: Array<() => void> = [];
+  private queryListChangesScheduled = false;
 
   constructor(
     private readonly scope?: IScope,
@@ -143,7 +207,9 @@ export class ViewQueryRegistry {
     this.controller = controller;
     controllerRegistries.set(controller, this);
     this.captureViewChildQueries(controller);
+    this.captureViewChildrenQueries(controller);
     this.captureContentChildQueries(controller);
+    this.captureContentChildrenQueries(controller);
     this.wrapPostLinkForStaticQueries(controller);
 
     if (!this.scope) {
@@ -163,6 +229,8 @@ export class ViewQueryRegistry {
     scope.$on("$destroy", () => {
       for (const disconnect of this.disconnectFromOwners) disconnect();
       this.disconnectFromOwners.length = 0;
+      for (const query of this.viewChildrenQueries) query.destroy();
+      for (const query of this.contentChildrenQueries) query.destroy();
       controllerRegistries.delete(controller);
 
       const currentRegistries = scopeRegistries.get(scope);
@@ -178,18 +246,18 @@ export class ViewQueryRegistry {
   }
 
   acceptsReference(locator: string, candidates: ReadonlyMap<ProviderToken<unknown>, unknown>): boolean {
-    return this.queries.some((query) =>
-      typeof query.locator === "string" ? query.locator === locator : candidates.has(query.locator),
+    return [...this.queries, ...this.viewChildrenQueries].some((query) =>
+      queryAcceptsReference(query, locator, candidates),
     );
   }
 
   get hasContentQueries(): boolean {
-    return this.contentQueries.length > 0;
+    return this.contentQueries.length > 0 || this.contentChildrenQueries.length > 0;
   }
 
   acceptsContentReference(locator: string, candidates: ReadonlyMap<ProviderToken<unknown>, unknown>): boolean {
-    return this.contentQueries.some((query) =>
-      typeof query.locator === "string" ? query.locator === locator : candidates.has(query.locator),
+    return [...this.contentQueries, ...this.contentChildrenQueries].some((query) =>
+      queryAcceptsReference(query, locator, candidates),
     );
   }
 
@@ -197,8 +265,9 @@ export class ViewQueryRegistry {
     locator: string,
     defaultValue: unknown,
     candidates: ReadonlyMap<ProviderToken<unknown>, unknown>,
+    node?: Node,
   ): () => void {
-    const reference: ViewReference = { candidates, defaultValue, locator };
+    const reference: ViewReference = { candidates, defaultValue, locator, node };
     this.references.push(reference);
     this.refreshQueries();
 
@@ -243,6 +312,7 @@ export class ViewQueryRegistry {
   finalizeStaticContentQueries(): void {
     this.refreshContentQueries();
     for (const query of this.contentQueries) query.freeze();
+    for (const query of this.contentChildrenQueries) query.freeze();
   }
 
   finalizeStaticViewQueries(): void {
@@ -264,6 +334,20 @@ export class ViewQueryRegistry {
     }
   }
 
+  private captureViewChildrenQueries(controller: object): void {
+    for (const property of Reflect.ownKeys(controller)) {
+      const descriptor = Object.getOwnPropertyDescriptor(controller, property);
+      if (!descriptor || !(descriptor.value instanceof ViewChildrenQuery)) continue;
+
+      const query = descriptor.value as ViewChildrenQuery<unknown>;
+      this.installViewChildrenQuery(controller, property, query, descriptor.enumerable ?? true);
+    }
+
+    for (const { propertyKey, query } of createDecoratedViewChildrenQueries(controller)) {
+      this.installViewChildrenQuery(controller, propertyKey, query, true);
+    }
+  }
+
   private captureContentChildQueries(controller: object): void {
     for (const property of Reflect.ownKeys(controller)) {
       const descriptor = Object.getOwnPropertyDescriptor(controller, property);
@@ -277,6 +361,22 @@ export class ViewQueryRegistry {
 
     for (const { propertyKey, query } of createDecoratedContentChildQueries(controller)) {
       this.installContentChildQuery(controller, propertyKey, query, true);
+    }
+  }
+
+  private captureContentChildrenQueries(controller: object): void {
+    for (const property of Reflect.ownKeys(controller)) {
+      const descriptor = Object.getOwnPropertyDescriptor(controller, property);
+      if (!descriptor || !(descriptor.value instanceof ContentChildrenQuery)) {
+        continue;
+      }
+
+      const query = descriptor.value as ContentChildrenQuery<unknown>;
+      this.installContentChildrenQuery(controller, property, query, descriptor.enumerable ?? true);
+    }
+
+    for (const { propertyKey, query } of createDecoratedContentChildrenQueries(controller)) {
+      this.installContentChildrenQuery(controller, propertyKey, query, true);
     }
   }
 
@@ -310,10 +410,51 @@ export class ViewQueryRegistry {
     });
   }
 
+  private installViewChildrenQuery(
+    controller: object,
+    property: PropertyKey,
+    query: ViewChildrenQuery<unknown>,
+    enumerable: boolean,
+  ): void {
+    this.viewChildrenQueries.push(query);
+
+    Object.defineProperty(controller, property, {
+      configurable: true,
+      enumerable,
+      get: () => query.value,
+    });
+  }
+
+  private installContentChildrenQuery(
+    controller: object,
+    property: PropertyKey,
+    query: ContentChildrenQuery<unknown>,
+    enumerable: boolean,
+  ): void {
+    this.contentChildrenQueries.push(query);
+
+    Object.defineProperty(controller, property, {
+      configurable: true,
+      enumerable,
+      get: () => query.value,
+    });
+  }
+
   private wrapPostLinkForStaticQueries(controller: object): void {
     const hasStaticViewQuery = this.queries.some((query) => query.staticQuery);
     const hasStaticContentQuery = this.contentQueries.some((query) => query.staticQuery);
-    if (!hasStaticViewQuery && !hasStaticContentQuery) return;
+    const hasStaticContentChildrenQuery = this.contentChildrenQueries.some((query) => query.staticQuery);
+    const hasViewChildrenQuery = this.viewChildrenQueries.length > 0;
+    const hasContentChildrenQuery = this.contentChildrenQueries.length > 0;
+    if (
+      !hasStaticViewQuery &&
+      !hasStaticContentQuery &&
+      !hasStaticContentChildrenQuery &&
+      !hasViewChildrenQuery &&
+      !hasContentChildrenQuery
+    ) {
+      return;
+    }
 
     const lifecycleController = controller as {
       $postLink?: (...args: unknown[]) => unknown;
@@ -323,29 +464,28 @@ export class ViewQueryRegistry {
     lifecycleController.$postLink = (...args: unknown[]) => {
       this.finalizeStaticViewQueries();
       this.finalizeStaticContentQueries();
+      this.notifyQueryListChanges();
       return postLink?.apply(controller, args);
     };
   }
 
   private publishControllerToOwners(controller: object, scope: IScope): void {
-    const prototype = Object.getPrototypeOf(controller) as { constructor?: ProviderToken<unknown> } | null;
-    const token = prototype?.constructor;
-    if (!token) return;
+    const tokens = getControllerTokens(controller);
+    if (tokens.length === 0) return;
 
-    const candidates = new Map<ProviderToken<unknown>, unknown>([[token, controller]]);
+    const candidates = new Map<ProviderToken<unknown>, unknown>(tokens.map((token) => [token, controller]));
+    const [node] = this.element ? Array.from(this.element) : [];
     let current: IScope | null = scope;
 
     while (current) {
       for (const owner of getScopeViewQueryRegistries(current)) {
         if (owner === this || !owner.acceptsReference("", candidates)) continue;
 
-        this.disconnectFromOwners.push(owner.connectReference("", controller, candidates));
+        this.disconnectFromOwners.push(owner.connectReference("", controller, candidates, node));
       }
 
       current = current.$parent;
     }
-
-    const [node] = this.element ? Array.from(this.element) : [];
 
     for (const owner of getContentQueryOwners(scope)) {
       if (owner === this || !owner.acceptsContentReference("", candidates)) {
@@ -357,8 +497,10 @@ export class ViewQueryRegistry {
   }
 
   private refreshQueries(): void {
+    const orderedReferences = sortReferencesByDocumentOrder(this.references);
+
     for (const query of this.queries) {
-      const reference = this.references.find((candidate) =>
+      const reference = orderedReferences.find((candidate) =>
         typeof query.locator === "string"
           ? candidate.locator === query.locator
           : candidate.candidates.has(query.locator),
@@ -370,7 +512,7 @@ export class ViewQueryRegistry {
       }
 
       const readToken = query.read ?? (typeof query.locator === "string" ? undefined : query.locator);
-      const value = readToken ? reference.candidates.get(readToken) : reference.defaultValue;
+      const value = this.readReference(reference, readToken, orderedReferences);
 
       if (value === undefined) {
         query.reset();
@@ -378,11 +520,38 @@ export class ViewQueryRegistry {
         query.resolve(value);
       }
     }
+
+    for (const query of this.viewChildrenQueries) {
+      const readToken = query.read ?? (typeof query.locator === "string" ? undefined : query.locator);
+      const matchedNodes = new Set<Node>();
+      const values = orderedReferences.flatMap((candidate) => {
+        const matchesLocator =
+          typeof query.locator === "string"
+            ? candidate.locator === query.locator
+            : candidate.candidates.has(query.locator);
+
+        if (!matchesLocator) return [];
+
+        if (candidate.node !== undefined) {
+          if (matchedNodes.has(candidate.node)) return [];
+          matchedNodes.add(candidate.node);
+        }
+
+        const value = this.readReference(candidate, readToken, orderedReferences);
+        return value === undefined ? [] : [value];
+      });
+
+      query.resolve(values);
+    }
+
+    this.scheduleQueryListChanges();
   }
 
   private refreshContentQueries(): void {
+    const orderedReferences = sortReferencesByDocumentOrder(this.contentReferences);
+
     for (const query of this.contentQueries) {
-      const reference = this.contentReferences.find((candidate) => {
+      const reference = orderedReferences.find((candidate) => {
         const matchesLocator =
           typeof query.locator === "string"
             ? candidate.locator === query.locator
@@ -399,7 +568,7 @@ export class ViewQueryRegistry {
       }
 
       const readToken = query.read ?? (typeof query.locator === "string" ? undefined : query.locator);
-      const value = readToken ? reference.candidates.get(readToken) : reference.defaultValue;
+      const value = this.readReference(reference, readToken, orderedReferences);
 
       if (value === undefined) {
         query.reset();
@@ -407,6 +576,76 @@ export class ViewQueryRegistry {
         query.resolve(value);
       }
     }
+
+    for (const query of this.contentChildrenQueries) {
+      const readToken = query.read ?? (typeof query.locator === "string" ? undefined : query.locator);
+      const matchedNodes = new Set<Node>();
+      const values = orderedReferences.flatMap((candidate) => {
+        const matchesLocator =
+          typeof query.locator === "string"
+            ? candidate.locator === query.locator
+            : candidate.candidates.has(query.locator);
+        const matchesDepth =
+          query.descendants || (candidate.node !== undefined && this.contentRoots.has(candidate.node));
+
+        if (!matchesLocator || !matchesDepth) return [];
+
+        if (candidate.node !== undefined) {
+          if (matchedNodes.has(candidate.node)) return [];
+          matchedNodes.add(candidate.node);
+        }
+
+        const value = this.readReference(candidate, readToken, orderedReferences);
+        return value === undefined ? [] : [value];
+      });
+
+      query.resolve(values);
+    }
+
+    this.scheduleQueryListChanges();
+  }
+
+  private scheduleQueryListChanges(): void {
+    if (
+      this.queryListChangesScheduled ||
+      (this.viewChildrenQueries.length === 0 && this.contentChildrenQueries.length === 0)
+    ) {
+      return;
+    }
+
+    this.queryListChangesScheduled = true;
+
+    if (this.scope) {
+      this.scope.$evalAsync(() => this.notifyQueryListChanges());
+    } else {
+      queueMicrotask(() => this.notifyQueryListChanges());
+    }
+  }
+
+  private notifyQueryListChanges(): void {
+    this.queryListChangesScheduled = false;
+    for (const query of this.viewChildrenQueries) query.notifyOnChanges();
+    for (const query of this.contentChildrenQueries) query.notifyOnChanges();
+  }
+
+  private readReference(
+    reference: ViewReference,
+    readToken: ProviderToken<unknown> | undefined,
+    references: readonly ViewReference[],
+  ): unknown {
+    if (readToken === undefined) return reference.defaultValue;
+
+    const value = reference.candidates.get(readToken);
+    if (value !== undefined || reference.node === undefined) return value;
+
+    for (const candidate of references) {
+      if (candidate.node !== reference.node) continue;
+
+      const siblingValue = candidate.candidates.get(readToken);
+      if (siblingValue !== undefined) return siblingValue;
+    }
+
+    return undefined;
   }
 }
 
@@ -419,9 +658,20 @@ export const decorNgController = ($delegate: IControllerService): IControllerSer
     later?: boolean,
     identifier?: string,
   ): T | ControllerInitializer<T> => {
+    const controllerLocals = createControllerLocals(locals);
+
     if (later) {
-      const initializer = invokeController<T>(expression, locals, true, identifier) as ControllerInitializer<T>;
-      const registry = new ViewQueryRegistry(locals?.$scope, locals?.$element, initializer.identifier ?? identifier);
+      const initializer = invokeController<T>(
+        expression,
+        controllerLocals,
+        true,
+        identifier,
+      ) as ControllerInitializer<T>;
+      const registry = new ViewQueryRegistry(
+        controllerLocals?.$scope,
+        controllerLocals?.$element,
+        initializer.identifier ?? identifier,
+      );
 
       const decoratedInitializer = (() => {
         pushActiveViewQueryRegistry(registry);
@@ -453,12 +703,12 @@ export const decorNgController = ($delegate: IControllerService): IControllerSer
       return decoratedInitializer;
     }
 
-    const registry = new ViewQueryRegistry(locals?.$scope, locals?.$element, identifier);
+    const registry = new ViewQueryRegistry(controllerLocals?.$scope, controllerLocals?.$element, identifier);
 
     pushActiveViewQueryRegistry(registry);
 
     try {
-      const instance = invokeController<T>(expression, locals, false, identifier) as T;
+      const instance = invokeController<T>(expression, controllerLocals, false, identifier) as T;
 
       if (isObject(instance)) {
         registry.attachController(instance);

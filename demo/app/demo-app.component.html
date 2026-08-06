@@ -7,7 +7,7 @@
         </p>
     </header>
 
-    <ng-template let-message>
+    <ng-template ng-ref="$ctrl.inferredTemplateRef" let-message>
         <span>{{message}}</span>
     </ng-template>
 
@@ -71,6 +71,7 @@
             <span>Por nombre: {{$ctrl.personTemplate ? "TemplateRef" : "sin resolver"}}</span>
             <span>Con decorador: {{$ctrl.decoratedTemplate ? "TemplateRef" : "sin resolver"}}</span>
             <span>Por tipo sin ng-ref: {{$ctrl.firstTemplateByType !== $ctrl.personTemplate ? "primer TemplateRef" : "ERROR"}}</span>
+            <span>ng-ref inferido: {{$ctrl.inferredTemplateRef.createEmbeddedView ? "TemplateRef" : "ERROR"}}</span>
             <span>Optional ausente: {{$ctrl.optionalMissingTemplate === undefined ? "undefined" : "ERROR"}}</span>
             <span>Required ausente: {{$ctrl.requiredMissingResult}}</span>
             <span>ElementRef por defecto: {{$ctrl.defaultElement.nativeElement.nodeName}}</span>
@@ -79,6 +80,8 @@
             <span>read ViewContainerRef: {{$ctrl.queriedContainer.length}} vistas</span>
             <span>DinÃ¡mico: {{$ctrl.dynamicTemplate ? "resuelto" : "undefined"}}</span>
             <span>Primer match: {{$ctrl.firstDuplicateElement.nativeElement.textContent}}</span>
+            <span>@ViewChildren: {{$ctrl.duplicateElements.length}} resultados</span>
+            <span>ViewChildren changes: {{$ctrl.viewChildrenChanges}} cambios</span>
         </div>
 
         <div class="controls">
@@ -329,12 +332,34 @@
             <ng-template let-message>
                 <span>{{message}}</span>
             </ng-template>
+            <ng-template
+                projected-template
+                ng-ref="$ctrl.projectedTemplateController"
+                ng-ref-read="projectedTemplate"
+                let-message
+            >
+                <span>{{message}}</span>
+            </ng-template>
             <ng-container ng-ref="projectedContainer"></ng-container>
             <span ng-ref="projectedElement">ContentChild directo</span>
+            <span ng-ref="projectedCollectionElement">ContentChildren A</span>
+            <span ng-ref="projectedCollectionElement">ContentChildren B</span>
             <span
                 ng-if="$ctrl.showProjectedContentChild"
                 ng-ref="dynamicProjectedElement"
             >ContentChild dinÃ¡mico</span>
+            <span
+                ng-if="$ctrl.showProjectedContentChild"
+                ng-ref="projectedCollectionElement"
+            >ContentChildren dinÃ¡mico</span>
+            <projection-relay>
+                <projection-relay>
+                    <span
+                        ng-if="$ctrl.showProjectedContentChild"
+                        ng-ref="nestedProjectedElement"
+                    >Contenido reproyectado dos veces</span>
+                </projection-relay>
+            </projection-relay>
             <p class="projected-message">{{$ctrl.projectionMessage}}</p>
             <button type="button" ng-click="$ctrl.renameProjection()">
                 Actualizar desde el contenido proyectado
@@ -349,6 +374,11 @@
                 ></div>
             </div>
         </projection-card>
+
+        <p class="expectation">
+            <code>ng-ref-read="projectedTemplate"</code>:
+            {{$ctrl.projectedTemplateController ? "controlador resuelto" : "sin resolver"}}
+        </p>
 
         <p class="expectation">
             El texto, el botón y el outlet anidado deben seguir usando el controller

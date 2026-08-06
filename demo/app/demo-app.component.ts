@@ -1,8 +1,10 @@
 import type { IComponentController, IComponentOptions } from "angular";
 import { TemplateRef } from "../../src/common/ng-template";
-import { ElementRef } from "../../src/core";
+import { ElementRef, type QueryList } from "../../src/core";
 import { type EmbeddedViewRef, ViewContainerRef } from "../../src/core/refs";
 import { ViewChild, viewChild } from "../../src/core/viewChild";
+import { ViewChildren } from "../../src/core/viewChildren";
+import type { ProjectedTemplateController } from "./projection-card.component";
 
 interface TemplateContext {
   $implicit: string;
@@ -23,6 +25,9 @@ interface PersonTemplateContext {
 export class DemoAppController implements IComponentController {
   @ViewChild("decoratedTemplate")
   decoratedTemplate?: TemplateRef<TemplateContext>;
+
+  @ViewChildren("duplicateElement", { read: ElementRef })
+  duplicateElements!: QueryList<ElementRef<HTMLElement>>;
 
   personTemplate = viewChild.required<TemplateRef<PersonTemplateContext>>("personTemplate");
   firstTemplateByType = viewChild.required(TemplateRef);
@@ -79,9 +84,18 @@ export class DemoAppController implements IComponentController {
   showProjectedContentChild = true;
   showDynamicViewChild = true;
   showFirstDuplicate = true;
+  projectedTemplateController: ProjectedTemplateController | null = null;
+  inferredTemplateRef: TemplateRef<TemplateContext> | null = null;
   requiredMissingResult = "Sin comprobar";
+  viewChildrenChanges = 0;
+  private unsubscribeViewChildren?: () => void;
 
   $postLink() {
+    const viewChildrenSubscription = this.duplicateElements.changes.subscribe(() => {
+      this.viewChildrenChanges++;
+    });
+    this.unsubscribeViewChildren = () => viewChildrenSubscription.unsubscribe();
+
     this.requiredMissingResult = this.readRequiredMissingQuery();
 
     console.group("viewChild: valor directo");
@@ -110,6 +124,10 @@ export class DemoAppController implements IComponentController {
     console.groupEnd();
 
     this.logManagedContainer("ViewContainerRef listo");
+  }
+
+  $onDestroy() {
+    this.unsubscribeViewChildren?.();
   }
 
   toggleDynamicViewChild() {

@@ -1,6 +1,7 @@
 import type {IAugmentedJQuery, IController, IDirective, IScope, ITranscludeFunction} from "angular";
 import {
     bindContentQueryOwners,
+    getContentQueryOwners,
     getScopeViewQueryRegistries,
     runWithContentQueryOwners,
 } from "@/core/ng-controller";
@@ -13,9 +14,11 @@ export class NgContent implements IController {
     ) {}
 
     $postLink() {
-        const owners = getScopeViewQueryRegistries(this.$scope).filter(
+        const localOwners = getScopeViewQueryRegistries(this.$scope).filter(
             (registry) => registry.hasContentQueries,
         );
+        const inheritedOwners = getContentQueryOwners(this.$scope);
+        const owners = Array.from(new Set([...localOwners, ...inheritedOwners]));
 
         runWithContentQueryOwners(owners, () => {
             this.$transclude?.((clone, transcludedScope) => {
@@ -26,7 +29,7 @@ export class NgContent implements IController {
                 if (!clone) return;
 
                 const nodes = Array.from(clone);
-                for (const owner of owners) owner.setContentRoots(nodes);
+                for (const owner of localOwners) owner.setContentRoots(nodes);
                 this.$element.after(clone);
             });
         });

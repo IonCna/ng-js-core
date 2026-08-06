@@ -54,11 +54,19 @@ class TemplateNgRef implements IDirective {
                         "$element": nativeEl
                     }
 
-                    const value = cases[read];
+                    const directiveController = read
+                        ? linkedElement.data(`$${read}Controller`)
+                        : undefined;
+                    const defaultValue = templateRef ?? nativeEl;
+                    const value = read ? cases[read] ?? directiveController : defaultValue;
                     const candidates = new Map<ProviderToken<unknown>, unknown>([
                         [ElementRef, nativeEl],
                         ["$element", nativeEl],
                     ]);
+
+                    if (directiveController !== undefined) {
+                        candidates.set(read, directiveController);
+                    }
 
                     if (templateRef) {
                         candidates.set(TemplateRef, templateRef);
@@ -70,7 +78,6 @@ class TemplateNgRef implements IDirective {
                         candidates.set("viewContainerRef", viewContainerRef);
                     }
 
-                    const defaultValue = templateRef ?? nativeEl;
                     const disconnect = findViewQueryRegistry(
                         scope,
                         attrs.ngRef,
@@ -79,6 +86,7 @@ class TemplateNgRef implements IDirective {
                         attrs.ngRef,
                         defaultValue,
                         candidates,
+                        linkedNative,
                     );
                     const contentDisconnects = getContentQueryOwners(scope)
                         .filter((owner) =>
@@ -103,11 +111,6 @@ class TemplateNgRef implements IDirective {
 
                         setter(scope, null);
                     });
-
-                    if(!value) {
-                        setter(scope, nativeEl);
-                        return
-                    }
 
                     setter(scope, value);
                 }

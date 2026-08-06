@@ -8,11 +8,13 @@
         "@types/angular": "^1.8.9",
         "angular": "1.8.3",
         "esbuild": "^0.28.1",
+        "rxjs": "^7.8.2",
         "tsc-alias": "^1.9.1",
         "typescript": "~6.0.3",
       },
       "peerDependencies": {
         "angular": "^1.8.3",
+        "rxjs": "^7.8.2",
       },
     },
   },
@@ -163,11 +165,15 @@
 
     "run-parallel": ["run-parallel@1.2.0", "", { "dependencies": { "queue-microtask": "^1.2.2" } }, "sha512-5l4VyZR86LZ/lDxZTR6jqL8AFE2S0IFLMP26AbjsLVADxHdhB/c0GUsH+y39UfCi3dzz8OlQuPmnaJOMoDHQBA=="],
 
+    "rxjs": ["rxjs@7.8.2", "", { "dependencies": { "tslib": "^2.1.0" } }, "sha512-dhKf903U/PQZY6boNNtAGdWbG85WAbjT/1xYoZIC7FAY0yWapOBQVsVrDl58W86//e1VpMNBtRV4MaXfdMySFA=="],
+
     "slash": ["slash@3.0.0", "", {}, "sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q=="],
 
     "to-regex-range": ["to-regex-range@5.0.1", "", { "dependencies": { "is-number": "^7.0.0" } }, "sha512-65P7iz6X5yEr1cwcgvQxbbIw7Uk3gOy5dIdtZ4rDveLqhrdJP+Li/Hx6tyK0NEb+2GCyneCMJiGqrADCSNk8sQ=="],
 
     "tsc-alias": ["tsc-alias@1.9.1", "", { "dependencies": { "chokidar": "^3.5.3", "commander": "^9.0.0", "get-tsconfig": "^4.10.0", "globby": "^11.0.4", "mylas": "^2.1.9", "normalize-path": "^3.0.0", "plimit-lit": "^1.2.6" }, "bin": { "tsc-alias": "dist/bin/index.js" } }, "sha512-sFZdVFthH8uvdplPJrOYGOHcxu6UPtcAcY678JPwEQiMzgLZYFO7Qc/rzELp7ingTc+OxtzH6n+8Pn2eVQep6w=="],
+
+    "tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 
     "typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
   }

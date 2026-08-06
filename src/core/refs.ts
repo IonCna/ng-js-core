@@ -43,7 +43,7 @@ export class EmbeddedViewRef<C = ContextObject> extends AbstractViewRef<C> {
 
     public override detectChanges() {
         if(this._destroyed) return;
-        this.$scope.$digest()
+        this.$scope.$applyAsync()
     }
 
     public override destroy() {
