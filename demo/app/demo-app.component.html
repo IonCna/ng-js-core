@@ -326,9 +326,21 @@
         </div>
 
         <projection-card title="Contenido proyectado">
+            <ng-template let-message>
+                <span>{{message}}</span>
+            </ng-template>
+            <ng-container ng-ref="projectedContainer"></ng-container>
+            <span ng-ref="projectedElement">ContentChild directo</span>
+            <span
+                ng-if="$ctrl.showProjectedContentChild"
+                ng-ref="dynamicProjectedElement"
+            >ContentChild dinÃ¡mico</span>
             <p class="projected-message">{{$ctrl.projectionMessage}}</p>
             <button type="button" ng-click="$ctrl.renameProjection()">
                 Actualizar desde el contenido proyectado
+            </button>
+            <button type="button" ng-click="$ctrl.toggleProjectedContentChild()">
+                {{$ctrl.showProjectedContentChild ? "Destruir ContentChild dinÃ¡mico" : "Crear ContentChild dinÃ¡mico"}}
             </button>
             <div class="projected-outlet">
                 <div

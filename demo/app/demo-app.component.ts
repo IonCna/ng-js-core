@@ -76,6 +76,7 @@ export class DemoAppController implements IComponentController {
   };
   showOutlet = true;
   projectionMessage = "Este texto pertenece al scope del consumidor";
+  showProjectedContentChild = true;
   showDynamicViewChild = true;
   showFirstDuplicate = true;
   requiredMissingResult = "Sin comprobar";
@@ -230,6 +231,10 @@ export class DemoAppController implements IComponentController {
 
   renameProjection() {
     this.projectionMessage = `Contenido actualizado ${Date.now()}`;
+  }
+
+  toggleProjectedContentChild() {
+    this.showProjectedContentChild = !this.showProjectedContentChild;
   }
 
   private createManagedView(index?: number) {

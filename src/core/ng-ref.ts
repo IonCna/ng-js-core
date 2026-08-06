@@ -1,6 +1,10 @@
 import type {IDirective, IDirectiveCompileFn, IParseService, IScope} from "angular";
 import {TemplateRef} from "@/common/ng-template";
-import {getScopeViewQueryRegistries, type ViewQueryRegistry} from "@/core/ng-controller";
+import {
+    getContentQueryOwners,
+    getScopeViewQueryRegistries,
+    type ViewQueryRegistry,
+} from "@/core/ng-controller";
 import {ViewContainerRef} from "@/core/refs";
 import type {ProviderToken} from "@/core/viewChild";
 import {ElementRef} from "@/core";
@@ -76,9 +80,24 @@ class TemplateNgRef implements IDirective {
                         defaultValue,
                         candidates,
                     );
+                    const contentDisconnects = getContentQueryOwners(scope)
+                        .filter((owner) =>
+                            owner.acceptsContentReference(attrs.ngRef, candidates),
+                        )
+                        .map((owner) =>
+                            owner.connectContentReference(
+                                attrs.ngRef,
+                                defaultValue,
+                                candidates,
+                                linkedNative,
+                            ),
+                        );
 
                     scope.$on("$destroy", () => {
                         disconnect?.();
+                        for (const disconnectContent of contentDisconnects) {
+                            disconnectContent();
+                        }
                         const isCtrl = getter(scope) == value;
                         if (!isCtrl) return;
 

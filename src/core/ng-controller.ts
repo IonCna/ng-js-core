@@ -1,4 +1,5 @@
 import type { IAugmentedJQuery, IControllerService, IScope } from "angular";
+import { ContentChildQuery, createDecoratedContentChildQueries } from "@/core/contentChild";
 import { createDecoratedViewChildQueries, type ProviderToken, ViewChildQuery } from "@/core/viewChild";
 
 type ControllerExpression = unknown;
@@ -33,11 +34,14 @@ interface ViewReference {
   readonly candidates: ReadonlyMap<ProviderToken<unknown>, unknown>;
   readonly defaultValue: unknown;
   readonly locator: string;
+  readonly node?: Node;
 }
 
 const controllerRegistries = new WeakMap<object, ViewQueryRegistry>();
 const scopeRegistries = new WeakMap<IScope, ViewQueryRegistry[]>();
 const activeRegistries: ViewQueryRegistry[] = [];
+const contentOwnersByScope = new WeakMap<IScope, readonly ViewQueryRegistry[]>();
+const activeContentOwners: Array<readonly ViewQueryRegistry[]> = [];
 
 function isObject(value: unknown): value is object {
   return (typeof value === "object" && value !== null) || typeof value === "function";
@@ -71,10 +75,49 @@ export function getScopeViewQueryRegistries(scope: IScope): readonly ViewQueryRe
   return scopeRegistries.get(scope) ?? [];
 }
 
+export function runWithContentQueryOwners<T>(owners: readonly ViewQueryRegistry[], callback: () => T): T {
+  activeContentOwners.push(owners);
+
+  try {
+    return callback();
+  } finally {
+    activeContentOwners.pop();
+  }
+}
+
+export function bindContentQueryOwners(scope: IScope, owners: readonly ViewQueryRegistry[]): void {
+  contentOwnersByScope.set(scope, owners);
+
+  scope.$on("$destroy", () => {
+    if (contentOwnersByScope.get(scope) === owners) {
+      contentOwnersByScope.delete(scope);
+    }
+  });
+}
+
+export function getContentQueryOwners(scope: IScope): readonly ViewQueryRegistry[] {
+  const activeOwners = activeContentOwners.at(-1);
+  if (activeOwners) return activeOwners;
+
+  let current: IScope | null = scope;
+
+  while (current) {
+    const owners = contentOwnersByScope.get(current);
+    if (owners) return owners;
+
+    current = current.$parent;
+  }
+
+  return [];
+}
+
 export class ViewQueryRegistry {
   private controller?: object;
   private readonly queries: ViewChildQuery<unknown>[] = [];
   private readonly references: ViewReference[] = [];
+  private readonly contentQueries: ContentChildQuery<unknown>[] = [];
+  private readonly contentReferences: ViewReference[] = [];
+  private readonly contentRoots = new Set<Node>();
   private readonly disconnectFromOwners: Array<() => void> = [];
 
   constructor(
@@ -100,6 +143,8 @@ export class ViewQueryRegistry {
     this.controller = controller;
     controllerRegistries.set(controller, this);
     this.captureViewChildQueries(controller);
+    this.captureContentChildQueries(controller);
+    this.wrapPostLinkForStaticQueries(controller);
 
     if (!this.scope) {
       return;
@@ -138,6 +183,16 @@ export class ViewQueryRegistry {
     );
   }
 
+  get hasContentQueries(): boolean {
+    return this.contentQueries.length > 0;
+  }
+
+  acceptsContentReference(locator: string, candidates: ReadonlyMap<ProviderToken<unknown>, unknown>): boolean {
+    return this.contentQueries.some((query) =>
+      typeof query.locator === "string" ? query.locator === locator : candidates.has(query.locator),
+    );
+  }
+
   connectReference(
     locator: string,
     defaultValue: unknown,
@@ -156,6 +211,45 @@ export class ViewQueryRegistry {
     };
   }
 
+  connectContentReference(
+    locator: string,
+    defaultValue: unknown,
+    candidates: ReadonlyMap<ProviderToken<unknown>, unknown>,
+    node?: Node,
+  ): () => void {
+    const reference: ViewReference = {
+      candidates,
+      defaultValue,
+      locator,
+      node,
+    };
+    this.contentReferences.push(reference);
+    this.refreshContentQueries();
+
+    return () => {
+      const index = this.contentReferences.indexOf(reference);
+      if (index === -1) return;
+
+      this.contentReferences.splice(index, 1);
+      this.refreshContentQueries();
+    };
+  }
+
+  setContentRoots(nodes: readonly Node[]): void {
+    for (const node of nodes) this.contentRoots.add(node);
+    this.refreshContentQueries();
+  }
+
+  finalizeStaticContentQueries(): void {
+    this.refreshContentQueries();
+    for (const query of this.contentQueries) query.freeze();
+  }
+
+  finalizeStaticViewQueries(): void {
+    this.refreshQueries();
+    for (const query of this.queries) query.freeze();
+  }
+
   private captureViewChildQueries(controller: object): void {
     for (const property of Reflect.ownKeys(controller)) {
       const descriptor = Object.getOwnPropertyDescriptor(controller, property);
@@ -167,6 +261,22 @@ export class ViewQueryRegistry {
 
     for (const { propertyKey, query } of createDecoratedViewChildQueries(controller)) {
       this.installViewChildQuery(controller, propertyKey, query, true);
+    }
+  }
+
+  private captureContentChildQueries(controller: object): void {
+    for (const property of Reflect.ownKeys(controller)) {
+      const descriptor = Object.getOwnPropertyDescriptor(controller, property);
+      if (!descriptor || !(descriptor.value instanceof ContentChildQuery)) {
+        continue;
+      }
+
+      const query = descriptor.value as ContentChildQuery<unknown>;
+      this.installContentChildQuery(controller, property, query, descriptor.enumerable ?? true);
+    }
+
+    for (const { propertyKey, query } of createDecoratedContentChildQueries(controller)) {
+      this.installContentChildQuery(controller, propertyKey, query, true);
     }
   }
 
@@ -183,6 +293,38 @@ export class ViewQueryRegistry {
       enumerable,
       get: () => query.value,
     });
+  }
+
+  private installContentChildQuery(
+    controller: object,
+    property: PropertyKey,
+    query: ContentChildQuery<unknown>,
+    enumerable: boolean,
+  ): void {
+    this.contentQueries.push(query);
+
+    Object.defineProperty(controller, property, {
+      configurable: true,
+      enumerable,
+      get: () => query.value,
+    });
+  }
+
+  private wrapPostLinkForStaticQueries(controller: object): void {
+    const hasStaticViewQuery = this.queries.some((query) => query.staticQuery);
+    const hasStaticContentQuery = this.contentQueries.some((query) => query.staticQuery);
+    if (!hasStaticViewQuery && !hasStaticContentQuery) return;
+
+    const lifecycleController = controller as {
+      $postLink?: (...args: unknown[]) => unknown;
+    };
+    const postLink = lifecycleController.$postLink;
+
+    lifecycleController.$postLink = (...args: unknown[]) => {
+      this.finalizeStaticViewQueries();
+      this.finalizeStaticContentQueries();
+      return postLink?.apply(controller, args);
+    };
   }
 
   private publishControllerToOwners(controller: object, scope: IScope): void {
@@ -202,6 +344,16 @@ export class ViewQueryRegistry {
 
       current = current.$parent;
     }
+
+    const [node] = this.element ? Array.from(this.element) : [];
+
+    for (const owner of getContentQueryOwners(scope)) {
+      if (owner === this || !owner.acceptsContentReference("", candidates)) {
+        continue;
+      }
+
+      this.disconnectFromOwners.push(owner.connectContentReference("", controller, candidates, node));
+    }
   }
 
   private refreshQueries(): void {
@@ -211,6 +363,35 @@ export class ViewQueryRegistry {
           ? candidate.locator === query.locator
           : candidate.candidates.has(query.locator),
       );
+
+      if (!reference) {
+        query.reset();
+        continue;
+      }
+
+      const readToken = query.read ?? (typeof query.locator === "string" ? undefined : query.locator);
+      const value = readToken ? reference.candidates.get(readToken) : reference.defaultValue;
+
+      if (value === undefined) {
+        query.reset();
+      } else {
+        query.resolve(value);
+      }
+    }
+  }
+
+  private refreshContentQueries(): void {
+    for (const query of this.contentQueries) {
+      const reference = this.contentReferences.find((candidate) => {
+        const matchesLocator =
+          typeof query.locator === "string"
+            ? candidate.locator === query.locator
+            : candidate.candidates.has(query.locator);
+        const matchesDepth =
+          query.descendants || (candidate.node !== undefined && this.contentRoots.has(candidate.node));
+
+        return matchesLocator && matchesDepth;
+      });
 
       if (!reference) {
         query.reset();

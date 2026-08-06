@@ -8,12 +8,19 @@ export interface ViewChildReadOptions<T> extends ViewChildOptions {
   readonly read: ProviderToken<T>;
 }
 
+export interface ViewChildDecoratorOptions<T = unknown> {
+  readonly read?: ProviderToken<T>;
+  readonly static?: boolean;
+}
+
 export class ViewChildQuery<T> {
+  private frozen = false;
   private resolvedValue: T | undefined;
 
   constructor(
     readonly locator: ProviderToken<unknown>,
     readonly required: boolean,
+    readonly staticQuery: boolean,
     readonly read?: ProviderToken<T>,
     readonly debugName?: string,
   ) {}
@@ -28,11 +35,17 @@ export class ViewChildQuery<T> {
   }
 
   resolve(value: T): void {
+    if (this.frozen) return;
     this.resolvedValue = value;
   }
 
   reset(): void {
+    if (this.frozen) return;
     this.resolvedValue = undefined;
+  }
+
+  freeze(): void {
+    if (this.staticQuery) this.frozen = true;
   }
 
   clear(value: T): void {
@@ -62,7 +75,12 @@ type LegacyViewChildFieldDecorator = (target: object, propertyKey: string | symb
 
 interface DecoratedViewChildDefinition {
   readonly locator: ProviderToken<unknown>;
-  readonly options?: ViewChildOptions | ViewChildReadOptions<unknown>;
+  readonly options?: ViewChildDecoratorOptions;
+}
+
+interface ViewChildQueryCreationOptions<T> {
+  readonly debugName?: string;
+  readonly read?: ProviderToken<T>;
 }
 
 export interface DecoratedViewChildQuery {
@@ -74,11 +92,12 @@ const decoratedQueries = new WeakMap<object, Map<string | symbol, DecoratedViewC
 
 function createViewChildQuery<T>(
   locator: ProviderToken<unknown>,
-  options: ViewChildOptions | ViewChildReadOptions<T> | undefined,
+  options: ViewChildQueryCreationOptions<T> | undefined,
   required: boolean,
+  staticQuery = false,
 ): ViewChildQuery<T> {
   const read = options && "read" in options ? options.read : undefined;
-  return new ViewChildQuery<T>(locator, required, read, options?.debugName);
+  return new ViewChildQuery<T>(locator, required, staticQuery, read, options?.debugName);
 }
 
 function createViewChild<T>(
@@ -107,14 +126,15 @@ export const viewChild = optionalViewChild as ViewChildFunction;
 
 export function ViewChild(
   locator: ProviderToken<unknown>,
-  options?: ViewChildOptions | ViewChildReadOptions<unknown>,
+  options?: ViewChildDecoratorOptions,
 ): StandardViewChildFieldDecorator & LegacyViewChildFieldDecorator {
   const decorator = (
     valueOrTarget: undefined | object,
     contextOrProperty: ClassFieldDecoratorContext<unknown, unknown> | string | symbol,
   ) => {
     if (typeof contextOrProperty === "object") {
-      return <Value>(_initialValue: Value): Value => createViewChild(locator, options, false) as Value;
+      return <Value>(_initialValue: Value): Value =>
+        createViewChildQuery(locator, options, false, options?.static ?? false) as unknown as Value;
     }
 
     const target = valueOrTarget as object;
@@ -146,7 +166,12 @@ export function createDecoratedViewChildQueries(controller: object): readonly De
         capturedProperties.add(propertyKey);
         queries.push({
           propertyKey,
-          query: createViewChildQuery(definition.locator, definition.options, false),
+          query: createViewChildQuery(
+            definition.locator,
+            definition.options,
+            false,
+            definition.options?.static ?? false,
+          ),
         });
       }
     }

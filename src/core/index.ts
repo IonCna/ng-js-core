@@ -3,6 +3,7 @@ import { decorNgRef } from "@/core/ng-ref"
 import { decorNgController } from "@/core/ng-controller"
 
 export { EmbeddedViewRef, ViewContainerRef } from "@/core/refs"
+export { ContentChild, contentChild } from "@/core/contentChild"
 export { ViewChild, viewChild } from "@/core/viewChild"
 export type { ContextObject } from "@/core/abstracts"
 
