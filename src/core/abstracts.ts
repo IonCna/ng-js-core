@@ -47,7 +47,9 @@ export abstract class ViewContainerRef {
 }
 
 export interface ContextObject {
+  // biome-ignore lint/suspicious/noExplicitAny: Matches Angular's permissive template context contract.
   $implicit?: any;
+  // biome-ignore lint/suspicious/noExplicitAny: Template contexts may expose arbitrary consumer-defined values.
   [key: string]: any;
 }
 

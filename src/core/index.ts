@@ -21,7 +21,10 @@ CoreModule.decorator("ngRefDirective", decorNgRef);
 CoreModule.service(ChangeDetectorRef.$name, ChangeDetectorRef);
 CoreModule.factory(NgZone.$name, ["$rootScope", ngZoneFactory]);
 
-export class ElementRef<T = any> {
+export class ElementRef<
+  // biome-ignore lint/suspicious/noExplicitAny: Matches Angular's public ElementRef generic default.
+  T = any,
+> {
   public nativeElement: T;
 
   constructor(nativeElement: T) {

@@ -1,4 +1,6 @@
-export type ProviderToken<T> = string | { readonly prototype: T };
+import type { ProviderToken } from "@/core/queries/query-types";
+
+export type { ProviderToken } from "@/core/queries/query-types";
 
 export interface ViewChildOptions {
   readonly debugName?: string;
