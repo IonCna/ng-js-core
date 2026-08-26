@@ -1,5 +1,4 @@
 import type { TemplateRef } from "@/common/ng-template.ts";
-import type { ElementRef } from "@/core";
 
 export abstract class Refs {
   abstract markForCheck(): void;
@@ -31,25 +30,23 @@ export abstract class ViewContainerRef {
   abstract readonly length: number;
   abstract createEmbeddedView<C>(
     templateRef: TemplateRef<C>,
-    context?: C | undefined,
-    options?: { index?: number | undefined } | undefined,
+    context?: C,
+    options?: { index?: number },
   ): EmbeddedViewRef<C>;
   abstract createEmbeddedView<C>(
     templateRef: TemplateRef<C>,
-    context?: C | undefined,
-    index?: number | undefined,
+    context?: C,
+    index?: number,
   ): EmbeddedViewRef<C>;
-  abstract insert(viewRef: ViewRef, index?: number | undefined): ViewRef;
+  abstract insert(viewRef: ViewRef, index?: number): ViewRef;
   abstract move(viewRef: ViewRef, currentIndex: number): ViewRef;
   abstract indexOf(viewRef: ViewRef): number;
-  abstract remove(index?: number | undefined): void;
-  abstract detach(index?: number | undefined): ViewRef | null;
+  abstract remove(index?: number): void;
+  abstract detach(index?: number): ViewRef | null;
 }
 
 export interface ContextObject {
-  // biome-ignore lint/suspicious/noExplicitAny: Matches Angular's permissive template context contract.
   $implicit?: any;
-  // biome-ignore lint/suspicious/noExplicitAny: Template contexts may expose arbitrary consumer-defined values.
   [key: string]: any;
 }
 
@@ -58,4 +55,29 @@ export abstract class ChangeDetectorRef {
   abstract detach(): void;
   abstract detectChanges(): void;
   abstract reattach(): void;
+}
+
+type Type<T = any> = new (...args: any[]) => T;
+
+export abstract class ComponentRef<C> {
+  abstract setInput(name: string, value: unknown): void;
+  abstract readonly location: ElementRef<any>;
+  abstract readonly instance: C;
+  abstract readonly hostView: ViewRef;
+  abstract readonly changeDetectorRef: ChangeDetectorRef;
+  abstract readonly componentType: Type<any>;
+  abstract destroy(): void;
+  abstract onDestroy(callback: Function): void;
+}
+
+export abstract class NgDisabled {
+  abstract readonly disabled: boolean;
+
+  abstract onChange(
+    callback: (disabled: boolean) => void,
+  ): () => void;
+}
+
+export abstract class ElementRef<T = any> {
+  constructor(public nativeElement: T) {};
 }

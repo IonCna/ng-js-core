@@ -64,6 +64,8 @@ export class TemplateRef<C = ContextObject> implements IController {
       declarationMap.set(normalized, value || "$implicit");
     }
 
+    //escenario ocesa
+
     return {
       pre: (_scope, _el, _attrs, ctrl) => {
         const templateRef = ctrl as TemplateRef;
