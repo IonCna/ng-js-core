@@ -3,7 +3,7 @@ import { TemplateRef } from "../../src/common/ng-template";
 import { ElementRef, type QueryList } from "../../src/core";
 import { ContentChild, contentChild } from "../../src/core/contentChild";
 import { ContentChildren, contentChildren } from "../../src/core/contentChildren";
-import { ViewContainerRef } from "../../src/core/refs";
+import { ViewContainerRef } from "../../src/core";
 import { ViewChild } from "../../src/core/viewChild";
 
 export class ProjectedTemplateBase {}

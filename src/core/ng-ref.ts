@@ -1,8 +1,8 @@
 import type { IDirective, IDirectiveCompileFn, IParseService, IScope } from "angular";
 import { TemplateRef } from "@/common/ng-template";
-import { ElementRef } from "@/core";
+import { ElementRefImpl as ElementRef } from "@/core/abstractions/element-ref";
 import { getContentQueryOwners, getScopeViewQueryRegistries, type ViewQueryRegistry } from "@/core/ng-controller";
-import { ViewContainerRef } from "@/core/refs";
+import { ViewContainerRef } from "@/core/abstracts";
 import type { ProviderToken } from "@/core/viewChild";
 
 function findViewQueryRegistry(

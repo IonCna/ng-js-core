@@ -1,6 +1,6 @@
 import type { IAugmentedJQuery, IController, IDirective, IScope, ITranscludeFunction } from "angular";
-import { ElementRef } from "@/core";
-import { ViewContainerRef } from "@/core/refs";
+import { ElementRefImpl as ElementRef } from "@/core/abstractions/element-ref";
+import { ViewContainerRefImpl as ViewContainerRef } from "@/core/abstractions/view-container-ref";
 
 export class ContentRef implements IController {
   private readonly _viewContainerRef: ViewContainerRef;

@@ -1,7 +1,7 @@
 import type { IComponentController, IComponentOptions } from "angular";
 import { TemplateRef } from "../../src/common/ng-template";
 import { ElementRef, type QueryList } from "../../src/core";
-import { type EmbeddedViewRef, ViewContainerRef } from "../../src/core/refs";
+import { type EmbeddedViewRef, ViewContainerRef } from "../../src/core";
 import { ViewChild, viewChild } from "../../src/core/viewChild";
 import { ViewChildren } from "../../src/core/viewChildren";
 import type { ProjectedTemplateController } from "./projection-card.component";

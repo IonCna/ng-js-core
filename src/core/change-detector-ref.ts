@@ -1,4 +1,5 @@
 import type { IScope } from "angular";
+import { ChangeDetectorRefImpl } from "@/core/abstractions/change-detector-ref";
 import { ChangeDetectorRef as AbstractChangeDetectorRef } from "@/core/abstracts";
 
 /**
@@ -10,36 +11,27 @@ import { ChangeDetectorRef as AbstractChangeDetectorRef } from "@/core/abstracts
  * ambient application digests may still visit the scope.
  */
 export class ChangeDetectorRef extends AbstractChangeDetectorRef {
-  private attached = true;
-  private destroyed = false;
+  private readonly ref: ChangeDetectorRefImpl;
 
-  constructor(private readonly scope: IScope) {
+  constructor(scope: IScope) {
     super();
-
-    scope.$on("$destroy", () => {
-      this.destroyed = true;
-      this.attached = false;
-    });
+    this.ref = new ChangeDetectorRefImpl(scope);
   }
 
   markForCheck(): void {
-    if (!this.attached || this.destroyed || this.scope.$$phase) return;
-    this.scope.$applyAsync();
+    this.ref.markForCheck();
   }
 
   detach(): void {
-    if (this.destroyed) return;
-    this.attached = false;
+    this.ref.detach();
   }
 
   detectChanges(): void {
-    if (this.destroyed || this.scope.$$phase) return;
-    this.scope.$digest();
+    this.ref.detectChanges();
   }
 
   reattach(): void {
-    if (this.destroyed || this.attached) return;
-    this.attached = true;
+    this.ref.reattach();
   }
 
   static get $name(): string {
