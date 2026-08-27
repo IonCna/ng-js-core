@@ -1,4 +1,3 @@
-import angular from "angular";
 import type { ChangeDetectorRef } from "@/core/abstractions/change-detector-ref";
 import type { ElementRef } from "@/core/abstractions/element-ref";
 import type { ViewRef } from "@/core/abstractions/view-ref";
@@ -26,7 +25,7 @@ export class ComponentRefImpl<C = any> extends ComponentRef<C> {
   }
 
   setInput(name: string, value: unknown): void {
-    angular.extend(this.instance, {
+    Object.assign(this.instance as object, {
       [name]: value,
     });
 

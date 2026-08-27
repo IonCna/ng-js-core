@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type angular from "angular";
 import type { IControllerService, IScope } from "angular";
 import { NgChangeDetectorRef as ChangeDetectorRef } from "../src/core/decorators/ng-change-detector-ref";
 import { decorNgController } from "../src/core/decorators/ng-controller";
@@ -77,7 +78,7 @@ describe("ChangeDetectorRef", () => {
       injectedReference = locals?.[ChangeDetectorRef.$name];
       return {};
     }) as unknown as IControllerService;
-    const controllerService = decorNgController(delegate) as unknown as (
+    const controllerService = decorNgController(delegate, {} as angular.auto.IInjectorService) as unknown as (
       expression: unknown,
       locals: Record<string, unknown>,
     ) => unknown;

@@ -1,3 +1,4 @@
+import type angular from "angular";
 import type { IAugmentedJQuery, IController, IDirective, IScope, ITranscludeFunction } from "angular";
 import { ElementRefImpl as ElementRef } from "@/core/abstractions/element-ref";
 import { ViewContainerRefImpl as ViewContainerRef } from "@/core/abstractions/view-container-ref";
@@ -9,11 +10,12 @@ export class ContentRef implements IController {
     $element: IAugmentedJQuery,
     private $transclude: ITranscludeFunction,
     private $scope: IScope,
+    $injector: angular.auto.IInjectorService,
   ) {
     const [native] = Array.from($element);
 
     const elementRef = new ElementRef(native);
-    this._viewContainerRef = new ViewContainerRef(elementRef);
+    this._viewContainerRef = new ViewContainerRef(elementRef, $injector);
   }
 
   get viewContainerRef(): ViewContainerRef {
@@ -41,7 +43,7 @@ export class ContentRef implements IController {
   }
 
   static get $inject() {
-    return ["$element", "$transclude", "$scope"];
+    return ["$element", "$transclude", "$scope", "$injector"];
   }
 
   static get $name() {

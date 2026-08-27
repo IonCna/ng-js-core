@@ -1,4 +1,7 @@
+import type angular from "angular";
 import type { IAugmentedJQuery, IControllerService, IScope } from "angular";
+import { ElementRefImpl } from "@/core/abstractions/element-ref";
+import { ViewContainerRef, ViewContainerRefImpl } from "@/core/abstractions/view-container-ref";
 import { NgChangeDetectorRef } from "@/core/decorators/ng-change-detector-ref";
 import { popActiveViewQueryRegistry, pushActiveViewQueryRegistry } from "@/core/queries/query-context";
 import { ViewQueryRegistry } from "@/core/queries/view-query-registry";
@@ -39,16 +42,37 @@ function isObject(value: unknown): value is object {
   return (typeof value === "object" && value !== null) || typeof value === "function";
 }
 
-function createControllerLocals(locals?: ControllerLocals): ControllerLocals | undefined {
-  if (!locals?.$scope || Object.hasOwn(locals, NgChangeDetectorRef.$name)) return locals;
+function createControllerLocals(
+  locals: ControllerLocals | undefined,
+  injector: angular.auto.IInjectorService,
+): ControllerLocals | undefined {
+  if (!locals) return undefined;
+
+  let controllerLocals = locals;
+
+  if (locals.$scope && !Object.hasOwn(locals, NgChangeDetectorRef.$name)) {
+    controllerLocals = {
+      ...controllerLocals,
+      [NgChangeDetectorRef.$name]: new NgChangeDetectorRef(locals.$scope),
+    };
+  }
+
+  const [nativeElement] = locals.$element ? Array.from(locals.$element) : [];
+  if (!nativeElement || Object.hasOwn(locals, ViewContainerRef.$name)) return controllerLocals;
+
+  const viewContainerRef = new ViewContainerRefImpl(new ElementRefImpl(nativeElement), injector);
+  locals.$scope?.$on("$destroy", () => viewContainerRef.clear());
 
   return {
-    ...locals,
-    [NgChangeDetectorRef.$name]: new NgChangeDetectorRef(locals.$scope),
+    ...controllerLocals,
+    [ViewContainerRef.$name]: viewContainerRef,
   };
 }
 
-export const decorNgController = ($delegate: IControllerService): IControllerService => {
+export const decorNgController = (
+  $delegate: IControllerService,
+  $injector: angular.auto.IInjectorService,
+): IControllerService => {
   const invokeController = $delegate as unknown as InternalControllerService;
 
   const decoratedController = <T = unknown>(
@@ -57,7 +81,7 @@ export const decorNgController = ($delegate: IControllerService): IControllerSer
     later?: boolean,
     identifier?: string,
   ): T | ControllerInitializer<T> => {
-    const controllerLocals = createControllerLocals(locals);
+    const controllerLocals = createControllerLocals(locals, $injector);
 
     if (later) {
       const initializer = invokeController<T>(
@@ -113,4 +137,4 @@ export const decorNgController = ($delegate: IControllerService): IControllerSer
   return decoratedController as IControllerService;
 };
 
-decorNgController.$inject = ["$delegate"];
+decorNgController.$inject = ["$delegate", "$injector"];

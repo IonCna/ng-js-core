@@ -1,4 +1,4 @@
-import angular, { type IScope, type ITranscludeFunction } from "angular";
+import type { IScope, ITranscludeFunction } from "angular";
 import type { ContextObject } from "@/core/abstractions/context-object";
 import { ViewRef, ViewRefImpl } from "@/core/abstractions/view-ref";
 
@@ -23,7 +23,7 @@ export class EmbeddedViewRefImpl<C = ContextObject> extends ViewRefImpl implemen
   ) {
     super($scope);
 
-    const clone = $transclude(this.$scope, angular.noop);
+    const clone = $transclude(this.$scope, () => undefined);
     this.compiled = clone.contents();
     this.rootNodes = Array.from(this.compiled);
 
@@ -36,6 +36,6 @@ export class EmbeddedViewRefImpl<C = ContextObject> extends ViewRefImpl implemen
 
   public override destroy() {
     this.compiled.remove();
-    super.destroy()
+    super.destroy();
   }
 }

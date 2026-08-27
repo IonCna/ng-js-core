@@ -1,13 +1,17 @@
-import angular from "angular";
+import type angular from "angular";
 import type { TemplateRef } from "@/common/ng-template.ts";
-import type { Binding } from "@/core/index.ts";
-import { ComponentRef, ComponentRefImpl } from "@/core/abstractions/component-ref";
-import { ElementRef, ElementRefImpl } from "@/core/abstractions/element-ref";
-import { EmbeddedViewRef, EmbeddedViewRefImpl } from "@/core/abstractions/embedded-view-ref";
-import { ViewRef, ViewRefImpl } from "@/core/abstractions/view-ref";
 import { ChangeDetectorRefImpl } from "@/core/abstractions/change-detector-ref";
+import { type ComponentRef, ComponentRefImpl } from "@/core/abstractions/component-ref";
+import { type ElementRef, ElementRefImpl } from "@/core/abstractions/element-ref";
+import type { EmbeddedViewRef, EmbeddedViewRefImpl } from "@/core/abstractions/embedded-view-ref";
+import { type ViewRef, ViewRefImpl } from "@/core/abstractions/view-ref";
+import type { Binding } from "@/core/index.ts";
 
 export abstract class ViewContainerRef {
+  static get $name(): "viewContainerRef" {
+    return "viewContainerRef";
+  }
+
   abstract readonly element: ElementRef;
   abstract clear(): void;
   abstract get(index: number): ViewRef | null;
@@ -17,11 +21,7 @@ export abstract class ViewContainerRef {
     context?: C,
     options?: { index?: number },
   ): EmbeddedViewRef<C>;
-  abstract createEmbeddedView<C>(
-    templateRef: TemplateRef<C>,
-    context?: C,
-    index?: number,
-  ): EmbeddedViewRef<C>;
+  abstract createEmbeddedView<C>(templateRef: TemplateRef<C>, context?: C, index?: number): EmbeddedViewRef<C>;
   abstract insert(viewRef: ViewRef, index?: number): ViewRef;
   abstract move(viewRef: ViewRef, currentIndex: number): ViewRef;
   abstract indexOf(viewRef: ViewRef): number;
@@ -47,23 +47,12 @@ export class ViewContainerRefImpl extends ViewContainerRef {
 
   private injector: angular.auto.IInjectorService;
 
-  constructor(public readonly element: ElementRefImpl) {
+  constructor(
+    public readonly element: ElementRefImpl,
+    injector: angular.auto.IInjectorService,
+  ) {
     super();
-
-    this.injector = this.getClosestInjector();
-  }
-
-  private getClosestInjector() {
-    let node = this.element.nativeElement;
-
-    while (node) {
-      const injector = angular.element(node).injector();
-      if (injector) return injector;
-
-      node = node.parentNode;
-    }
-
-    return angular.element(document.body).injector();
+    this.injector = injector;
   }
 
   public get length() {
@@ -97,7 +86,7 @@ export class ViewContainerRefImpl extends ViewContainerRef {
     const template = attrs ? `<${componentName} ${attrs}></${componentName}>` : `<${componentName}></${componentName}>`;
     const linkFn = $compile(template);
 
-    angular.extend($scope, options?.bindings);
+    Object.assign($scope, options?.bindings);
 
     const compiled = linkFn($scope);
 
