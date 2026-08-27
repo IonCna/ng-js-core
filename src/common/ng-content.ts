@@ -4,7 +4,7 @@ import {
   getContentQueryOwners,
   getScopeViewQueryRegistries,
   runWithContentQueryOwners,
-} from "@/core/ng-controller";
+} from "@/core/decorators/ng-controller";
 
 export class NgContent implements IController {
   constructor(

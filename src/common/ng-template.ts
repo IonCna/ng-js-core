@@ -5,7 +5,7 @@ import angular, {
   type IScope,
   type ITranscludeFunction,
 } from "angular";
-import type { ContextObject } from "@/core/abstracts";
+import type { ContextObject } from "@/core/abstractions";
 import { EmbeddedViewRefImpl as EmbeddedViewRef } from "@/core/abstractions/embedded-view-ref";
 
 export class TemplateRef<C = ContextObject> implements IController {

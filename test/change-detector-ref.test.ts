@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { IControllerService, IScope } from "angular";
-import { ChangeDetectorRef } from "../src/core/change-detector-ref";
-import { decorNgController } from "../src/core/ng-controller";
+import { NgChangeDetectorRef as ChangeDetectorRef } from "../src/core/decorators/ng-change-detector-ref";
+import { decorNgController } from "../src/core/decorators/ng-controller";
 
 function createScopeHarness() {
   const destroyCallbacks: Array<() => void> = [];

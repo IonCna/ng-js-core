@@ -1,5 +1,5 @@
 import type { IAugmentedJQuery, IControllerService, IScope } from "angular";
-import { ChangeDetectorRef } from "@/core/change-detector-ref";
+import { NgChangeDetectorRef } from "@/core/decorators/ng-change-detector-ref";
 import { popActiveViewQueryRegistry, pushActiveViewQueryRegistry } from "@/core/queries/query-context";
 import { ViewQueryRegistry } from "@/core/queries/view-query-registry";
 
@@ -40,11 +40,11 @@ function isObject(value: unknown): value is object {
 }
 
 function createControllerLocals(locals?: ControllerLocals): ControllerLocals | undefined {
-  if (!locals?.$scope || Object.hasOwn(locals, ChangeDetectorRef.$name)) return locals;
+  if (!locals?.$scope || Object.hasOwn(locals, NgChangeDetectorRef.$name)) return locals;
 
   return {
     ...locals,
-    [ChangeDetectorRef.$name]: new ChangeDetectorRef(locals.$scope),
+    [NgChangeDetectorRef.$name]: new NgChangeDetectorRef(locals.$scope),
   };
 }
 

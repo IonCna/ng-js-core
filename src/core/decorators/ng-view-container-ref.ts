@@ -1,8 +1,12 @@
 import type { IDirective, IDirectiveCompileFn, IParseService, IScope } from "angular";
 import { TemplateRef } from "@/common/ng-template";
-import { ElementRefImpl as ElementRef } from "@/core/abstractions/element-ref";
-import { getContentQueryOwners, getScopeViewQueryRegistries, type ViewQueryRegistry } from "@/core/ng-controller";
-import { ViewContainerRef } from "@/core/abstracts";
+import { ElementRef, ElementRefImpl } from "@/core/abstractions/element-ref";
+import { ViewContainerRef } from "@/core/abstractions/view-container-ref";
+import {
+  getContentQueryOwners,
+  getScopeViewQueryRegistries,
+  type ViewQueryRegistry,
+} from "@/core/decorators/ng-controller";
 import type { ProviderToken } from "@/core/viewChild";
 
 function findViewQueryRegistry(
@@ -42,12 +46,12 @@ class TemplateNgRef implements IDirective {
       return {
         pre: (scope, linkedElement, _attrs, controllers) => {
           const [linkedNative = native] = Array.from(linkedElement);
-          const nativeEl = new ElementRef(linkedNative);
+          const nativeEl = new ElementRefImpl(linkedNative);
           const templateRef = controllers?.ngTemplate as TemplateRef | undefined;
           const viewContainerRef = controllers?.ngContainer?.viewContainerRef as ViewContainerRef | undefined;
           const cases: Record<string, TemplateRef | ViewContainerRef | ElementRef | undefined> = {
             ngTemplate: templateRef,
-            viewContainerRef: viewContainerRef,
+            viewContainerRef,
             $element: nativeEl,
           };
 
@@ -56,6 +60,7 @@ class TemplateNgRef implements IDirective {
           const value = read ? (cases[read] ?? directiveController) : defaultValue;
           const candidates = new Map<ProviderToken<unknown>, unknown>([
             [ElementRef, nativeEl],
+            [ElementRefImpl, nativeEl],
             ["$element", nativeEl],
           ]);
 
@@ -88,8 +93,7 @@ class TemplateNgRef implements IDirective {
             for (const disconnectContent of contentDisconnects) {
               disconnectContent();
             }
-            const isCtrl = getter(scope) === value;
-            if (!isCtrl) return;
+            if (getter(scope) !== value) return;
 
             setter(scope, null);
           });
@@ -115,7 +119,7 @@ class TemplateNgRef implements IDirective {
   }
 }
 
-export const decorNgRef = ($delegate: IDirective[], $parse: IParseService) => {
+export const decorNgRef = ($delegate: IDirective[], $parse: IParseService): IDirective[] => {
   const [nativeNgRef] = $delegate;
   const templateNgRef = TemplateNgRef.$factory(nativeNgRef, $parse);
 

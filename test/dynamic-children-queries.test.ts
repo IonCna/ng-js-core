@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { IScope } from "angular";
 import { ContentChildrenQuery } from "../src/core/contentChildren";
-import { ViewQueryRegistry } from "../src/core/ng-controller";
+import { ViewQueryRegistry } from "../src/core/decorators/ng-controller";
 import type { QueryList } from "../src/core/query-list";
 import { ViewChildrenQuery } from "../src/core/viewChildren";
 
