@@ -15,6 +15,7 @@
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
+    "typeRoots": ["./src/core/decorators/types.d.ts"],
     "paths": {
       "@/*": ["./src/*"]
     }

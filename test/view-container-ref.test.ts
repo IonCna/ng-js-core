@@ -24,6 +24,10 @@ function createScopeHarness() {
 }
 
 describe("ViewContainerRef controller injection", () => {
+  test("exposes the Angular-compatible injection token", () => {
+    expect(ViewContainerRef.$name).toBe("ViewContainerRef");
+  });
+
   test("provides an element-scoped instance and clears it with the scope", () => {
     const harness = createScopeHarness();
     const element = [{ parentNode: null }] as unknown as IAugmentedJQuery;

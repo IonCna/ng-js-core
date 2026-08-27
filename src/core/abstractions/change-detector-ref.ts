@@ -1,6 +1,10 @@
 import type { IScope } from "angular";
 
 export abstract class ChangeDetectorRef {
+  static get $name(): string {
+    return "ChangeDetectorRef";
+  }
+
   abstract markForCheck(): void;
   abstract detach(): void;
   abstract detectChanges(): void;
@@ -9,34 +13,37 @@ export abstract class ChangeDetectorRef {
 
 export class ChangeDetectorRefImpl extends ChangeDetectorRef {
   private attached = true;
-  private destroyed = false;
+  private changeDetectorDestroyed = false;
 
-  constructor(private readonly scope: IScope) {
+  constructor(protected readonly scope: IScope) {
     super();
 
     scope.$on("$destroy", () => {
-      this.destroyed = true;
+      this.changeDetectorDestroyed = true;
       this.attached = false;
     });
   }
 
   markForCheck(): void {
-    if (!this.attached || this.destroyed || this.scope.$$phase) return;
+    if (!this.attached || this.changeDetectorDestroyed || this.scope.$$phase) return;
     this.scope.$applyAsync();
   }
 
   detach(): void {
-    if (this.destroyed) return;
+    if (this.changeDetectorDestroyed) return;
+
     this.attached = false;
+    this.scope.$suspend();
   }
 
   detectChanges(): void {
-    if (this.destroyed || this.scope.$$phase) return;
-    this.scope.$digest();
+    if (this.changeDetectorDestroyed) return;
+    this.scope.$applyAsync();
   }
 
   reattach(): void {
-    if (this.destroyed || this.attached) return;
+    if (this.changeDetectorDestroyed || this.attached) return;
     this.attached = true;
+    this.scope.$resume();
   }
 }

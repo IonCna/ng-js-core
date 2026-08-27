@@ -26,10 +26,6 @@ export class NgChangeDetectorRef extends ChangeDetectorRef {
     this.implementation.reattach();
   }
 
-  static get $name(): string {
-    return "ng.change-detector-ref";
-  }
-
   static get $inject(): readonly ["$rootScope"] {
     return ["$rootScope"];
   }

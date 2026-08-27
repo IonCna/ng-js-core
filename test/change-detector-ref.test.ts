@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type angular from "angular";
 import type { IControllerService, IScope } from "angular";
+import { ChangeDetectorRef as ChangeDetectorRefContract } from "../src/core/abstractions/change-detector-ref";
+import { ViewRef, ViewRefImpl } from "../src/core/abstractions/view-ref";
 import { NgChangeDetectorRef as ChangeDetectorRef } from "../src/core/decorators/ng-change-detector-ref";
 import { decorNgController } from "../src/core/decorators/ng-controller";
 
@@ -9,6 +11,8 @@ function createScopeHarness() {
   const state = {
     applyAsyncCalls: 0,
     digestCalls: 0,
+    suspendCalls: 0,
+    resumeCalls: 0,
     phase: null as string | null,
   };
   const scope = {
@@ -20,6 +24,12 @@ function createScopeHarness() {
     },
     $digest: () => {
       state.digestCalls++;
+    },
+    $suspend: () => {
+      state.suspendCalls++;
+    },
+    $resume: () => {
+      state.resumeCalls++;
     },
     $on: (event: string, callback: () => void) => {
       if (event === "$destroy") destroyCallbacks.push(callback);
@@ -38,6 +48,14 @@ function createScopeHarness() {
 }
 
 describe("ChangeDetectorRef", () => {
+  test("is the direct base abstraction of ViewRef", () => {
+    const harness = createScopeHarness();
+
+    expect(Object.getPrototypeOf(ViewRef.prototype)).toBe(ChangeDetectorRefContract.prototype);
+    expect(new ViewRefImpl(harness.scope)).toBeInstanceOf(ChangeDetectorRefContract);
+    expect(ChangeDetectorRefContract.$name).toBe("ChangeDetectorRef");
+  });
+
   test("schedules, detaches and performs explicit local detection", () => {
     const harness = createScopeHarness();
     const changeDetector = new ChangeDetectorRef(harness.scope);
@@ -46,6 +64,7 @@ describe("ChangeDetectorRef", () => {
     expect(harness.state.applyAsyncCalls).toBe(1);
 
     changeDetector.detach();
+    expect(harness.state.suspendCalls).toBe(1);
     changeDetector.markForCheck();
     expect(harness.state.applyAsyncCalls).toBe(1);
 
@@ -53,6 +72,7 @@ describe("ChangeDetectorRef", () => {
     expect(harness.state.digestCalls).toBe(1);
 
     changeDetector.reattach();
+    expect(harness.state.resumeCalls).toBe(1);
     expect(harness.state.applyAsyncCalls).toBe(1);
     changeDetector.markForCheck();
     expect(harness.state.applyAsyncCalls).toBe(2);

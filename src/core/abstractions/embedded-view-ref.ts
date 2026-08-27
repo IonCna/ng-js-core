@@ -13,7 +13,7 @@ export abstract class EmbeddedViewRef<C = ContextObject> extends ViewRef {
 }
 
 export class EmbeddedViewRefImpl<C = ContextObject> extends ViewRefImpl implements EmbeddedViewRef<C> {
-  public rootNodes: Node[] = [];
+  public override readonly rootNodes: Node[] = [];
   private compiled: JQLite;
 
   constructor(
@@ -23,7 +23,7 @@ export class EmbeddedViewRefImpl<C = ContextObject> extends ViewRefImpl implemen
   ) {
     super($scope);
 
-    const clone = $transclude(this.$scope, () => undefined);
+    const clone = $transclude(this.scope, () => undefined);
     this.compiled = clone.contents();
     this.rootNodes = Array.from(this.compiled);
 

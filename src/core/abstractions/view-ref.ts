@@ -1,26 +1,47 @@
-import { RefImpl, Refs } from "@/core/abstractions/ref";
+import type { IScope } from "angular";
 
-export abstract class ViewRef extends Refs {
+import { ChangeDetectorRef, ChangeDetectorRefImpl } from "@/core/abstractions/change-detector-ref";
+
+export abstract class ViewRef extends ChangeDetectorRef {
   abstract destroy(): void;
   abstract readonly destroyed: boolean;
   abstract onDestroy(callback: () => void): void;
   abstract override markForCheck(): void;
   abstract override detectChanges(): void;
+  abstract override detach(): void;
+  abstract override reattach(): void;
 }
 
-export class ViewRefImpl extends RefImpl implements ViewRef {
+export class ViewRefImpl extends ChangeDetectorRefImpl implements ViewRef {
   private _destroyed = false;
   private _callbacks = new Set<() => void>();
+
+  constructor(
+    $scope: IScope,
+    public readonly rootNodes: readonly Node[] = [],
+  ) {
+    super($scope);
+  }
 
   destroy(): void {
     if (this._destroyed) return;
     this._destroyed = true;
 
-    this._callbacks.forEach((callback) => {
-      callback();
-    });
+    let firstError: unknown;
+    for (const callback of this._callbacks) {
+      try {
+        callback();
+      } catch (error) {
+        firstError ??= error;
+      }
+    }
+    this._callbacks.clear();
 
-    this.$scope.$destroy();
+    for (const node of this.rootNodes) node.parentNode?.removeChild(node);
+
+    this.scope.$destroy();
+
+    if (firstError) throw firstError;
   }
 
   get destroyed() {
@@ -28,6 +49,6 @@ export class ViewRefImpl extends RefImpl implements ViewRef {
   }
 
   onDestroy(callback: () => void): void {
-    this._callbacks.add(callback);
+    if (!this._destroyed) this._callbacks.add(callback);
   }
 }

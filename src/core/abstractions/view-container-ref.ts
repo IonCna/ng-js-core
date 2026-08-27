@@ -1,15 +1,16 @@
 import type angular from "angular";
 import type { TemplateRef } from "@/common/ng-template.ts";
-import { ChangeDetectorRefImpl } from "@/core/abstractions/change-detector-ref";
-import { type ComponentRef, ComponentRefImpl } from "@/core/abstractions/component-ref";
-import { type ElementRef, ElementRefImpl } from "@/core/abstractions/element-ref";
+import type { ComponentRef } from "@/core/abstractions/component-ref";
+import type { ElementRef, ElementRefImpl } from "@/core/abstractions/element-ref";
 import type { EmbeddedViewRef, EmbeddedViewRefImpl } from "@/core/abstractions/embedded-view-ref";
-import { type ViewRef, ViewRefImpl } from "@/core/abstractions/view-ref";
+import { claimView, getViewOwner, releaseView, type ViewOwner } from "@/core/abstractions/view-owner";
+import type { ViewRef, ViewRefImpl } from "@/core/abstractions/view-ref";
+import { createComponent as createRootComponent } from "@/core/decorators/ng-create-component";
 import type { Binding } from "@/core/index.ts";
 
 export abstract class ViewContainerRef {
-  static get $name(): "viewContainerRef" {
-    return "viewContainerRef";
+  static get $name(): "ViewContainerRef" {
+    return "ViewContainerRef";
   }
 
   abstract readonly element: ElementRef;
@@ -39,9 +40,8 @@ export abstract class ViewContainerRef {
   ): ComponentRef<C>;
 }
 
-export class ViewContainerRefImpl extends ViewContainerRef {
-  private static readonly owners = new WeakMap<ViewRef, ViewContainerRefImpl>();
-  private readonly rootNodesByView = new WeakMap<ViewRef, Node[]>();
+export class ViewContainerRefImpl extends ViewContainerRef implements ViewOwner {
+  readonly viewOwnerKind = "container" as const;
   private readonly views: ViewRef[] = [];
   private readonly trackedViews = new WeakSet<ViewRef>();
 
@@ -73,46 +73,21 @@ export class ViewContainerRefImpl extends ViewContainerRef {
       bindings?: Binding;
     },
   ): ComponentRef<C> {
-    const inj = options?.injector ?? this.injector;
-    const $compile = inj.get("$compile");
-    const rootScop = inj.get("$rootScope");
+    const componentRef = createRootComponent<C>(componentType, {
+      environmentInjector: this.injector,
+      elementInjector: options?.injector,
+      projectableNodes: options?.projectableNodes,
+      directives: options?.directives,
+      bindings: options?.bindings,
+    });
 
-    const $scope = rootScop.$new(true);
-
-    const componentName = this.toKebabCase(componentType);
-    const bindingsAttrs = this._buildBindingsAttrs(options?.bindings ?? {});
-    const directivesAttrs = (options?.directives ?? []).map((directive) => this.toKebabCase(directive)).join(" ");
-    const attrs = [bindingsAttrs, directivesAttrs].filter(Boolean).join(" ");
-    const template = attrs ? `<${componentName} ${attrs}></${componentName}>` : `<${componentName}></${componentName}>`;
-    const linkFn = $compile(template);
-
-    Object.assign($scope, options?.bindings);
-
-    const compiled = linkFn($scope);
-
-    const viewRef = new ViewRefImpl($scope);
-    const rootNodes = Array.from(compiled);
-    const location = new ElementRefImpl(compiled[0]);
-    const instance = compiled.controller(componentType);
-    const changeDetectorRef = new ChangeDetectorRefImpl($scope);
-
-    this.rootNodesByView.set(viewRef, rootNodes);
-    this.insert(viewRef, options?.index);
-
-    return new ComponentRefImpl(location, instance, changeDetectorRef, viewRef);
-  }
-
-  private toKebabCase(value: string): string {
-    return value
-      .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-      .replace(/([A-Z])([A-Z][a-z])/g, "$1-$2")
-      .toLowerCase();
-  }
-
-  private _buildBindingsAttrs(bindings: Binding) {
-    return Object.keys(bindings || {})
-      .map((key) => `${this.toKebabCase(key)}="${key}"`)
-      .join(" ");
+    try {
+      this.insert(componentRef.hostView, options?.index);
+      return componentRef;
+    } catch (error) {
+      componentRef.destroy();
+      throw error;
+    }
   }
 
   createEmbeddedView<C>(
@@ -159,8 +134,12 @@ export class ViewContainerRefImpl extends ViewContainerRef {
       throw new Error("No se puede insertar una vista destruida");
     }
 
-    const currentOwner = ViewContainerRefImpl.owners.get(viewRef);
+    const currentOwner = getViewOwner(viewRef);
     if (currentOwner) {
+      if (!(currentOwner instanceof ViewContainerRefImpl)) {
+        throw new Error("La vista pertenece a ApplicationRef y debe separarse antes de insertarla");
+      }
+
       const currentIndex = currentOwner.indexOf(viewRef);
       if (currentIndex !== -1) currentOwner.detach(currentIndex);
     }
@@ -179,7 +158,8 @@ export class ViewContainerRefImpl extends ViewContainerRef {
     for (const node of rootNodes) parent.insertBefore(node, referenceNode);
 
     this.views.splice(targetIndex, 0, viewRef);
-    ViewContainerRefImpl.owners.set(viewRef, this);
+    claimView(viewRef, this);
+    viewRef.reattach();
     this.trackDestroyedView(viewRef);
 
     return viewRef;
@@ -208,9 +188,8 @@ export class ViewContainerRefImpl extends ViewContainerRef {
       node.parentNode?.removeChild(node);
     }
 
-    if (ViewContainerRefImpl.owners.get(viewRef) === this) {
-      ViewContainerRefImpl.owners.delete(viewRef);
-    }
+    releaseView(viewRef, this);
+    viewRef.detach();
 
     return viewRef;
   }
@@ -226,13 +205,13 @@ export class ViewContainerRefImpl extends ViewContainerRef {
   }
 
   private getRootNodes(viewRef: ViewRef): Node[] {
-    const rootNodes = this.rootNodesByView.get(viewRef) ?? (viewRef as Partial<EmbeddedViewRefImpl>).rootNodes;
+    const rootNodes = (viewRef as Partial<ViewRefImpl>).rootNodes;
 
     if (!rootNodes) {
       throw new Error("La vista no expone rootNodes y no puede insertarse");
     }
 
-    return rootNodes as Node[];
+    return Array.from(rootNodes);
   }
 
   private getInsertionReference(index: number): Node | null {
@@ -258,9 +237,7 @@ export class ViewContainerRefImpl extends ViewContainerRef {
       const index = this.views.indexOf(viewRef);
       if (index !== -1) this.views.splice(index, 1);
 
-      if (ViewContainerRefImpl.owners.get(viewRef) === this) {
-        ViewContainerRefImpl.owners.delete(viewRef);
-      }
+      releaseView(viewRef, this);
     });
   }
 }
