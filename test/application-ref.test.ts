@@ -79,7 +79,7 @@ function createScopeHarness() {
 }
 
 describe("ApplicationRef", () => {
-  test("bootstraps and owns a component host view at the application root", () => {
+  test("bootstraps and owns a component host view at the application root", async () => {
     const originalDocument = globalThis.document;
     const originalElement = globalThis.Element;
     const host = new FakeElement("root-widget");
@@ -104,6 +104,7 @@ describe("ApplicationRef", () => {
       get: (name: string) => {
         if (name === "$compile") return $compile;
         if (name === "$rootScope") return scopeHarness.rootScope;
+        if (name === "$q") return $q;
         throw new Error(`Unexpected dependency: ${name}`);
       },
     } as angular.auto.IInjectorService;
@@ -113,7 +114,7 @@ describe("ApplicationRef", () => {
 
     try {
       const applicationRef = new ApplicationRefImpl(scopeHarness.rootScope, $q, injector, new NgZone({}));
-      const componentRef = applicationRef.bootstrap<typeof instance>("rootWidget", {
+      const componentRef = await applicationRef.bootstrap<typeof instance>("rootWidget", {
         bindings: [{ title: "Root" }],
       });
 

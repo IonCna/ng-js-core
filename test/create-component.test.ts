@@ -56,7 +56,7 @@ class FakeElement {
 }
 
 describe("createComponent", () => {
-  test("creates a detached host view with options and deterministic cleanup", () => {
+  test("creates a detached host view with options and deterministic cleanup", async () => {
     const originalDocument = globalThis.document;
     const mount = new FakeElement("main");
     const projectedNode = new FakeElement("projected-content");
@@ -100,10 +100,14 @@ describe("createComponent", () => {
       linked.controller = () => instance;
       return linked;
     }) as unknown as ICompileService;
+    const $q = {
+      when: <T>(value: T | PromiseLike<T>) => Promise.resolve(value),
+    };
     const injector = {
       get: (name: string) => {
         if (name === "$compile") return $compile;
         if (name === "$rootScope") return rootScope;
+        if (name === "$q") return $q;
         throw new Error(`Unexpected dependency: ${name}`);
       },
     } as angular.auto.IInjectorService;
@@ -116,7 +120,7 @@ describe("createComponent", () => {
     });
 
     try {
-      const componentRef = createComponent<typeof instance>("rootWidget", {
+      const componentRef = await createComponent<typeof instance>("rootWidget", {
         environmentInjector: injector,
         hostElement: mount as unknown as Element,
         projectableNodes: [[projectedNode as unknown as Node]],

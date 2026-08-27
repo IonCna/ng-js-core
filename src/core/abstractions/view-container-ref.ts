@@ -1,4 +1,5 @@
 import type angular from "angular";
+import type { IPromise, IQService } from "angular";
 import type { TemplateRef } from "@/common/ng-template.ts";
 import type { ComponentRef } from "@/core/abstractions/component-ref";
 import type { ElementRef, ElementRefImpl } from "@/core/abstractions/element-ref";
@@ -37,7 +38,7 @@ export abstract class ViewContainerRef {
       directives?: string[];
       bindings?: Binding;
     },
-  ): ComponentRef<C>;
+  ): IPromise<ComponentRef<C>>;
 }
 
 export class ViewContainerRefImpl extends ViewContainerRef implements ViewOwner {
@@ -72,22 +73,24 @@ export class ViewContainerRefImpl extends ViewContainerRef implements ViewOwner 
       directives?: string[];
       bindings?: Binding;
     },
-  ): ComponentRef<C> {
-    const componentRef = createRootComponent<C>(componentType, {
+  ): IPromise<ComponentRef<C>> {
+    const $q = this.injector.get<IQService>("$q");
+
+    return createRootComponent<C>(componentType, {
       environmentInjector: this.injector,
       elementInjector: options?.injector,
       projectableNodes: options?.projectableNodes,
       directives: options?.directives,
       bindings: options?.bindings,
+    }).then((componentRef) => {
+      try {
+        this.insert(componentRef.hostView, options?.index);
+        return componentRef;
+      } catch (error) {
+        componentRef.destroy();
+        return $q.reject(error);
+      }
     });
-
-    try {
-      this.insert(componentRef.hostView, options?.index);
-      return componentRef;
-    } catch (error) {
-      componentRef.destroy();
-      throw error;
-    }
   }
 
   createEmbeddedView<C>(

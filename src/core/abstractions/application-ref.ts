@@ -25,8 +25,8 @@ export abstract class ApplicationRef {
   abstract readonly isStable: Observable<boolean>;
   abstract whenStable(): IPromise<void>;
   abstract readonly injector: angular.auto.IInjectorService;
-  abstract bootstrap<C>(component: string, options?: BootstrapOptions): ComponentRef<C>;
-  abstract bootstrap<C>(component: string, hostElement?: string | Element): ComponentRef<C>;
+  abstract bootstrap<C>(component: string, options?: BootstrapOptions): IPromise<ComponentRef<C>>;
+  abstract bootstrap<C>(component: string, hostElement?: string | Element): IPromise<ComponentRef<C>>;
   abstract tick(): void;
   abstract attachView(viewRef: ViewRef): void;
   abstract detachView(viewRef: ViewRef): void;
@@ -116,36 +116,36 @@ export class ApplicationRefImpl extends ApplicationRef implements ViewOwner {
     viewRef.detach();
   }
 
-  bootstrap<C>(component: string, options?: BootstrapOptions): ComponentRef<C>;
-  bootstrap<C>(component: string, hostElement?: string | Element): ComponentRef<C>;
-  bootstrap<C>(component: string, options?: BootstrapOptions | string | Element): ComponentRef<C> {
+  bootstrap<C>(component: string, options?: BootstrapOptions): IPromise<ComponentRef<C>>;
+  bootstrap<C>(component: string, hostElement?: string | Element): IPromise<ComponentRef<C>>;
+  bootstrap<C>(component: string, options?: BootstrapOptions | string | Element): IPromise<ComponentRef<C>> {
     this.assertNotDestroyed();
 
     const bootstrapOptions = this.normalizeBootstrapOptions(options);
     const hostElement = this.resolveHostElement(component, bootstrapOptions.hostElement);
-    const componentRef = createComponent<C>(component, {
+    return createComponent<C>(component, {
       environmentInjector: this.injector,
       hostElement,
       directives: bootstrapOptions.directives,
       bindings: bootstrapOptions.bindings,
+    }).then((componentRef) => {
+      try {
+        this.attachView(componentRef.hostView);
+      } catch (error) {
+        componentRef.destroy();
+        return this.$q.reject(error);
+      }
+
+      this._components.push(componentRef);
+      if (!this._componentTypes.includes(component)) this._componentTypes.push(component);
+
+      componentRef.onDestroy(() => {
+        const index = this._components.indexOf(componentRef);
+        if (index !== -1) this._components.splice(index, 1);
+      });
+
+      return componentRef;
     });
-
-    try {
-      this.attachView(componentRef.hostView);
-    } catch (error) {
-      componentRef.destroy();
-      throw error;
-    }
-
-    this._components.push(componentRef);
-    if (!this._componentTypes.includes(component)) this._componentTypes.push(component);
-
-    componentRef.onDestroy(() => {
-      const index = this._components.indexOf(componentRef);
-      if (index !== -1) this._components.splice(index, 1);
-    });
-
-    return componentRef;
   }
 
   destroy(): void {

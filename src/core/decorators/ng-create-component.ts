@@ -1,5 +1,5 @@
 import type angular from "angular";
-import type { ICompileService, IRootScopeService } from "angular";
+import type { ICompileService, IPromise, IQService, IRootScopeService, ITimeoutService } from "angular";
 import type { Binding } from "@/core";
 import { type ComponentRef, ComponentRefImpl } from "@/core/abstractions/component-ref";
 import { ElementRefImpl } from "@/core/abstractions/element-ref";
@@ -14,11 +14,33 @@ export interface CreateComponentOptions {
   bindings?: Binding | Binding[];
 }
 
-declare global {
-  function createComponent<C>(component: string, options: CreateComponentOptions): ComponentRef<C>;
+export function createComponent<C>(component: string, options: CreateComponentOptions): IPromise<ComponentRef<C>> {
+  const injector = options.elementInjector ?? options.environmentInjector;
+  const $q = injector.get<IQService>("$q");
+  const linkedComponent = linkComponent(component, options);
+  const instance = linkedComponent.linkedElement.controller(component) as C | undefined;
+
+  if (instance) return $q.when(createComponentRef(instance, linkedComponent));
+
+  const $timeout = injector.get<ITimeoutService>("$timeout");
+
+  return waitForComponentController<C>(linkedComponent.linkedElement, component, $q, $timeout).then(
+    (instance) => createComponentRef(instance, linkedComponent),
+    (error) => {
+      linkedComponent.ownerScope.$destroy();
+      return $q.reject(error);
+    },
+  );
 }
 
-export function createComponent<C>(component: string, options: CreateComponentOptions): ComponentRef<C> {
+interface LinkedComponent {
+  bindings: Binding;
+  hostElement: Element;
+  linkedElement: angular.IAugmentedJQuery;
+  ownerScope: angular.IScope;
+}
+
+function linkComponent(component: string, options: CreateComponentOptions): LinkedComponent {
   const injector = options.elementInjector ?? options.environmentInjector;
   const $compile = injector.get<ICompileService>("$compile");
   const $rootScope = injector.get<IRootScopeService>("$rootScope");
@@ -29,7 +51,7 @@ export function createComponent<C>(component: string, options: CreateComponentOp
   const hostElement = resolveComponentHost(requestedHost, componentName);
 
   Object.assign(ownerScope, bindings);
-  applyHostAttributes(hostElement, bindings, options.directives ?? []);
+  applyHostAttributes(hostElement, bindings, options.directives ?? [], component, injector);
   const projectableNodes = options.projectableNodes ?? [];
   appendProjectionMarkers(hostElement, projectableNodes);
 
@@ -42,12 +64,11 @@ export function createComponent<C>(component: string, options: CreateComponentOp
     throw error;
   }
 
-  const instance = linkedElement.controller(component) as C | undefined;
+  return { bindings, hostElement, linkedElement, ownerScope };
+}
 
-  if (!instance) {
-    ownerScope.$destroy();
-    throw new Error(`No se pudo crear el componente "${component}"`);
-  }
+function createComponentRef<C>(instance: C, linkedComponent: LinkedComponent): ComponentRef<C> {
+  const { bindings, hostElement, linkedElement, ownerScope } = linkedComponent;
 
   const rootNodes = Array.from(linkedElement);
   const hostView = new ViewRefImpl(ownerScope, rootNodes);
@@ -61,6 +82,34 @@ export function createComponent<C>(component: string, options: CreateComponentOp
     hostView,
     bindings,
   );
+}
+
+function waitForComponentController<C>(
+  linkedElement: angular.IAugmentedJQuery,
+  component: string,
+  $q: IQService,
+  $timeout: ITimeoutService,
+): IPromise<C> {
+  const timeoutAt = Date.now() + 10_000;
+  const deferred = $q.defer<C>();
+
+  const check = () => {
+    const instance = linkedElement.controller(component) as C | undefined;
+    if (instance) {
+      deferred.resolve(instance);
+      return;
+    }
+
+    if (Date.now() >= timeoutAt) {
+      deferred.reject(new Error(`No se pudo crear el componente "${component}"`));
+      return;
+    }
+
+    $timeout(check, 0, false);
+  };
+
+  check();
+  return deferred.promise;
 }
 
 const PROJECTABLE_NODE_ATTRIBUTE = "data-ngjs-projectable-node";
@@ -99,9 +148,36 @@ function normalizeBindings(bindings?: Binding | Binding[]): Binding {
   return Array.isArray(bindings) ? Object.assign({}, ...bindings) : bindings;
 }
 
-function applyHostAttributes(host: Element, bindings: Binding, directives: string[]): void {
-  for (const key of Object.keys(bindings)) host.setAttribute(toKebabCase(key), key);
+function applyHostAttributes(
+  host: Element,
+  bindings: Binding,
+  directives: string[],
+  component: string,
+  injector: angular.auto.IInjectorService,
+): void {
+  const componentBindings = resolveComponentBindings(component, injector);
+
+  for (const key of Object.keys(bindings)) {
+    const binding = componentBindings[key];
+    const mode = typeof binding === "string" ? binding[0] : binding?.mode;
+    host.setAttribute(toKebabCase(key), mode === "@" ? `{{${key}}}` : key);
+  }
+
   for (const directive of directives) host.setAttribute(toKebabCase(directive), "");
+}
+
+function resolveComponentBindings(
+  component: string,
+  injector: angular.auto.IInjectorService,
+): Record<string, string | { mode?: string }> {
+  try {
+    const [definition] = injector.get<Array<{ bindToController?: Record<string, string | { mode?: string }> }>>(
+      `${component}Directive`,
+    );
+    return definition?.bindToController ?? {};
+  } catch {
+    return {};
+  }
 }
 
 function resolveComponentHost(requestedHost: Element, componentName: string): Element {

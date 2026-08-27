@@ -21,6 +21,7 @@ export { NgZone } from "@/core/ng-zone";
 export { QueryList } from "@/core/query-list";
 export { ViewChild, viewChild } from "@/core/viewChild";
 export { ViewChildren, viewChildren } from "@/core/viewChildren";
+export { createComponent } from "@/core/decorators/ng-create-component";
 
 export const CoreModule = angular.module("ng.core", []);
 
