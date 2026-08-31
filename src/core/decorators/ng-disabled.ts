@@ -47,3 +47,5 @@ export function decorNgDisabled($delegate: IDirective[]): IDirective[] {
 
   return $delegate;
 }
+
+decorNgDisabled.$inject = ["$delegate"];

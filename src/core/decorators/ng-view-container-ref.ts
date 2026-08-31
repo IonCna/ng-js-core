@@ -80,13 +80,13 @@ class TemplateNgRef implements IDirective {
 
           const disconnect = findViewQueryRegistry(scope, attrs.ngRef, candidates)?.connectReference(
             attrs.ngRef,
-            defaultValue,
+            value,
             candidates,
             linkedNative,
           );
           const contentDisconnects = getContentQueryOwners(scope)
             .filter((owner) => owner.acceptsContentReference(attrs.ngRef, candidates))
-            .map((owner) => owner.connectContentReference(attrs.ngRef, defaultValue, candidates, linkedNative));
+            .map((owner) => owner.connectContentReference(attrs.ngRef, value, candidates, linkedNative));
 
           scope.$on("$destroy", () => {
             disconnect?.();
