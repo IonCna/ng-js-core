@@ -14,7 +14,7 @@ export abstract class EmbeddedViewRef<C = ContextObject> extends ViewRef {
 
 export class EmbeddedViewRefImpl<C = ContextObject> extends ViewRefImpl implements EmbeddedViewRef<C> {
   public override readonly rootNodes: Node[] = [];
-  private compiled: JQLite;
+  private readonly compiled: JQLite;
 
   constructor(
     public context: C,
