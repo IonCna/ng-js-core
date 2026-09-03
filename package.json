@@ -1,10 +1,26 @@
 {
   "name": "ngjs-core",
   "version": "0.0.0",
-  "private": true,
-  "type": "module",
   "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@uirouter/angularjs": "^1.1.2",
+    "angular": "1.8.3",
+    "angular-animate": "1.8.3",
+    "angular-aria": "1.8.3",
+    "angular-dynamic-locale": "^0.1.38",
+    "angular-messages": "1.8.3",
+    "angular-sanitize": "1.8.3",
+    "angular-translate": "^2.19.1",
+    "rxjs": "^7.8.2",
+    "zone.js": "^0.16.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.6",
+    "@types/angular": "^1.8.9",
+    "esbuild": "^0.28.1",
+    "tsc-alias": "^1.9.1",
+    "typescript": "~6.0.3"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -15,27 +31,17 @@
   "files": [
     "dist"
   ],
+  "private": true,
   "scripts": {
     "build": "bun run build:js && bun run build:types",
     "build:js": "bun esbuild.config.ts",
     "build:types": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
-    "demo": "bun esbuild.demo.config.ts",
+    "demo": "bun reference/esbuild.demo.config.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "check": "biome check .",
     "format": "biome check --write ."
   },
-  "devDependencies": {
-    "@biomejs/biome": "^2.5.6",
-    "@types/angular": "^1.8.9",
-    "angular": "1.8.3",
-    "esbuild": "^0.28.1",
-    "rxjs": "^7.8.2",
-    "tsc-alias": "^1.9.1",
-    "typescript": "~6.0.3"
-  },
-  "peerDependencies": {
-    "angular": "^1.8.3",
-    "rxjs": "^7.8.2"
-  }
+  "type": "module",
+  "types": "./dist/index.d.ts"
 }

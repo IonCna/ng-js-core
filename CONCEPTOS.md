@@ -1,0 +1,607 @@
+# Conceptos Angular → ngjs
+
+Objetivo: **escribir con decoradores de Angular 16** (`@Component`, `@Directive`,
+`@Injectable`, `@NgModule`, `@Pipe`, `@Input`, `@Output`, `@ViewChild`, …) y correr
+sobre AngularJS 1.8.
+
+Es una **capa de traducción**, no una reimplementación de Angular. La detección de
+cambios es: Zone.js dispara `$digest`. Punto. No hay `OnPush`, ni CD por componente,
+ni scheduler propio — el dirty-checking de AngularJS ya recorre todo.
+
+## Capas
+
+1. **Autoría** — clases con decoradores. `experimentalDecorators` +
+   `emitDecoratorMetadata` (la metadata de tipos alimenta la DI).
+2. **CLI (`ng-js-cli`)** — capa dev-time que *absorbe el template de fondo*: lo toma
+   como input y lo transforma antes de que build/runtime lo vean. Es donde vive (o
+   vivirá) la traducción de sintaxis de template Angular → AngularJS y, en la otra
+   dirección, el codemod de migración. Comparte la maquinaria de lectura/parcheo de
+   `ng-js-vite` (`reading/`, `writing/`: parse5, css-tree, patch de AST). Hoy es un
+   stub.
+3. **Build (`ng-js-vite`)** — lee los decoradores y la metadata emitida y genera el
+   registro AngularJS: `angular.module().component()/.directive()/.service()/.filter()`,
+   deriva `bindings` de `@Input`/`@Output`, arma `$inject` de `design:paramtypes`,
+   extrae `templateUrl` con content-hash y aplica encapsulación de estilos emulada
+   (`styleUrl`/`styles`, atributo `_content-<hash>` en cada elemento y selector,
+   como `_ngcontent`). Hoy solo procesa `templateUrl`/`styleUrl` por regex; adaptarlo
+   a leer decoradores es el próximo paso.
+4. **Runtime** — AngularJS 1.8.3 + RxJS 7 + Zone.js 0.16 + `@uirouter/angularjs` +
+   `angular-animate` + `angular-sanitize` + `angular-messages` + `angular-aria` +
+   `angular-translate` + `angular-dynamic-locale` + `$sce` (core) + primitivas de
+   `ngjs-core` (sección «Primitivas de `ngjs-core`»). Ver «Librerías satélite».
+
+**Migrar a Angular** = quitar los transforms de CLI + `ng-js-vite`, dejar clases y
+decoradores como están, correr el codemod de template en el CLI.
+
+## Columna «Migra»
+
+- `directo` — clase + decorador quedan idénticos; solo cambia el import
+- `shim` — CLI, `ng-js-vite` o `ngjs-core` generan el equivalente; migrar = quitar ese transform
+- `tpl` — hoy el template se escribe en sintaxis AngularJS y hay codemod al migrar.
+  Si el CLI absorbe también la sintaxis Angular del template (`[prop]`, `(event)`,
+  `*ngIf`, `{{ x }}`), estos renglones se acercan a `directo`. Decisión abierta.
+- `brecha` — semántica de runtime que AngularJS no tiene; aproximación + nota
+
+## Librerías satélite
+
+Módulos oficiales `angular-*` que se incluyen porque dan sustrato a un concepto
+Angular (el dev escribe Angular, se traduce al módulo):
+
+| Lib | Habilita | Estado |
+|---|---|---|
+| `@uirouter/angularjs` | `@angular/router` | incluida |
+| `angular-animate` (`ngAnimate`) | `@angular/animations` | incluida |
+| `angular-sanitize` (`ngSanitize`) | `DomSanitizer` / `[innerHTML]` sanitizado | incluida |
+| `angular-messages` (`ngMessages`) | display de errores de `FormControl` | incluida |
+| `angular-aria` (`ngAria`) | ARIA automática sobre directivas — parcial vs `@angular/cdk/a11y` | incluida |
+| `angular-translate` | `$localize` / `i18n` attrs / `TranslocoModule`-style | incluida |
+| `angular-dynamic-locale` | `LOCALE_ID` en runtime / `registerLocaleData` | incluida |
+| `$sce` (core, no es lib aparte) | `bypassSecurityTrust*` / `SafeHtml`/`SafeUrl`/… | siempre |
+| `angular-mocks` (`ngMock`) | `TestBed` (substrato de tests) | dev |
+
+No aplican (sin traducción a un concepto Angular): `angular-route` (usamos
+UI-Router), `angular-resource` (`HttpClient` directo), `angular-touch` (deprecado),
+`angular-cookies` (sin equivalente core).
+
+El "CDK" (`FocusTrap`, positioning/Popper, `LiveAnnouncer`, RTL, overlay) no tiene
+lib de AngularJS ni entra en `ngjs-core`: es `brecha`, lo resuelve quien lo
+necesite.
+
+---
+
+## Bootstrap y módulo
+
+| Angular | ngjs | Migra | Nota |
+|---|---|---|---|
+| `@NgModule({ declarations, imports, providers, bootstrap })` | `ng-js-vite` → `angular.module(name, [deps])` + registro por cada `declaration`/`provider` | directo | |
+| `platformBrowserDynamic().bootstrapModule(AppModule)` | bootstrap propio: `angular.bootstrap(el, [mod])` dentro de la zona | shim | esperar `DOMContentLoaded`; devuelve `ApplicationRef` |
+| `ApplicationRef.tick()` | `$rootScope.$digest()` guardado por `$$phase` | shim | con Zone corre solo al vaciarse la microtask queue |
+| `ApplicationRef.isStable` / `whenStable()` | estado de la zona + `firstValueFrom` | shim | |
+| `APP_INITIALIZER` | bloque `.run()` generado | shim | |
+| `ErrorHandler` | `.decorator('$exceptionHandler')` | shim | |
+
+## Componente
+
+| Angular | ngjs | Migra | Nota |
+|---|---|---|---|
+| `@Component({ selector, template })` | `ng-js-vite` → `.component('sel', { controller, controllerAs: '$', template })` | tpl | selector solo de elemento (`restrict: 'E'`) |
+| `templateUrl` | `ng-js-vite`: content-hash + import del HTML | shim | resuelto en build |
+| `styles` / `styleUrls` / `styleUrl` / `ViewEncapsulation.Emulated` | `ng-js-vite`: atributo `_content-<hash>` en cada elemento y selector | shim | encapsulación emulada |
+| `@Input() x` | `ng-js-vite` deriva `bindings: { x: '<' }` | directo | `@Input({ required })` → `<` + assert; string → `@` |
+| `@Input() set x()` | `<` + `$onChanges` puenteado | shim | `$onChanges` shallow/async |
+| `@Output() x = new EventEmitter()` | `bindings: { x: '&' }` + `EventEmitter` (RxJS `Subject`) que invoca el `&` | directo | `emit(v)` → `x({ $event: v })` |
+| `@HostBinding` / `@HostListener` | `ng-js-vite` → `link` de directiva / `$element.on()` | directo | |
+| `implements OnInit` → `ngOnInit()` | el bridge lo conecta a `$onInit()` | directo | la clase nunca escribe `$onInit` |
+| `implements OnChanges` → `ngOnChanges(changes)` | `$onChanges(changes)` | directo | el objeto de cambios de AngularJS ya tiene la forma `SimpleChanges` (`currentValue` / `previousValue` / `isFirstChange()`) |
+| `implements OnDestroy` → `ngOnDestroy()` | `$onDestroy()` | directo | |
+| `implements DoCheck` → `ngDoCheck()` | `$doCheck()` | directo | |
+| `implements AfterViewInit` / `AfterContentInit` | ambos a `$postLink()` | brecha | AngularJS no separa view/content |
+| `implements AfterViewChecked` / `AfterContentChecked` | watcher propio al final del digest | brecha | |
+| `ChangeDetectionStrategy.OnPush` | ignorado | — | con Zone el digest es global |
+| `@Attribute('name')` (param decorator) | `$attrs.name` inyectado por posición | shim | valor estático del atributo |
+| `ComponentRef.setInput()` / `.destroy()` / `.instance` | `ComponentRef` de `ngjs-core` | shim | `setInput` dispara `$onChanges` |
+| `afterNextRender()` / `afterRender()` | `$scope.$$postDigest()` | shim | corre al final del digest, sin fase browser-only |
+| `hostDirectives: [...]` | aplicar varias directivas al host en el registro | brecha parcial | sin re-exponer `inputs`/`outputs` |
+| `ElementRef` | `$element[0]` | shim | |
+| `Renderer2` | DOM directo / `angular.element` | brecha | sin abstracción de render |
+
+**Bridge de ciclo de vida.** La clase implementa las interfaces de Angular
+(`OnInit`, `OnChanges`, `OnDestroy`, `DoCheck`, …) con métodos `ngX`. El decorador
+de `$controller` de `ngjs-core`, al instanciar el controller, detecta esos métodos
+y los reenvía al hook `$…` de AngularJS (`ngOnInit` → `$onInit`, `ngOnChanges` →
+`$onChanges`, `ngOnDestroy` → `$onDestroy`, `ngDoCheck` → `$doCheck`,
+`ngAfterViewInit`/`ngAfterContentInit` → `$postLink`). La clase **nunca escribe**
+`$onInit` ni ningún hook con `$`.
+
+## Directivas y binding de template
+
+| Angular | ngjs | Migra | Nota |
+|---|---|---|---|
+| `@Directive({ selector: '[x]' })` | `ng-js-vite` → `.directive('x')` `restrict: 'A'` | directo | |
+| `@Directive({ exportAs: 'x' })` + `#r="x"` | controller de directiva + `require: 'x'` / `ng-ref` read | shim | |
+| `*ngIf` / `*ngFor` / `[ngSwitch]` | `ng-if` / `ng-repeat` / `ng-switch` | tpl | |
+| `[ngClass]` / `[ngStyle]` | `ng-class` / `ng-style` | tpl | |
+| `[prop]="x"` / `(event)="f()"` | interpolación / `ng-*` | tpl | |
+| `#ref` | `ng-ref` + bridge de `ngjs-core` | tpl | ver `@ViewChild` |
+| `[(ngModel)]` | `ng-model` | tpl | |
+| `[disabled]="x"` | CLI → `ng-disabled="x"`; `ngjs-core` extiende `ngDisabled` → inyectable `NgDisabled` (`.disabled` + `.onChange`) | tpl | equivale a `@Input() disabled` / `setDisabledState` |
+| `NgPlural` / `i18nPlural` | `ngPluralize` (`ng-pluralize`) | tpl | AngularJS lo trae de fábrica |
+| `ngProjectAs="[x]"` | asignación de slot en `transclude` | tpl | |
+| `<ng-container>` | directiva propia sin nodo en el DOM | shim | |
+
+## Proyección y vistas dinámicas
+
+| Angular | ngjs | Migra | Nota |
+|---|---|---|---|
+| `<ng-content>` / `<ng-content select="[x]">` | `transclude: true` / `transclude: { x: '?x' }` | tpl | slots nombrados, sin selector CSS libre |
+| `<ng-template>` / `TemplateRef` | `transclude: 'element'` (`TemplateRef` de `ngjs-core`) | shim | plantilla diferida |
+| `<ng-template let-a let-b="$implicit">` | scope transcluido con locals (`$implicit` + nombrados) | shim | `TemplateRef` ya expone contexto |
+| `*ngTemplateOutlet` (+ context) | directiva de `ngjs-core` | tpl | |
+| `NgComponentOutlet` | `ViewContainerRef.createComponent` (directiva envoltorio) | tpl | |
+| `ViewContainerRef` (`createEmbeddedView` / `createComponent`) | `ViewContainerRef` de `ngjs-core` (`$compile` + DOM) | shim | |
+| `@ViewChild` / `@ViewChildren` | decorador de `ngjs-core` (`ng-ref` + registro de query) | shim | resuelto en `$postLink` |
+| `@ContentChild` / `@ContentChildren` | ídem sobre el contenido transcluido | shim | |
+| `QueryList` (`.changes`) | `QueryList` de `ngjs-core` (RxJS `Subject`) | directo | |
+
+## Inyección de dependencias
+
+| Angular | ngjs | Migra | Nota |
+|---|---|---|---|
+| `@Injectable({ providedIn: 'root' })` / `@NgModule({ providers })` | `ng-js-vite` → `.service(name, Class)` / `.factory` | directo | instancia única de app |
+| `constructor(private x: Foo)` | `ng-js-vite` lee `design:paramtypes` (+ `@Inject`) → genera `$inject` | directo | requiere `emitDecoratorMetadata` |
+| `@Inject(TOKEN)` / `InjectionToken<T>` | nombre string único en `$inject` | shim | sin tipo en runtime |
+| `@Optional()` | nodo devuelve `null` en vez de lanzar | shim | ver «Inyector jerárquico» |
+| `@Self()` / `@Host()` / `@SkipSelf()` | limitan el recorrido del nodo (solo este / hasta el host / desde el padre) | shim | ver «Inyector jerárquico» |
+| **`@Component({ providers: [X] })`** / `providedIn` no-root | nodo de inyector por instancia de componente, anclado al DOM | shim | ver «Inyector jerárquico» |
+| `{ provide, useClass }` / `useExisting` | el nodo instancia la clase / resuelve el alias | shim | app-level → `.service()` |
+| `{ provide, useValue }` | el nodo devuelve el valor / `.constant()` si es app-level | shim | |
+| `{ provide, useFactory, deps }` | el nodo llama la factory con `deps` resueltos | shim | app-level → `.factory([...deps, fn])` |
+| `{ provide, multi: true }` | el nodo junta todos los providers del token en un array | shim | |
+| `ModuleWithProviders` | `.provider()` configurable en `.config()` | shim | |
+| `Injector` / `INJECTOR` token / `Injector.get()` | el nodo (con fallback a `$injector`) | shim | |
+| `forwardRef` | referencia por nombre string | directo | los strings no tienen orden de carga |
+
+### Inyector jerárquico (`providers` a nivel de componente)
+
+Un contenedor chico, paralelo al `$injector`, anclado al árbol de componentes.
+
+```ts
+interface ElementInjectorNode {
+  providers: Map<Token, ProviderRecord>;   // de @Component/@Directive `providers`
+  cache: Map<Token, unknown>;              // instancias ya creadas en este nodo
+  parent?: ElementInjectorNode;            // nodo del componente ancestro
+}
+```
+
+- **Construcción**: en el decorador de `$controller`, al instanciar el controller
+  de un componente que declara `providers`. Se busca el nodo padre con
+  `$element.inheritedData('$ngjsInjector')` (jqLite sube por el DOM), se crea el
+  nodo propio y se guarda con `$element.data('$ngjsInjector', node)`.
+  Un componente sin `providers` no crea nodo: pasa el del padre.
+- **Resolución** `node.get(token, flags)`:
+  1. `cache` del nodo → devolver.
+  2. `providers` del nodo → instanciar según el record:
+     - clase → `new`, resolviendo su `design:paramtypes` contra **este** `node`
+     - `useValue` → tal cual · `useFactory` → llamar con `deps` resueltos ·
+       `useExisting` → `node.get(alias)` · `multi` → array de todos.
+     cachear y devolver.
+  3. `parent.get(token)` (salvo `@Self`).
+  4. `$injector.get(stringName(token))` — todo lo app-level cae acá.
+  5. nada → `@Optional` devuelve `null`, si no lanza.
+- **Modificadores**: `@Self` = solo paso 1–2 · `@SkipSelf` = arrancar en `parent`
+  · `@Host` = no pasar el borde del componente host · `@Optional` = `null` en vez
+  de throw.
+- **Inyección por constructor**: el transform genera una factory de controller que
+  resuelve cada parámetro con `node.get(token)` en vez del array `$inject` plano.
+  Los servicios `.service()`/`.factory()` normales siguen igual (caen en el paso 4).
+- **Teardown**: en `$scope.$on('$destroy')`, llamar `ngOnDestroy` de las instancias
+  del `cache`.
+- **Límite**: `inheritedData` sube por el **DOM**; para contenido proyectado el
+  árbol lógico de Angular puede diferir. Primera versión: árbol DOM, documentado.
+
+Esto hace que `@Self` / `@Host` / `@SkipSelf` / `@Optional` también pasen de
+`brecha` a `shim`: ahora hay una jerarquía real sobre la que aplicarlos.
+
+## Detección de cambios
+
+No se reimplementa nada. Zone.js dispara el `$digest` y con eso el dirty-checking
+de AngularJS recorre todo. `ChangeDetectorRef` existe solo por compatibilidad de
+API: es un passthrough fino.
+
+| Angular | ngjs | Migra | Nota |
+|---|---|---|---|
+| `NgZone` / `run` / `runOutsideAngular` | Zone.js + `onMicrotaskEmpty` → `$digest` guardado | shim | |
+| `ChangeDetectorRef.detectChanges()` | `$scope.$digest()` | shim | fuerza un digest síncrono |
+| `ChangeDetectorRef.markForCheck()` | no-op (con Zone ya va a haber digest) | shim | |
+| `ChangeDetectorRef.detach()` / `reattach()` | `$scope.$suspend()` / `$resume()` si se quiere; opcional | shim | |
+| `ChangeDetectionStrategy.OnPush` | ignorado | — | con Zone el digest es global; no hay CD por componente que saltear |
+
+## Reactividad y async
+
+### RxJS bajo el digest
+
+**Con Zone.js no hace falta código extra**: si la subscripción se crea dentro de la
+zona (toda la app arranca dentro de `digestZone.run()`), cada emisión que mute el
+modelo dispara un `$digest` al vaciarse la microtask queue.
+
+- Operadores **síncronos** (`map`, `filter`, `tap`, `scan`): corren en el contexto
+  del `.next()` / `.subscribe()`. Si el `.next()` viene de un evento DOM o un
+  `Promise` (parcheados), quedan dentro de la zona. ✅
+- Operadores **async** (`debounceTime`, `delay`, `timer`, `interval`, `auditTime`,
+  `throttleTime`): `asyncScheduler` usa `setTimeout`/`setInterval`; `asapScheduler`
+  usa `Promise`; `animationFrameScheduler` usa `requestAnimationFrame`. Los tres
+  parcheados por Zone. ✅
+- `fromEvent` → `addEventListener`, parcheado. ✅
+- **Excepciones** (necesitan `ngZone.run(...)` a mano): subscripción movida con
+  `runOutsideAngular`, y fuentes sobre APIs que Zone core no parchea (WebSocket
+  crudo, `EventSource`, mensajes de Web Worker).
+- `$http` ya dispara digest por sí mismo (usa `$q` + `$browser.defer`); envolverlo
+  en `from(...)` no lo rompe.
+
+### interop
+
+| Angular | ngjs | Migra | Nota |
+|---|---|---|---|
+| `EventEmitter` | RxJS `Subject` | directo | `EventEmitter` ya extiende `Subject` |
+| `AsyncPipe` (`| async`) | filtro que subscribe, asigna al scope y `markForCheck` | shim | |
+| `HttpClient` (Observable) | `$http` (Promise) → `from(...)` como `Observable` | shim | corre bajo el digest |
+| `HttpHeaders` / `HttpParams` | objetos `headers` / `params` de la config de `$http` | shim | inmutabilidad emulada |
+| `HttpInterceptor` | `$httpProvider.interceptors` | shim | |
+| `HttpErrorResponse` | rechazo de `$http` (`{ status, data, headers, statusText }`) | shim | |
+| `DestroyRef` | `$scope.$on('$destroy')` del controller | shim | |
+| `takeUntilDestroyed(destroyRef?)` (`@angular/core/rxjs-interop`) | operador que completa en `$destroy`; `ngjs-core` lo provee tomando el `$scope` del contexto | shim | |
+| `outputToObservable(ref.x)` | el `@Output` **ya es** un `Subject` | directo | identidad |
+| `outputFromObservable(obs$)` | `@Output` respaldado por `obs$` | shim | |
+| `Promise` que muta el modelo | Zone la parchea → dispara `$digest` | directo | ya no hace falta `$q` |
+
+## Pipes
+
+| Angular | ngjs | Migra | Nota |
+|---|---|---|---|
+| `@Pipe({ name: 'x' })` `transform()` | `ng-js-vite` → `.filter('x', …)` | directo | |
+| `date` / `currency` / `number` / `json` / `lowercase` / `uppercase` | filtros homónimos (`number` = `DecimalPipe`) | tpl | |
+| `slice` | `limitTo` (+ `begin`) | tpl | semántica no idéntica |
+| `titlecase` / `percent` / `keyvalue` | sin filtro nativo → `.filter()` propio | shim | |
+| pipe puro vs impuro | filtro: se re-evalúa en cada digest | brecha | sin memoización |
+
+## Forms
+
+`ng-js-vite` no ayuda acá.
+
+| Angular | ngjs | Migra | Nota |
+|---|---|---|---|
+| `FormsModule` / `[(ngModel)]` / `#f="ngForm"` | `ng-model`, `<form name>` → `FormController`, `ng-form` | tpl | template-driven mapea bien |
+| `ngModelGroup` | `ng-form` anidado | tpl | |
+| `ReactiveFormsModule` | — | brecha | no existe en AngularJS |
+| `FormControl` / `FormGroup` / `FormArray` | clases propias con `value`, `valueChanges`/`statusChanges` (`BehaviorSubject`), `setValue`, `patchValue` | brecha | shim propio |
+| `FormBuilder` | factory propia que arma el árbol de `FormControl` | brecha | |
+| `[formGroup]` / `formControlName` / `formArrayName` | directiva propia que ata el `FormControl` shim al `NgModelController` del input | brecha | el grueso del trabajo |
+| `Validators.*` / validador custom | `(control) => errors | null` | shim | firma idéntica → reutilizable en Angular |
+| `ControlValueAccessor` / `NG_VALUE_ACCESSOR` | `NgModelController`: `$render`, `$formatters`, `$parsers`, `$setViewValue` | shim | mapeo casi 1:1 para controles custom |
+| `ControlValueAccessor.setDisabledState()` | `NgDisabled` de `ngjs-core` (`.disabled` + `.onChange`) | shim | ver «Primitivas» |
+| `Validator` / `NG_VALIDATORS` / `AsyncValidator` / `NG_ASYNC_VALIDATORS` | `NgModelController.$validators` / `$asyncValidators` | shim | |
+| `updateOn: 'blur' \| 'submit'` | `ngModelOptions="{ updateOn: 'blur' }"` | directo | AngularJS trae `ngModelOptions` |
+| display de errores (`@if (ctrl.hasError('x'))`) | `ngMessages` / `ngMessage` bajo el capó (o `ng-if` sobre `.$error`) | tpl | `angular-messages` da la mecánica |
+| estados (`touched`, `dirty`, `pending`…) | replicados en el shim / leídos del `NgModelController` | brecha | |
+
+## Router
+
+Sustrato: `@uirouter/angularjs` (no `ngRoute`).
+
+| Angular | ngjs (UI-Router) | Migra | Nota |
+|---|---|---|---|
+| `RouterModule.forRoot(routes)` / `forChild` | módulo `ui.router` + `.config($stateProvider => …)` | shim | árbol de estados con nombre |
+| `Route { path, component, children, data }` | `$stateProvider.state({ name, url, component })` anidado | brecha | mapa estado↔path para el codemod |
+| `<router-outlet>` (+ `name`) | `<ui-view>` (+ `name`) | tpl | |
+| `routerLink` / `routerLinkActive` | `ui-sref` / `ui-sref-active` | tpl | la forma `['/x', id]` la arma el codemod |
+| `Router.navigate` / `navigateByUrl` | `$state.go` / `$state.href` | shim | |
+| `ActivatedRoute` (params/data/query como `Observable`) | shim RxJS sobre `$transitions.onSuccess` + `$state.params` | brecha | UI-Router entrega valores planos |
+| re-uso de componente al cambiar un param | UI-Router re-crea la vista salvo `dynamic: true` | brecha | |
+| `CanActivate` / `CanDeactivate` / `CanMatch` | hooks `$transitions.onBefore` / `.onExit` | shim | `UrlTree` → `TargetState` |
+| `Resolve` / `resolve: {}` | `resolve: {}` en el estado | directo | |
+| `Route.data` / `Route.title` | `state.data` / `state.data.title` | shim | |
+| `TitleStrategy` / `Title` | `$transitions.onSuccess` → `document.title` | shim | |
+| `loadChildren` → `NgModule` | `lazyLoad` en el estado | shim | |
+| eventos del router (`NavigationStart`…) | hooks de transición | brecha | |
+
+## Animaciones
+
+Autoría: la DSL de `@angular/animations` (`trigger`, `state`, `style`, `animate`,
+`transition`, …) tal cual. Sustrato: `ngAnimate` + `$animateCss`. El CLI/`ng-js-vite`
+compila el `animations: [...]` del `@Component` a llamadas de `$animateCss` y a una
+directiva que interpreta `[@trigger]` en el template.
+
+| Angular | ngjs (ngAnimate) | Migra | Nota |
+|---|---|---|---|
+| `@Component({ animations: [trigger(...)] })` | metadata compilada a `$animateCss` + directiva de trigger | shim | la DSL se escribe igual que en Angular |
+| `trigger` / `state` / `style` / `animate` / `transition` | `$animateCss(el, { from, to, duration, easing, delay })` por transición | shim | |
+| `keyframes([...])` | `@keyframes` generado + `$animateCss({ keyframeStyle })` | shim | |
+| `[@trigger]="expr"` en template | directiva propia que observa `expr` y corre la transición state→state | tpl | `[@...]` ya es sintaxis Angular |
+| `(@trigger.start)` / `(@trigger.done)` | callbacks del runner de `$animateCss` (`.start()` / `.done()`) | tpl | |
+| `:enter` / `:leave` | hooks `.ng-enter` / `.ng-leave` de `ngAnimate` (o `$animate.enter/leave`) | shim | |
+| `:increment` / `:decrement` | comparación de valor numérico en la directiva de trigger | shim | |
+| `[@.disabled]` | `$animate.enabled(element, false)` | shim | |
+| `AnimationBuilder` / `AnimationPlayer` | wrapper sobre `$animateCss` con `play/pause/finish/destroy` | shim | |
+| `BrowserAnimationsModule` / `provideAnimations()` | incluir `ngAnimate` en el módulo | directo | |
+| `NoopAnimationsModule` | `$animate.enabled(false)` / `$animateProvider.customFilter` | shim | |
+| `query()` / `stagger()` / `group()` / `sequence()` / `animateChild()` | orquestar varios runners de `$animateCss` con delays | brecha | parcial; la orquestación fina se pierde |
+
+## Primitivas de `ngjs-core` (portadas de `reference/`)
+
+Lo que ya existe en `reference/` y hay que reincorporar a la base nueva.
+
+| Primitiva | Respalda | Forma |
+|---|---|---|
+| `CoreModule` (`ng.core`) / `CommonModule` (`ng.common`) | `@NgModule` base | `angular.module` + `.decorator("$controller" / "ngRefDirective" / "ngDisabledDirective")` |
+| decorador de `$controller` | ciclo de queries + locals por controller | monta el `ViewQueryRegistry`, inyecta `ViewContainerRef` / `ChangeDetectorRef` como locals |
+| `ApplicationRef` (+ `Impl`) | `ApplicationRef` | servicio: `bootstrap`, `tick`, `isStable`, `whenStable`, `attachView` |
+| `NgZone` (+ factory sobre `$rootScope`) | `NgZone` | `run` / `runOutsideAngular` / `onStable` — **hoy turn-tracker propio; va a Zone.js real** |
+| `ChangeDetectorRef` / `NgChangeDetectorRef` | `ChangeDetectorRef` | `markForCheck` / `detectChanges` / `detach` / `reattach` sobre `$scope` |
+| `ViewChild` / `viewChild` / `ViewChildren` / `viewChildren` | `@ViewChild(ren)` | decorador + funcional; se resuelven vía el bridge de `ng-ref` |
+| `ContentChild` / `contentChild` / `ContentChildren` / `contentChildren` | `@ContentChild(ren)` | ídem sobre contenido transcluido |
+| `QueryList` | `QueryList` | `.changes` (RxJS), `.first` / `.last` / `.length`, iterable |
+| bridge de `ng-ref` (`decorNgRef`) | `#ref`, `read:` de las queries | `.decorator("ngRefDirective")`: `ng-ref` resuelve `TemplateRef` / `ViewContainerRef` / `ElementRef` / controller y alimenta el registro de queries |
+| `TemplateRef` (`ng.common`) | `<ng-template>` | `transclude: 'element'` + `let-*` / `$implicit` |
+| `NgTemplateOutlet` (`ng.common`) | `*ngTemplateOutlet` | directiva `[ng-template-outlet]` + context |
+| `NgContent` (`ng.common`) | `<ng-content>` (incl. reproyección) | directiva + "content query owners" |
+| `ContentRef` / `<ng-container>` (`ng.common`) | `<ng-container>` que expone `ViewContainerRef` | `transclude: 'element'` |
+| `ViewContainerRef` (+ `Impl`) | `ViewContainerRef` | `createEmbeddedView` / `createComponent` / `insert` / `move` / `detach` / `clear` |
+| `EmbeddedViewRef` / `ViewRef` | `EmbeddedViewRef` / `ViewRef` | `rootNodes`, `destroy`, `onDestroy`, `context` |
+| `ComponentRef` (+ `Impl`) | `ComponentRef` | `setInput` (+ `$onChanges`), `instance`, `location`, `hostView`, `destroy`, `onDestroy` |
+| `ElementRef` (+ `Impl`) | `ElementRef` | `nativeElement` |
+| `createComponent` | `ViewContainerRef.createComponent`, bootstrap | `$compile` + link + espera del controller + proyección de nodos; expuesto en `globalThis` |
+| `NgDisabled` (+ `Impl` + `decorNgDisabled`) | `[disabled]` / `setDisabledState` | ver abajo |
+
+### `NgDisabled` — extensión sobre `ng-disabled`
+
+El `ng-disabled` nativo solo hace `el.prop('disabled', v)`. `ngjs-core` lo decora
+(`.decorator("ngDisabledDirective")`) con un controller que **observa el atributo y
+expone el estado**:
+
+```ts
+abstract class NgDisabled {
+  readonly disabled: boolean;
+  onChange(cb: (disabled: boolean) => void): () => void;   // devuelve unsubscribe
+}
+```
+
+Un componente hace `require: '^ngDisabled'` (o inyecta `NgDisabled`) y sabe si está
+deshabilitado y reacciona a los cambios. Equivale a `@Input() disabled` con setter,
+o a `ControlValueAccessor.setDisabledState(isDisabled)` en Angular. En template, el
+CLI reescribe `[disabled]="expr"` → `ng-disabled="expr"`.
+
+## Servicios de plataforma
+
+| Angular | ngjs | Migra | Nota |
+|---|---|---|---|
+| `Location` / `LocationStrategy` (`PathLocationStrategy` / `HashLocationStrategy`) | `$location` / `$locationProvider.html5Mode()` | shim | |
+| `PlatformLocation` | `$window.location` | shim | |
+| `DOCUMENT` token | `$document` | shim | |
+| `ViewportScroller` | `$anchorScroll` / scroll manual | shim | |
+| `Title` | `$document[0].title` | directo | |
+| `Meta` | `<meta>` en `$document` a mano | shim | |
+| `DomSanitizer.sanitize()` / `[innerHTML]` | `$sanitize` (`ngSanitize`) + `ng-bind-html` | shim | |
+| `bypassSecurityTrustHtml` / `…Url` / `…ResourceUrl` / `…Style` / `…Script` | `$sce.trustAsHtml` / `…Url` / `…ResourceUrl` / `…Css` / `…Js` | shim | nombres casi calcados |
+| `SafeHtml` / `SafeUrl` / `SafeResourceUrl` (tipos) | valores marcados por `$sce` | shim | |
+| `@angular/cdk/layout` `BreakpointObserver` / `Breakpoints` (`XSmall`…`XLarge`, `Handset`, `Tablet`, `Web`) | servicio sobre `window.matchMedia` → `Observable<BreakpointState>` (RxJS; Zone lo corre bajo el digest) | shim | |
+| `MediaMatcher` | `window.matchMedia` directo | shim | |
+
+## Build y entornos
+
+Sustrato: la config del CLI + el bundler (Vite / esbuild).
+
+| Angular | ngjs | Migra | Nota |
+|---|---|---|---|
+| `angular.json` (targets, `assets`, `styles`, `scripts`, `budgets`) | config del CLI (`ngjs.config.ts` / campos en `package.json`) + config del bundler | shim | el CLI mapea los campos relevantes |
+| `src/environments/environment.ts` + `.prod.ts` | `environment.ts` + reemplazo por modo (`fileReplacements` del CLI o `define` del bundler) | shim | `import { environment }` queda igual |
+| `fileReplacements` por `--configuration` | el CLI sustituye el archivo según el modo de build | shim | |
+| `isDevMode()` | `import.meta.env.DEV` / flag del `environment` | shim | |
+
+## i18n
+
+Sustrato: `angular-translate` (+ `angular-dynamic-locale` para el `$locale`).
+
+| Angular | ngjs | Migra | Nota |
+|---|---|---|---|
+| `i18n="meaning\|desc@@id"` en template | `translate` directiva / `{{ 'id' \| translate }}` | tpl | el CLI extrae `id` + texto default a un catálogo |
+| `$localize\`…\`` | `$translate('id')` / filtro `translate` | shim | |
+| `ng extract-i18n` (catálogo) | el CLI genera el catálogo de `angular-translate` desde los `i18n` / `$localize` | shim | reversible |
+| `LOCALE_ID` / `registerLocaleData` | `tmhDynamicLocale` + `$translate.use()` | shim | cambia `$locale` en runtime |
+| locale de `DatePipe` / `CurrencyPipe` | `$locale` cambiado por `angular-dynamic-locale` | shim | |
+| ICU (`{count, plural, …}`) | `angular-translate` + interpolación MessageFormat | brecha parcial | |
+
+## Accesibilidad
+
+| Angular | ngjs | Migra | Nota |
+|---|---|---|---|
+| ARIA implícita (Material / directivas) | `ngAria`: `aria-*`, `role`, `tabindex`, teclado automáticos | shim | AngularJS no lo hace solo |
+| `@angular/cdk/a11y` (`LiveAnnouncer`, `FocusTrap`, `FocusMonitor`) | — | brecha | sin lib de AngularJS; fuera de `ngjs-core` |
+| `A11yModule` | `ngAria` | shim | solo la parte automática |
+
+## Fuera de alcance
+
+| Concepto | Alternativa |
+|---|---|
+| `@defer` | `*ngIf` + carga manual |
+| `NgOptimizedImage` (`ngSrc`) | `<img>` normal |
+| SSR / hydration / `TransferState` | irrelevante sobre AngularJS |
+| `CUSTOM_ELEMENTS_SCHEMA` / Web Components | registrar elementos a mano |
+| `@angular/service-worker` | — |
+| `TestBed` | `angular.mock.module` / `angular.mock.inject` |
+
+---
+
+# Construcción
+
+Alcance: `ngjs-core` + el transform (`ng-js-vite` / CLI). Los consumidores son
+libres y se adaptan cuando esto esté listo.
+
+## Versiones y adopción
+
+Adopción incremental, no migración brusca.
+
+### Retrocompatible por construcción
+
+El runtime **es** AngularJS. Una app AngularJS existente agrega `ngjs-core` + el
+plugin y sigue andando: el transform solo toca archivos **con decoradores**; todo
+lo demás (`.component()` / `.directive()` / `.service()` a mano, templates `ng-*`)
+pasa sin cambios. Un `@Component` nuevo y un `.component()` viejo conviven en el
+mismo módulo.
+
+### v1 — núcleo
+
+Lo mínimo para escribir `@Component` y que corra. Etapas **0–10 + 3b**:
+`@NgModule`, `@Component`/`@Directive`/`@Pipe`, `@Input`/`@Output`, DI (app-level +
+jerárquico), lifecycle, queries, refs, common, `ChangeDetectorRef` passthrough,
+transform MVP, `environment` por modo.
+
+### v2 — extras
+
+Se adopta cuando el código base ya está en `@Component`. Etapas **11–19**:
+pipes built-in, rxjs-interop, HTTP, `platform-browser` (sanitizer / location /
+breakpoints), forms reactivos, router, animations, i18n + a11y, codemod inverso.
+
+Una app arranca con v1, pasa su código a `@Component`, y sube a v2 cuando necesita
+los extras.
+
+## CLI / `ng-js-vite` — qué hace con los conceptos
+
+Una vez que los decoradores y las primitivas existen, el transform (AST de TS, no
+regex) tiene estas responsabilidades:
+
+### 1. Leer
+
+- Decoradores de clase: `@Component`, `@Directive`, `@Pipe`, `@NgModule`, `@Injectable`.
+- Decoradores de miembro: `@Input`, `@Output`, `@HostBinding`, `@HostListener`,
+  `@ViewChild(ren)`, `@ContentChild(ren)`, `@Attribute`.
+- Metadata emitida: `design:paramtypes` (ctor), `propMetadata`.
+- `template` / `templateUrl` / `styles` / `styleUrl(s)`, `animations: [...]`.
+- Interfaces implementadas (`OnInit`, `ControlValueAccessor`, …) para saber qué
+  hooks reenviar.
+
+### 2. Generar (registro AngularJS)
+
+| De | A |
+|---|---|
+| `@NgModule({ declarations, imports, providers, bootstrap })` | `angular.module(name, [deps])` + `.component()/.directive()/.service()/.filter()` por entrada |
+| `@Component` | `IComponentOptions`: `bindings` de `@Input`/`@Output`, `controllerAs: '$'`, `require` de `@ViewChild/@ContentChild read`, `transclude` según `<ng-content>` del template, `template` importado |
+| `@Directive` | `IDirective` `restrict:'A'`, `bindToController`, `require` |
+| `@Injectable` / `providers` | `.service()` / `.factory()` con `$inject` de `design:paramtypes` + `@Inject` |
+| ctor tipado | array `$inject` de nombres string / tokens |
+| `@HostBinding` / `@HostListener` | `link` de la directiva host / `$element.on()` |
+| `animations: [...]` | llamadas a `$animateCss` + registro de la directiva `[@trigger]` |
+| `@Pipe` | `.filter(name, factory)` |
+
+### 3. Templates
+
+- Hoy (opción A): content-hash + import + encapsulación de estilos (`_content-<hash>`).
+- Si se cierra la opción B: traducir `[prop]`→`ng-prop-*`/interpolación,
+  `(event)`→`ng-*`, `*ngIf`→`ng-if`, `{{ x }}`→`{{ $.x }}`, `#ref`→`ng-ref`,
+  `[@t]`→directiva, `[(ngModel)]`→`ng-model`, pipes→filtros, `i18n`→`translate`.
+
+### 4. i18n
+
+Extraer `i18n` / `$localize` a un catálogo de `angular-translate`; generar el
+`$translate.use()` para `LOCALE_ID`.
+
+### 5. Build y entornos
+
+Resolver `src/environments/environment.ts` según el modo (`--configuration` /
+`fileReplacements` o `define` del bundler); mapear los campos de `angular.json`
+(`assets`, `styles`, `budgets`) a la config del bundler.
+
+### 6. Codemod inverso (ngjs → Angular)
+
+Quitar lo generado, reconstruir el `@NgModule` real, retraducir template
+AngularJS → Angular, `ui-sref`→`[routerLink]` con el mapa estado↔path,
+`$http`→`HttpClient`. Marcar lo no-mecánico con `// TODO(migrate): …`.
+
+### 7. Diagnóstico
+
+Reportar cada `brecha` que aparezca en el fuente: `query()`/`stagger()` de
+animaciones, subscripción a WebSocket sin `ngZone.run`, etc.
+
+## Arquitectura de `src/`
+
+```
+src/
+  index.ts                    barrel público
+  platform/
+    zone-flags.ts             __Zone_disable_toString (antes de zone.js)
+    ng-zone.ts                NgZone real sobre Zone.js (reemplaza el turn-tracker)
+    digest-bridge.ts          onMicrotaskEmpty → $digest guardado
+    bootstrap.ts              bootstrapModule → angular.bootstrap dentro de la zona
+    application-ref.ts        tick / isStable / whenStable / attachView / components
+  core/
+    di/                       @Injectable, @Inject, @Optional, @Self/@SkipSelf/@Host,
+                              InjectionToken, Injector (wrapper de $injector), reflect.ts
+    metadata/                 @Component, @Directive, @Pipe, @NgModule, @Input, @Output,
+                              @HostBinding, @HostListener, @Attribute — solo recolectan
+    lifecycle/                interfaces OnInit/… + SimpleChanges,
+                              controller-bridge.ts (decorador de $controller: ngX→$X)
+    change-detection/         ChangeDetectorRef
+    queries/                  viewChild/contentChild, QueryList, registry, ng-ref bridge
+    refs/                     ElementRef, ComponentRef, ViewRef, EmbeddedViewRef,
+                              ViewContainerRef, TemplateRef
+    create-component.ts
+    ng-disabled.ts
+  common/                     ng-template, ng-content, ng-container, ng-template-outlet
+  forms/                      FormControl/Group/Array, FormBuilder, Validators,
+                              control-value-accessor (↔ NgModelController),
+                              directivas formGroup / formControlName
+  router/                     wrappers sobre @uirouter/angularjs: RouterModule,
+                              router-outlet, router-link, ActivatedRoute, guards, resolve
+  animations/                 re-export DSL, trigger.directive, animate-css-runner,
+                              AnimationBuilder
+  platform-browser/          DomSanitizer ($sce+$sanitize), Title, Meta, Location
+  rxjs-interop/              takeUntilDestroyed, outputToObservable/outputFromObservable
+  i18n/                       wrappers sobre angular-translate + angular-dynamic-locale
+```
+
+**Regla de dependencias:** `platform` ← `core` ← el resto. `core` no importa
+`forms`/`router`/`animations`/`i18n`. Los módulos de nivel superior dependen de
+`core` + `platform`, no entre sí.
+
+## Orden de construcción
+
+Secuencial por dependencia. Cada etapa cierra cuando su criterio pasa en verde.
+Cada sección de este documento cae en alguna etapa (columna «cubre»).
+
+| # | Etapa | Cubre | Criterio de cierre |
+|---|---|---|---|
+| 0 | **Terreno**: `src/` nuevo, tsconfig con `experimentalDecorators` + `emitDecoratorMetadata`, `reflect-metadata`, harness vitest + jsdom + `angular-mocks` | — | un test trivial con `angular.mock` corre |
+| 1 | **Zona**: `zone-flags` + `import "zone.js"`, `NgZone` real (fork de `Zone`), `digest-bridge` | Detección de cambios (`NgZone`/`run`/`runOutsideAngular`), «RxJS bajo el digest», `Promise` que muta el modelo | promesa nativa dentro de la zona dispara `$digest`; `runOutsideAngular` no |
+| 2 | **Bootstrap y aplicación**: `bootstrap.ts`, `ApplicationRef`, `APP_INITIALIZER` (bloque `.run`), `ErrorHandler` (`.decorator('$exceptionHandler')`) | Bootstrap y módulo | bootstrappear un `angular.module` a mano; `whenStable` resuelve; un `APP_INITIALIZER` corre antes |
+| 3 | **DI app-level**: `InjectionToken`, `@Injectable`, `@Inject`, `Injector`/`INJECTOR`, `forwardRef`, recetas `useClass`/`useExisting`/`useValue`/`useFactory`/`multi`, `ModuleWithProviders`, `reflect.ts` (`design:paramtypes`) | Inyección de dependencias (app-level) | `@Injectable` con ctor tipado y `@Inject(TOKEN)` se resuelve; `useValue`/`useFactory` funcionan |
+| 3b | **Inyector jerárquico (contenedor)**: `ElementInjectorNode` (providers / cache / parent), `node.get(token, flags)` con recetas `useClass`/`useValue`/`useFactory`/`useExisting`/`multi` y fallback a `$injector`, modificadores `@Self`/`@Host`/`@SkipSelf`/`@Optional` | `@Self`/`@Host`/`@SkipSelf`/`@Optional`, recetas de provider en cadena | test unitario: `node.get` resuelve padre→hijo, cae a `$injector`, respeta los modificadores |
+| 4 | **Metadata (sin codegen)**: `@Component`, `@Directive` (+ `exportAs`), `@Pipe`, `@NgModule`, `@Input` (+ `required`/`transform`/`alias`), `@Output`, `@HostBinding`, `@HostListener`, `@Attribute` | Componente (decoradores), Directivas (decoradores) | leer la metadata completa de una clase decorada desde un test |
+| 5 | **Lifecycle + wiring del inyector**: interfaces `OnInit`/`OnChanges`/`OnDestroy`/`DoCheck`/`AfterView*`/`AfterContent*` + `SimpleChanges`, decorador de `$controller` (`ngX`→`$X`, monta `ViewQueryRegistry`, **crea el `ElementInjectorNode` del componente con `providers`, lo ancla por `$element.data`/`inheritedData`, resuelve los params del ctor contra el nodo, teardown en `$destroy`**), `afterNextRender`/`afterRender` (`$$postDigest`) | Componente (ciclo de vida, bridge), `@Component({ providers })` | controller con `ngOnInit`/`ngOnChanges`/`ngOnDestroy` recibe las llamadas; `@Component({ providers: [X] })` da instancia nueva de `X` por componente y un hijo la resuelve; `afterNextRender` corre tras el digest |
+| 6 | **Refs y vistas** (portar de `reference/`): `ElementRef`, `ComponentRef` (`setInput`/`instance`/`destroy`), `ViewRef`, `EmbeddedViewRef`, `ViewContainerRef`, `TemplateRef`, `createComponent` | Proyección y vistas dinámicas (refs), Primitivas de `ngjs-core` | tests portados (`view-container-ref`, `create-component`) verdes |
+| 7 | **Queries** (portar): `viewChild`/`viewChildren`/`contentChild`/`contentChildren` (+ decoradores), `QueryList`, registry, `ng-ref` bridge | `@ViewChild(ren)` / `@ContentChild(ren)`, `QueryList` | test `dynamic-children-queries` portado verde |
+| 8 | **Common**: `ng-template` (+ `let-*`/`$implicit`), `ng-content` (+ `select`, reproyección), `ng-container`, `ng-template-outlet` | Proyección (`<ng-content>`, `<ng-template>`, `*ngTemplateOutlet`, `NgComponentOutlet`) | proyección multi-nivel + outlet con contexto |
+| 9 | **`ChangeDetectorRef` (passthrough) + `NgDisabled`**: `detectChanges`→`$digest`, `markForCheck`→no-op, `detach`/`reattach` opcional; `NgDisabled` (portar de `reference/`) | `ChangeDetectorRef`, `[disabled]`/`NgDisabled` | `detectChanges()` fuerza un `$digest`; test de `NgDisabled` portado verde |
+| 10 | **Transform MVP** (`ng-js-vite`/CLI): leer etapa 4 + ctor metadata → `angular.module()` + `.component()`/`.directive()`/`.service()`/`.filter()`, `bindings` de `@Input`/`@Output`, `$inject`, `require` de queries con `read`, `transclude` según `<ng-content>`, `link` de `@HostBinding`/`@HostListener`, `$attrs` de `@Attribute`; `environment` por modo de build | CLI §2 + §5, Componente/Directivas (codegen), `@Pipe` (codegen), Build y entornos | un `@Component` + `@Directive` + `@Pipe` + `@Injectable` nuevos se registran y renderizan en jsdom; `environment` cambia entre dev/prod |
+| 11 | **Pipes**: `PipeTransform`, filtros built-in que faltan (`titlecase`/`percent`/`keyvalue`), `AsyncPipe` (`\| async`) | Pipes | `\| async` refleja emisiones; `keyvalue` sobre un objeto |
+| 12 | **rxjs-interop**: `takeUntilDestroyed(destroyRef?)`, `DestroyRef`, `outputToObservable`/`outputFromObservable`, `EventEmitter` (clase) | Reactividad §interop | `takeUntilDestroyed` completa en `$destroy` |
+| 13 | **HTTP**: `HttpClient` (`$http`→`Observable` vía `from`), `HttpHeaders`/`HttpParams`, `HttpInterceptor`→`$httpProvider.interceptors`, `HttpErrorResponse` | Reactividad (filas HTTP) | `HttpClient.get()` emite y su continuación corre bajo el digest; un interceptor modifica el request |
+| 14 | **platform-browser**: `DomSanitizer` (`$sce`+`$sanitize`), `bypassSecurityTrust*`, `SafeHtml`/`SafeUrl`/`SafeResourceUrl`, `Title`, `Meta`, `DOCUMENT`, `Location`/`LocationStrategy`/`PlatformLocation` (`$location`), `ViewportScroller` (`$anchorScroll`), `BreakpointObserver`/`Breakpoints`/`MediaMatcher` (sobre `matchMedia`) | Servicios de plataforma | `[innerHTML]` sanitizado; `Location.go()` cambia la URL; `BreakpointObserver` emite al cruzar un breakpoint |
+| 15 | **Forms**: `FormControl`/`FormGroup`/`FormArray`, `FormBuilder`, `Validators.*`, `ControlValueAccessor`/`NG_VALUE_ACCESSOR` ↔ `NgModelController`, `NG_VALIDATORS`/`NG_ASYNC_VALIDATORS`→`$validators`/`$asyncValidators`, directivas `[formGroup]`/`formControlName`/`formArrayName`, `updateOn`→`ngModelOptions`, errores (`ngMessages`), template-driven (`[(ngModel)]`/`#f="ngForm"`/`ngModelGroup`) | Forms | `formGroup` reactivo con validación sync+async, `valueChanges`, y un control custom vía CVA |
+| 16 | **Router**: `RouterModule.forRoot/forChild` (sobre `$stateProvider`), `<router-outlet>` (+ `name`), `routerLink`/`routerLinkActive`, `Router.navigate`/`navigateByUrl`, `ActivatedRoute` shim (RxJS sobre `$transitions`), `CanActivate`/`CanDeactivate`/`CanMatch`, `Resolve`/`resolve`, `Route.data`/`title`/`TitleStrategy`, `loadChildren`→`lazyLoad` | Router | navegación entre 2 rutas + guard + resolve + `ActivatedRoute.paramMap` emite |
+| 17 | **Animations**: re-export DSL (`trigger`/`state`/`style`/`animate`/`transition`/`keyframes`), directiva `[@trigger]`, runner de `$animateCss`, `(@t.start)`/`(@t.done)`, `:enter`/`:leave`/`:increment`/`:decrement`, `[@.disabled]`, `AnimationBuilder`/`AnimationPlayer`, `BrowserAnimationsModule`/`provideAnimations`/`NoopAnimationsModule` | Animaciones | `[@trigger]` anima entre 2 estados; `:enter` en un `*ngIf` |
+| 18 | **i18n + a11y**: wrappers de `angular-translate` (`translate`, `$translate`) + `angular-dynamic-locale` (`LOCALE_ID`/`$locale`), incluir `ngAria` | i18n, Accesibilidad | `{{ 'KEY' \| translate }}` + cambio de locale en runtime |
+| 19 | **Transform completo + codemod inverso + diagnóstico**: el transform cubre `animations`, i18n (`i18n`/`$localize`→catálogo) y, si se cierra la opción B, la sintaxis de template; codemod ngjs→Angular; reporte de brechas | CLI §3, §6, §7 | un componente ngjs se reescribe a Angular; se listan las brechas del fuente |
+
+### Brechas — no se implementan, se documentan/reportan
+
+`hostDirectives` (parcial), `Renderer2`, `AfterViewChecked`/`AfterContentChecked`
+(watcher ad-hoc), `FocusMonitor`, ICU plurals (parcial), modelo estado-vs-path del
+router, re-uso de componente por param.
+
+`@Component({ providers })` **sí** se intenta (inyector jerárquico, etapas 3b + 5);
+único límite conocido: el árbol lógico de proyección vs el DOM.
+
+`ChangeDetectionStrategy.OnPush` se **ignora** (no es brecha): con Zone el `$digest`
+es global.
+
+Regla: una etapa **no** está lista solo porque los archivos existen — lo está
+cuando pasan sus contratos, comportamiento, registro y test.
