@@ -137,11 +137,29 @@ y los reenvía al hook `$…` de AngularJS (`ngOnInit` → `$onInit`, `ngOnChang
 | `<ng-template>` / `TemplateRef` | `transclude: 'element'` (`TemplateRef` de `ngjs-core`) | shim | plantilla diferida |
 | `<ng-template let-a let-b="$implicit">` | scope transcluido con locals (`$implicit` + nombrados) | shim | `TemplateRef` ya expone contexto |
 | `*ngTemplateOutlet` (+ context) | directiva de `ngjs-core` | tpl | |
-| `NgComponentOutlet` | `ViewContainerRef.createComponent` (directiva envoltorio) | tpl | |
+| `NgComponentOutlet` (+ lazy `import()`) | `ViewContainerRef.createComponent` (directiva envoltorio) | tpl | |
 | `ViewContainerRef` (`createEmbeddedView` / `createComponent`) | `ViewContainerRef` de `ngjs-core` (`$compile` + DOM) | shim | |
+| lazy component: `await import('./x')` + `createComponent(X)` | `import()` (chunk del bundler) + registro diferido + `createComponent` | shim | ver abajo |
 | `@ViewChild` / `@ViewChildren` | decorador de `ngjs-core` (`ng-ref` + registro de query) | shim | resuelto en `$postLink` |
 | `@ContentChild` / `@ContentChildren` | ídem sobre el contenido transcluido | shim | |
 | `QueryList` (`.changes`) | `QueryList` de `ngjs-core` (RxJS `Subject`) | directo | |
+
+**Componentes lazy.** AngularJS **no registra componentes/directivas/servicios
+después del `bootstrap`** (`$compileProvider.component()` solo existe en la fase
+config). Solución: `CoreModule.config` captura `$compileProvider`,
+`$controllerProvider`, `$provide`, `$filterProvider`, `$animateProvider` y los
+guarda. El transform, para un chunk lazy, emite el registro usando esos providers
+capturados. Entonces `await import('./x')` corre el side-effect que registra
+`<x>`, y `createComponent(X)` (que registra la clase si falta y compila `<x>`) lo
+instancia. `@defer` (sintaxis v17) queda fuera; el mecanismo de carga sí está.
+
+**UI-Router `lazyLoad` y ESM.** UI-Router **sí** trae `lazyLoad` en el estado, pero
+su contrato es de la era SystemJS/webpack: espera un `Promise<{ states: [...] }>` (o
+un `NgModule`), no un `import()` nativo cuyo módulo resuelto solo tiene
+side-effects. El wrapper de `router/` adapta: recibe el resultado de `import()`,
+deja que el chunk se registre por los providers capturados, y le devuelve a
+UI-Router el `{ states }` que espera. Así `loadChildren`/`loadComponent` con
+`() => import(...)` nativo funcionan.
 
 ## Inyección de dependencias
 
@@ -301,7 +319,8 @@ Sustrato: `@uirouter/angularjs` (no `ngRoute`).
 | `Resolve` / `resolve: {}` | `resolve: {}` en el estado | directo | |
 | `Route.data` / `Route.title` | `state.data` / `state.data.title` | shim | |
 | `TitleStrategy` / `Title` | `$transitions.onSuccess` → `document.title` | shim | |
-| `loadChildren` → `NgModule` | `lazyLoad` en el estado | shim | |
+| `loadChildren: () => import(...)` | `lazyLoad` del estado + wrapper que adapta el `import()` nativo al contrato `{ states }` de UI-Router | shim | ver «UI-Router `lazyLoad` y ESM» |
+| `loadComponent: () => import(...)` | ídem + registro del componente vía providers capturados | shim | |
 | eventos del router (`NavigationStart`…) | hooks de transición | brecha | |
 
 ## Animaciones
@@ -422,7 +441,7 @@ Sustrato: `angular-translate` (+ `angular-dynamic-locale` para el `$locale`).
 
 | Concepto | Alternativa |
 |---|---|
-| `@defer` | `*ngIf` + carga manual |
+| `@defer` (sintaxis v17) | `*ngIf` + `import()` manual (el mecanismo lazy sí existe, ver «Componentes lazy») |
 | `NgOptimizedImage` (`ngSrc`) | `<img>` normal |
 | SSR / hydration / `TransferState` | irrelevante sobre AngularJS |
 | `CUSTOM_ELEMENTS_SCHEMA` / Web Components | registrar elementos a mano |
@@ -571,12 +590,12 @@ Cada sección de este documento cae en alguna etapa (columna «cubre»).
 |---|---|---|---|
 | 0 | **Terreno**: `src/` nuevo, tsconfig con `experimentalDecorators` + `emitDecoratorMetadata`, `reflect-metadata`, harness vitest + jsdom + `angular-mocks` | — | un test trivial con `angular.mock` corre |
 | 1 | **Zona**: `zone-flags` + `import "zone.js"`, `NgZone` real (fork de `Zone`), `digest-bridge` | Detección de cambios (`NgZone`/`run`/`runOutsideAngular`), «RxJS bajo el digest», `Promise` que muta el modelo | promesa nativa dentro de la zona dispara `$digest`; `runOutsideAngular` no |
-| 2 | **Bootstrap y aplicación**: `bootstrap.ts`, `ApplicationRef`, `APP_INITIALIZER` (bloque `.run`), `ErrorHandler` (`.decorator('$exceptionHandler')`) | Bootstrap y módulo | bootstrappear un `angular.module` a mano; `whenStable` resuelve; un `APP_INITIALIZER` corre antes |
+| 2 | **Bootstrap y aplicación**: `bootstrap.ts`, `ApplicationRef`, `APP_INITIALIZER` (bloque `.run`), `ErrorHandler` (`.decorator('$exceptionHandler')`), **captura de providers de config** (`$compileProvider`/`$controllerProvider`/`$provide`/`$filterProvider`/`$animateProvider`) para registro diferido | Bootstrap y módulo, base de componentes lazy | bootstrappear un `angular.module` a mano; `whenStable` resuelve; `APP_INITIALIZER` corre antes; registrar un componente **después** del bootstrap con los providers capturados |
 | 3 | **DI app-level**: `InjectionToken`, `@Injectable`, `@Inject`, `Injector`/`INJECTOR`, `forwardRef`, recetas `useClass`/`useExisting`/`useValue`/`useFactory`/`multi`, `ModuleWithProviders`, `reflect.ts` (`design:paramtypes`) | Inyección de dependencias (app-level) | `@Injectable` con ctor tipado y `@Inject(TOKEN)` se resuelve; `useValue`/`useFactory` funcionan |
 | 3b | **Inyector jerárquico (contenedor)**: `ElementInjectorNode` (providers / cache / parent), `node.get(token, flags)` con recetas `useClass`/`useValue`/`useFactory`/`useExisting`/`multi` y fallback a `$injector`, modificadores `@Self`/`@Host`/`@SkipSelf`/`@Optional` | `@Self`/`@Host`/`@SkipSelf`/`@Optional`, recetas de provider en cadena | test unitario: `node.get` resuelve padre→hijo, cae a `$injector`, respeta los modificadores |
 | 4 | **Metadata (sin codegen)**: `@Component`, `@Directive` (+ `exportAs`), `@Pipe`, `@NgModule`, `@Input` (+ `required`/`transform`/`alias`), `@Output`, `@HostBinding`, `@HostListener`, `@Attribute` | Componente (decoradores), Directivas (decoradores) | leer la metadata completa de una clase decorada desde un test |
 | 5 | **Lifecycle + wiring del inyector**: interfaces `OnInit`/`OnChanges`/`OnDestroy`/`DoCheck`/`AfterView*`/`AfterContent*` + `SimpleChanges`, decorador de `$controller` (`ngX`→`$X`, monta `ViewQueryRegistry`, **crea el `ElementInjectorNode` del componente con `providers`, lo ancla por `$element.data`/`inheritedData`, resuelve los params del ctor contra el nodo, teardown en `$destroy`**), `afterNextRender`/`afterRender` (`$$postDigest`) | Componente (ciclo de vida, bridge), `@Component({ providers })` | controller con `ngOnInit`/`ngOnChanges`/`ngOnDestroy` recibe las llamadas; `@Component({ providers: [X] })` da instancia nueva de `X` por componente y un hijo la resuelve; `afterNextRender` corre tras el digest |
-| 6 | **Refs y vistas** (portar de `reference/`): `ElementRef`, `ComponentRef` (`setInput`/`instance`/`destroy`), `ViewRef`, `EmbeddedViewRef`, `ViewContainerRef`, `TemplateRef`, `createComponent` | Proyección y vistas dinámicas (refs), Primitivas de `ngjs-core` | tests portados (`view-container-ref`, `create-component`) verdes |
+| 6 | **Refs y vistas** (portar de `reference/`): `ElementRef`, `ComponentRef` (`setInput`/`instance`/`destroy`), `ViewRef`, `EmbeddedViewRef`, `ViewContainerRef`, `TemplateRef`, `createComponent` (acepta una clase recién importada y la registra vía providers capturados si falta) | Proyección y vistas dinámicas (refs + componentes lazy), Primitivas de `ngjs-core` | tests portados (`view-container-ref`, `create-component`) verdes; `createComponent` de un `@Component` cargado con `import()` |
 | 7 | **Queries** (portar): `viewChild`/`viewChildren`/`contentChild`/`contentChildren` (+ decoradores), `QueryList`, registry, `ng-ref` bridge | `@ViewChild(ren)` / `@ContentChild(ren)`, `QueryList` | test `dynamic-children-queries` portado verde |
 | 8 | **Common**: `ng-template` (+ `let-*`/`$implicit`), `ng-content` (+ `select`, reproyección), `ng-container`, `ng-template-outlet` | Proyección (`<ng-content>`, `<ng-template>`, `*ngTemplateOutlet`, `NgComponentOutlet`) | proyección multi-nivel + outlet con contexto |
 | 9 | **`ChangeDetectorRef` (passthrough) + `NgDisabled`**: `detectChanges`→`$digest`, `markForCheck`→no-op, `detach`/`reattach` opcional; `NgDisabled` (portar de `reference/`) | `ChangeDetectorRef`, `[disabled]`/`NgDisabled` | `detectChanges()` fuerza un `$digest`; test de `NgDisabled` portado verde |
@@ -586,7 +605,7 @@ Cada sección de este documento cae en alguna etapa (columna «cubre»).
 | 13 | **HTTP**: `HttpClient` (`$http`→`Observable` vía `from`), `HttpHeaders`/`HttpParams`, `HttpInterceptor`→`$httpProvider.interceptors`, `HttpErrorResponse` | Reactividad (filas HTTP) | `HttpClient.get()` emite y su continuación corre bajo el digest; un interceptor modifica el request |
 | 14 | **platform-browser**: `DomSanitizer` (`$sce`+`$sanitize`), `bypassSecurityTrust*`, `SafeHtml`/`SafeUrl`/`SafeResourceUrl`, `Title`, `Meta`, `DOCUMENT`, `Location`/`LocationStrategy`/`PlatformLocation` (`$location`), `ViewportScroller` (`$anchorScroll`), `BreakpointObserver`/`Breakpoints`/`MediaMatcher` (sobre `matchMedia`) | Servicios de plataforma | `[innerHTML]` sanitizado; `Location.go()` cambia la URL; `BreakpointObserver` emite al cruzar un breakpoint |
 | 15 | **Forms**: `FormControl`/`FormGroup`/`FormArray`, `FormBuilder`, `Validators.*`, `ControlValueAccessor`/`NG_VALUE_ACCESSOR` ↔ `NgModelController`, `NG_VALIDATORS`/`NG_ASYNC_VALIDATORS`→`$validators`/`$asyncValidators`, directivas `[formGroup]`/`formControlName`/`formArrayName`, `updateOn`→`ngModelOptions`, errores (`ngMessages`), template-driven (`[(ngModel)]`/`#f="ngForm"`/`ngModelGroup`) | Forms | `formGroup` reactivo con validación sync+async, `valueChanges`, y un control custom vía CVA |
-| 16 | **Router**: `RouterModule.forRoot/forChild` (sobre `$stateProvider`), `<router-outlet>` (+ `name`), `routerLink`/`routerLinkActive`, `Router.navigate`/`navigateByUrl`, `ActivatedRoute` shim (RxJS sobre `$transitions`), `CanActivate`/`CanDeactivate`/`CanMatch`, `Resolve`/`resolve`, `Route.data`/`title`/`TitleStrategy`, `loadChildren`→`lazyLoad` | Router | navegación entre 2 rutas + guard + resolve + `ActivatedRoute.paramMap` emite |
+| 16 | **Router**: `RouterModule.forRoot/forChild` (sobre `$stateProvider`), `<router-outlet>` (+ `name`), `routerLink`/`routerLinkActive`, `Router.navigate`/`navigateByUrl`, `ActivatedRoute` shim (RxJS sobre `$transitions`), `CanActivate`/`CanDeactivate`/`CanMatch`, `Resolve`/`resolve`, `Route.data`/`title`/`TitleStrategy`, `loadChildren`/`loadComponent` → `lazyLoad` + wrapper que adapta el `import()` nativo al contrato `{ states }` de UI-Router + registro diferido | Router | navegación entre 2 rutas + guard + resolve + `ActivatedRoute.paramMap` emite; una ruta con `loadComponent: () => import(...)` nativo carga y monta el chunk |
 | 17 | **Animations**: re-export DSL (`trigger`/`state`/`style`/`animate`/`transition`/`keyframes`), directiva `[@trigger]`, runner de `$animateCss`, `(@t.start)`/`(@t.done)`, `:enter`/`:leave`/`:increment`/`:decrement`, `[@.disabled]`, `AnimationBuilder`/`AnimationPlayer`, `BrowserAnimationsModule`/`provideAnimations`/`NoopAnimationsModule` | Animaciones | `[@trigger]` anima entre 2 estados; `:enter` en un `*ngIf` |
 | 18 | **i18n + a11y**: wrappers de `angular-translate` (`translate`, `$translate`) + `angular-dynamic-locale` (`LOCALE_ID`/`$locale`), incluir `ngAria` | i18n, Accesibilidad | `{{ 'KEY' \| translate }}` + cambio de locale en runtime |
 | 19 | **Transform completo + codemod inverso + diagnóstico**: el transform cubre `animations`, i18n (`i18n`/`$localize`→catálogo) y, si se cierra la opción B, la sintaxis de template; codemod ngjs→Angular; reporte de brechas | CLI §3, §6, §7 | un componente ngjs se reescribe a Angular; se listan las brechas del fuente |
