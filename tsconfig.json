@@ -10,15 +10,16 @@
     "noEmit": true,
     "skipLibCheck": true,
     "strict": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-    "typeRoots": ["./src/core/decorators/types.d.ts"],
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "test", "vitest.config.ts"]
 }
