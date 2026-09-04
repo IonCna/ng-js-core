@@ -48,6 +48,50 @@ describe("etapa 3 — registro de providers en bootstrapApplication", () => {
     appRef.destroy();
   });
 
+  it("useClass sustituye la implementación: provide y useClass son clases distintas", async () => {
+    abstract class Logger {
+      static readonly $name = "Logger";
+      abstract log(msg: string): string;
+    }
+    class FileLogger extends Logger {
+      log(msg: string) {
+        return `file: ${msg}`;
+      }
+    }
+    const { appRef, $injector } = await boot([{ provide: Logger, useClass: FileLogger }]);
+
+    const logger = $injector.get<Logger>("Logger");
+    expect(logger).toBeInstanceOf(FileLogger);
+    expect(logger.log("hola")).toBe("file: hola");
+    appRef.destroy();
+  });
+
+  it("providers anidados (array dentro de array) se aplanan", async () => {
+    const A = new InjectionToken<string>("A");
+    const B = new InjectionToken<string>("B");
+    const { appRef, $injector } = await boot([{ provide: A, useValue: "a" }, [{ provide: B, useValue: "b" }]]);
+
+    expect($injector.get(A.toString())).toBe("a");
+    expect($injector.get(B.toString())).toBe("b");
+    appRef.destroy();
+  });
+
+  it("multi: true funciona mezclando useClass con useValue en el mismo grupo", async () => {
+    const HANDLERS = new InjectionToken<unknown>("HANDLERS");
+    class HandlerA {
+      static readonly $name = "HandlerA";
+    }
+    const { appRef, $injector } = await boot([
+      { provide: HANDLERS, useClass: HandlerA, multi: true },
+      { provide: HANDLERS, useValue: "handler-b", multi: true },
+    ]);
+
+    const handlers = $injector.get<unknown[]>(HANDLERS.toString());
+    expect(handlers[0]).toBeInstanceOf(HandlerA);
+    expect(handlers[1]).toBe("handler-b");
+    appRef.destroy();
+  });
+
   it("una clase pelada (TypeProvider) se registra bajo su propio $name", async () => {
     class Clock {
       static readonly $name = "Clock";

@@ -1,9 +1,9 @@
 import "reflect-metadata";
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { forwardRef, resolveForwardRef } from "@/core/di/forward-ref.ts";
+import { forwardRef, isForwardRef, resolveForwardRef } from "@/core/di/forward-ref.ts";
 import { Inject, Injectable } from "@/core/di/injectable.ts";
-import { ReflectInjection } from "@/core/di/reflect.ts";
+import { ensureInject, ReflectInjection } from "@/core/di/reflect.ts";
 
 describe("etapa 3 — forwardRef", () => {
   it("resolveForwardRef desenvuelve el thunk", () => {
@@ -18,6 +18,25 @@ describe("etapa 3 — forwardRef", () => {
     expect(resolveForwardRef("$http")).toBe("$http");
     class Foo {}
     expect(resolveForwardRef(Foo)).toBe(Foo);
+  });
+
+  it("isForwardRef distingue un forwardRef de cualquier otra cosa", () => {
+    class Foo {}
+    expect(isForwardRef(forwardRef(() => Foo))).toBe(true);
+    expect(isForwardRef(Foo)).toBe(false);
+    expect(isForwardRef("$http")).toBe(false);
+    expect(isForwardRef(() => Foo)).toBe(false); // una función común, sin el marcador
+  });
+
+  it("ensureInject resuelve un $inject mixto: string + forwardRef juntos", () => {
+    class Bar {
+      static readonly $name = "Bar";
+      static $inject: unknown[] = ["$http", forwardRef(() => Bar)];
+    }
+
+    ensureInject(Bar);
+
+    expect((Bar as unknown as { $inject: string[] }).$inject).toEqual(["$http", "Bar"]);
   });
 
   it("ReflectInjection.translate desenvuelve un forwardRef antes de traducir", () => {

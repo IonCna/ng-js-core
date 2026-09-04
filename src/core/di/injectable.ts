@@ -4,6 +4,16 @@ import type { ProviderToken } from "@/core/di/provider-token.ts";
 const injectOverrides = new WeakMap<Function, Map<number, InjectionEntry>>();
 
 /**
+ * Piel JS — la parte pública para consumidores sin decoradores. `ensureInject`
+ * es un primitivo interno (lo usan `injectable()`, `Injectable()`, y el
+ * registro de providers); esta es la función que se documenta/exporta.
+ */
+export function injectable<T extends object>(target: T): T {
+  ensureInject(target);
+  return target;
+}
+
+/**
  * Decorador de parámetro de ctor. Corre UNA VEZ, al definir la clase — no
  * puede resolver nada por su cuenta. Solo anota `{ índice, token }`; el valor
  * lo termina poniendo `$inject` nativo + `$injector.instantiate`, por
@@ -50,6 +60,6 @@ export function Injectable(_config?: { providedIn?: "root" }): ClassDecorator {
     );
 
     (ctor as unknown as { $inject?: readonly InjectionEntry[] }).$inject = entries;
-    ensureInject(ctor);
+    injectable(ctor); // @Injectable llama a la piel JS de fondo, como @Component -> component()
   };
 }

@@ -50,6 +50,24 @@ describe("etapa 3 — Injector", () => {
     expect(injector.get("noExiste", "fallback")).toBe("fallback");
   });
 
+  it("si el token SÍ está registrado, ignora notFoundValue y devuelve el valor real", () => {
+    const $injector = bootInjector("injectorTestFoundWithFallback", (module) => {
+      module.constant("existente", "valor-real");
+    });
+    const injector = $injector.get<Injector>(Injector.$name);
+
+    expect(injector.get("existente", "fallback")).toBe("valor-real");
+  });
+
+  it("notFoundValue funciona con valores falsy (0, false, cadena vacía)", () => {
+    const $injector = bootInjector("injectorTestFalsyFallback");
+    const injector = $injector.get<Injector>(Injector.$name);
+
+    expect(injector.get("noExiste0", 0)).toBe(0);
+    expect(injector.get("noExisteFalse", false)).toBe(false);
+    expect(injector.get("noExisteVacio", "")).toBe("");
+  });
+
   it("InjectorImpl.current queda apuntando a la última instancia creada", () => {
     bootInjector("injectorTestCurrent").get(Injector.$name);
     expect(InjectorImpl.current).toBeInstanceOf(InjectorImpl);
