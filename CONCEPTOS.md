@@ -11,7 +11,10 @@ ni scheduler propio — el dirty-checking de AngularJS ya recorre todo.
 ## Capas
 
 1. **Autoría** — clases con decoradores. `experimentalDecorators` +
-   `emitDecoratorMetadata` (la metadata de tipos alimenta la DI).
+   `emitDecoratorMetadata` (la metadata de tipos alimenta la DI). Los decoradores
+   son azúcar sobre un registro de metadata normalizado que también se escribe
+   desde JS puro (forma funcional o `static`) — ver «Superficie de autoría — JS y
+   TS a la par».
 2. **CLI (`ng-js-cli`)** — capa dev-time que *absorbe el template de fondo*: lo toma
    como input y lo transforma antes de que build/runtime lo vean. Es donde vive (o
    vivirá) la traducción de sintaxis de template Angular → AngularJS y, en la otra
@@ -66,6 +69,188 @@ UI-Router), `angular-resource` (`HttpClient` directo), `angular-touch` (deprecad
 El "CDK" (`FocusTrap`, positioning/Popper, `LiveAnnouncer`, RTL, overlay) no tiene
 lib de AngularJS ni entra en `ngjs-core`: es `brecha`, lo resuelve quien lo
 necesite.
+
+---
+
+## Superficie de autoría — JS y TS a la par
+
+Premisa: **AngularJS y su ecosistema son JS**. Todo lo que un consumidor escribe
+—decoradores, tokens, `EventEmitter`, refs— tiene que poder usarse desde `.js` sin
+`tsc`, y además traer su `.d.ts` para el que escribe `.ts`. La sintaxis `@` no es
+nativa en ninguno de los dos: en TS la habilita `experimentalDecorators`, en JS un
+transpilador (Babel / esbuild). Por eso el runtime **nunca** depende de que haya
+decoradores: depende de un **registro de metadata normalizado**, y los decoradores
+son solo uno de los frentes que lo producen.
+
+### Un modelo de datos, varios frentes
+
+```
+frentes (producen)                          metadata normalizada            consumidores
+─────────────────────────────────────       ────────────────────────        ─────────────────────────────────
+@Component + @Input/@Output  (TS, @)        ┐                          ┌──   ng-js-vite (build):
+component(nombre, class {…})  (JS)          ├─▶  ComponentDef /  ──────┤     angular.module().component(...)
+static ngComponent = {…}      (JS)          │    DirectiveDef /        │
+ng-js-vite (lee el AST TS en build)         ┘    PipeDef / NgModuleDef ├──   ngjs-core (runtime):
+                                                 / InjectableDef       │     $compileProvider/$controllerProvider
+                                                                       └──   createComponent (lazy / dinámico)
+```
+
+- **La metadata es data plana.** `ComponentDef` (y `DirectiveDef`, `PipeDef`,
+  `NgModuleDef`, `InjectableDef`) es un objeto serializable: `selector`,
+  `inputs[]` (`{ propName, bindingName, required?, transform? }`), `outputs[]`,
+  `host` (`bindings` / `listeners`), `queries[]`, `lifecycle` (set de hooks
+  presentes), `providers[]`, `ctorDeps[]`, `template`/`templateUrl`,
+  `styles`/`styleUrl`, `exportAs`. Sin lógica.
+- **Los frentes convergen** en el mismo objeto. Un decorador TS y un
+  `static ngComponent` en JS dejan el mismo registro; `ng-js-vite` arma ese shape
+  desde el AST en build-time.
+- **Dos modos de consumo**:
+  - *Build-time (principal)* — `ng-js-vite` lee la metadata y emite
+    `angular.module().component()/.directive()/.service()/.filter()`. El runtime
+    no introspecta nada.
+  - *Runtime (fallback / JS puro / dinámico)* — sin transform. `ngjs-core` lee el
+    registro normalizado (de decoradores en runtime o de `static`) y llama a los
+    providers de config capturados (etapa 2). Es la historia "agrego un `<script>`"
+    y la de componentes lazy / `createComponent`.
+
+### Un primitivo, dos pieles
+
+Un solo constructor de bajo nivel, `defineComponent(clase, ComponentDef)`, estampa
+la marca interna y no parsea nada. Todo lo demás produce un `ComponentDef` y llama
+ahí:
+
+```
+defineComponent(clase, def)                 núcleo — recibe el def ya normalizado
+  └─ component(nombre, clase)               JS — recorre la clase, deriva bindings de input()/output(), normaliza
+       ├─ @Component({ selector })          TS — ≡ (clase) => component(selector, clase); los @Input/@Output ya corrieron
+       └─ static ngComponent = {…}          JS — el reflector hace component(clase, clase.ngComponent) lazy
+```
+
+`@Component` **llama a `component()` de fondo**; no hay dos caminos que mantener.
+
+**JS** — la clase es el controller; `input()` / `output()` / `model()` como
+initializers de campo hacen el cableado:
+
+```js
+export const Counter = component('counter', class {
+  static template = `<button (click)="$.dec()">–</button>{{ $.count }}<button (click)="$.inc()">+</button>`;
+
+  count = input(0);           // binding '<'  ('<?' si no es required)
+  step  = input.required();   // binding '<'  + assert
+  countChange = output();     // binding '&'  + EventEmitter
+
+  inc() { this.count += this.step; this.countChange.emit(this.count); }
+  ngOnInit() {}
+});
+```
+
+`component()` recorre los campos, detecta los marcadores y deriva `bindings` (nombre
+del campo = nombre del binding). El resto son métodos/estado normales; `this` es la
+instancia (`$` en el template). `nombre` = `selector` (`restrict: 'E'`).
+`template` / `templateUrl` / `styleUrl` / `styles` van como `static` en la clase, o
+en un objeto opcional: `component('counter', { templateUrl, styleUrl }, class {…})`.
+DI: `static $inject = ['api']` + constructor, como en AngularJS.
+
+**TS** — mismo cuerpo, decoradores:
+
+```ts
+@Component({ selector: 'counter', template: `…` })
+export class Counter {
+  @Input() count = 0;
+  @Input({ required: true }) step!: number;
+  @Output() countChange = new EventEmitter<number>();
+
+  inc() { this.count += this.step; this.countChange.emit(this.count); }
+  ngOnInit() {}
+}
+```
+
+**El par** — codemod mecánico, nada se traduce salvo el template (`tpl`):
+
+| JS | TS |
+|---|---|
+| `component('x', class {` | `@Component({ selector: 'x', … })` + `class X {` |
+| `static template = …` | `template:` en el decorador |
+| `count = input(0)` | `@Input() count = 0` |
+| `name = input.required()` | `@Input({ required: true }) name!: T` |
+| `countChange = output()` | `@Output() countChange = new EventEmitter()` |
+| `total = model(0)` | `@Input() total` + `@Output() totalChange` (`[(total)]`) |
+| `static $inject = ['api']` + ctor | `constructor(private api: Api)` |
+| `ngOnInit() {…}` | `ngOnInit() {…}` (idéntico) |
+
+Mismo triángulo para `directive()` / `@Directive`, `pipe()` / `@Pipe`,
+`injectable()` / `@Injectable`, `ngModule()` / `@NgModule` — claves `static`
+`ngDirective` / `ngPipe` / `ngInjectable` / `ngModule`.
+
+- **Dialecto de decorador: experimental (legacy).** TS (`experimentalDecorators`) y
+  Babel (`@babel/plugin-proposal-decorators { legacy: true }`) comparten firma
+  (`(target)` / `(proto, key)` / `(proto, key, index)`). Los TC39 stage-3
+  (`(value, context)`) **no** se aceptan como entrada; ese consumidor usa la forma
+  `component()` o `static`.
+- **Orden.** Los decoradores de miembro corren antes que el de clase; acumulan en
+  un bucket keyed por `class.prototype` (WeakMap) que `@Component` funde con lo
+  heredado (`Object.getPrototypeOf`). Subclasear funde
+  `inputs`/`outputs`/`queries`/`lifecycle`.
+- **Class fields (TS).** Con `useDefineForClassFields: true`, `@Input() name;` emite
+  un initializer que puede pisar lo que setea el bridge. Recomendación: `false` en
+  el `tsconfig` del consumidor (igual que Angular pre-signals).
+
+### DI: lo único que no infiere en JS
+
+`emitDecoratorMetadata` (→ `design:paramtypes`) es **exclusivo de TS**. En JS —aun
+con decoradores legacy de Babel— no hay tipos de constructor en runtime. Frentes
+para declarar dependencias, por preferencia:
+
+| Forma | Ejemplo | Notas |
+|---|---|---|
+| `ng-js-vite` genera `$inject` | (build-time, desde el AST TS) | camino principal; sin reflexión en runtime |
+| `$inject` nativo de AngularJS | `Foo.$inject = ['$http', 'miServicio']` | ya existe; JS puro sin nada extra |
+| `static parameters` | `Foo.parameters = [HttpClient, [new Optional(), TOKEN]]` | equivale a `design:paramtypes` + `@Inject`/`@Optional` |
+| `design:paramtypes` | `constructor(private http: HttpClient)` | solo TS con `emitDecoratorMetadata` + `reflect-metadata` |
+
+`reflect-metadata` es **opcional**: el reflector prefiere `static parameters` /
+`static annotations` / `static propMetadata` y cae a `Reflect.getMetadata` solo si
+está presente. Se carga una vez, global, antes de cualquier clase decorada.
+
+### Interfaces de ciclo de vida = solo tipos
+
+`OnInit`, `OnChanges`, `ControlValueAccessor`, `Validator`, … son `interface` de
+TS: se borran al compilar. El bridge (etapa 5) detecta los métodos **por nombre**
+(`ngOnInit`, `ngOnChanges`, …), no por `instanceof`. En JS se escribe el método y
+listo; en TS `implements OnInit` agrega chequeo del compilador y nada más.
+
+### Distribución y typings
+
+- **Build**: ESM (`import { Component } from 'ngjs-core'`) + UMD/global
+  (`window.ngjs`, con `ngjs.core.Component`, `ngjs.common.NgTemplateOutlet`, …)
+  para el consumidor de solo `<script>`. Los mismos objetos en ambos.
+- **`.d.ts` por cada valor de runtime**, calcados a los nombres públicos de
+  `@angular/core` para que el tooling del editor y el codemod inverso sean
+  transparentes:
+  - decoradores tipados a la vez como `ClassDecorator` / `PropertyDecorator` /
+    `ParameterDecorator` (uso `@X`) y como factory callable `(config) => …` (uso JS).
+  - `EventEmitter<T> extends Subject<T>` — tipo + runtime.
+  - `InjectionToken<T>` — clase de runtime con parámetro de tipo fantasma.
+  - `SimpleChanges`, `QueryList<T>`, `ElementRef<T>`, `ComponentRef<T>`,
+    `TemplateRef<C>`, `ViewContainerRef` — tipos que reflejan los de Angular.
+- **`static ɵcmp` / `ɵdir` / `ɵpipe`**: `ng-js-vite` puede emitir el registro
+  normalizado como propiedad estática de la clase, así `createComponent` sobre una
+  clase importada con `import()` no re-parsea nada.
+
+### El espectro de autoría
+
+De más "AngularJS crudo" a más "Angular idiomático", todo produce el mismo
+registro; el consumidor elige dónde pararse y `ngjs-core` / `ng-js-vite` aceptan
+cualquier punto:
+
+```
+.component('foo', {...})   ─▶   static annotations = [new Component({...})]   ─▶   Component({...})(class Foo {})   ─▶   @Component({...}) class Foo {}
+  raw AngularJS                   JS, sin build, sin sintaxis                       JS/TS, funcional                      TS, experimentalDecorators
+```
+
+Esto es la contracara de «Retrocompatible por construcción»: el transform solo
+toca archivos con decoradores, pero el registro que produce es el mismo al que
+llega un `.js` a mano por la vía `static` / funcional.
 
 ---
 
@@ -178,6 +363,15 @@ UI-Router el `{ states }` que espera. Así `loadChildren`/`loadComponent` con
 | `ModuleWithProviders` | `.provider()` configurable en `.config()` | shim | |
 | `Injector` / `INJECTOR` token / `Injector.get()` | el nodo (con fallback a `$injector`) | shim | |
 | `forwardRef` | referencia por nombre string | directo | los strings no tienen orden de carga |
+
+**Decisión abierta — `InjectionToken` con `factory` (tree-shakable).** `InjectionToken<T>`
+acepta `{ factory: () => T }` (sin `providedIn`: acá siempre es a nivel app, no hay otro
+nivel todavía). La `factory` no corre al crear el token, solo se guarda. Falta implementar
+el "momento de hacer registry": cuando `Injector.get(token)` no lo encuentra en el
+`$injector` real, correr `factory()` (puede usar `inject()` para sus propias deps) y
+registrar el resultado vía `ConfigProviderFactory.current.$provide.constant(...)` (mismo
+mecanismo que componentes lazy), para que quede cacheado y visible también por `$inject`
+nativo, no solo por `Injector.get()`. Pendiente para cuando se retome `injector.ts`.
 
 ### Inyector jerárquico (`providers` a nivel de componente)
 
@@ -545,17 +739,22 @@ animaciones, subscripción a WebSocket sin `ngZone.run`, etc.
 ```
 src/
   index.ts                    barrel público
+  event-emitter.ts            Subject + emit(); hoja (solo rxjs). La usan platform
+                              (eventos de NgZone, etapa 1) y core (@Output/output()).
+                              Vive en la raíz para no invertir `platform ← core`.
   platform/
     zone-flags.ts             __Zone_disable_toString (antes de zone.js)
-    ng-zone.ts                NgZone real sobre Zone.js (reemplaza el turn-tracker)
-    digest-bridge.ts          onMicrotaskEmpty → $digest guardado
+    ng-zone.ts                abstract NgZone + NgZoneImpl (facade sobre el fork de Zone)
+    digest-bridge.ts          NgZoneFactory: fork + tracking de tasks + emisores + $digest guardado
     bootstrap.ts              bootstrapModule → angular.bootstrap dentro de la zona
     application-ref.ts        tick / isStable / whenStable / attachView / components
   core/
     di/                       @Injectable, @Inject, @Optional, @Self/@SkipSelf/@Host,
                               InjectionToken, Injector (wrapper de $injector), reflect.ts
-    metadata/                 @Component, @Directive, @Pipe, @NgModule, @Input, @Output,
-                              @HostBinding, @HostListener, @Attribute — solo recolectan
+    metadata/                 def.ts (ComponentDef/DirectiveDef/PipeDef/…),
+                              define-component.ts + component()/directive()/pipe()/injectable() (primitivo + piel JS),
+                              @Component/@Directive/@Pipe/@NgModule + @Input/@Output/@HostBinding/@HostListener/@Attribute (piel TS),
+                              input()/output()/model() (marcadores de binding), store.ts (bucket), reflector.ts
     lifecycle/                interfaces OnInit/… + SimpleChanges,
                               controller-bridge.ts (decorador de $controller: ngX→$X)
     change-detection/         ChangeDetectorRef
@@ -579,7 +778,8 @@ src/
 
 **Regla de dependencias:** `platform` ← `core` ← el resto. `core` no importa
 `forms`/`router`/`animations`/`i18n`. Los módulos de nivel superior dependen de
-`core` + `platform`, no entre sí.
+`core` + `platform`, no entre sí. Excepción: `src/event-emitter.ts` es una hoja
+(solo `rxjs`) por debajo de todo; la importan tanto `platform` como `core`.
 
 ## Orden de construcción
 
@@ -589,11 +789,11 @@ Cada sección de este documento cae en alguna etapa (columna «cubre»).
 | # | Etapa | Cubre | Criterio de cierre |
 |---|---|---|---|
 | 0 | **Terreno**: `src/` nuevo, tsconfig con `experimentalDecorators` + `emitDecoratorMetadata`, `reflect-metadata`, harness vitest + jsdom + `angular-mocks` | — | un test trivial con `angular.mock` corre |
-| 1 | **Zona**: `zone-flags` + `import "zone.js"`, `NgZone` real (fork de `Zone`), `digest-bridge` | Detección de cambios (`NgZone`/`run`/`runOutsideAngular`), «RxJS bajo el digest», `Promise` que muta el modelo | promesa nativa dentro de la zona dispara `$digest`; `runOutsideAngular` no |
+| 1 | **Zona**: `zone-flags` + `import "zone.js"`, `NgZone` real (`abstract` + `NgZoneImpl` facade sobre el fork de `Zone`), `digest-bridge` (fork + tracking + `$digest` guardado), `EventEmitter` (clase mínima: `Subject` + `emit`, para los eventos de `NgZone`) | Detección de cambios (`NgZone`/`run`/`runOutsideAngular`), «RxJS bajo el digest», `Promise` que muta el modelo | promesa nativa dentro de la zona dispara `$digest`; `runOutsideAngular` no |
 | 2 | **Bootstrap y aplicación**: `bootstrap.ts`, `ApplicationRef`, `APP_INITIALIZER` (bloque `.run`), `ErrorHandler` (`.decorator('$exceptionHandler')`), **captura de providers de config** (`$compileProvider`/`$controllerProvider`/`$provide`/`$filterProvider`/`$animateProvider`) para registro diferido | Bootstrap y módulo, base de componentes lazy | bootstrappear un `angular.module` a mano; `whenStable` resuelve; `APP_INITIALIZER` corre antes; registrar un componente **después** del bootstrap con los providers capturados |
 | 3 | **DI app-level**: `InjectionToken`, `@Injectable`, `@Inject`, `Injector`/`INJECTOR`, `forwardRef`, recetas `useClass`/`useExisting`/`useValue`/`useFactory`/`multi`, `ModuleWithProviders`, `reflect.ts` (`design:paramtypes`) | Inyección de dependencias (app-level) | `@Injectable` con ctor tipado y `@Inject(TOKEN)` se resuelve; `useValue`/`useFactory` funcionan |
 | 3b | **Inyector jerárquico (contenedor)**: `ElementInjectorNode` (providers / cache / parent), `node.get(token, flags)` con recetas `useClass`/`useValue`/`useFactory`/`useExisting`/`multi` y fallback a `$injector`, modificadores `@Self`/`@Host`/`@SkipSelf`/`@Optional` | `@Self`/`@Host`/`@SkipSelf`/`@Optional`, recetas de provider en cadena | test unitario: `node.get` resuelve padre→hijo, cae a `$injector`, respeta los modificadores |
-| 4 | **Metadata (sin codegen)**: `@Component`, `@Directive` (+ `exportAs`), `@Pipe`, `@NgModule`, `@Input` (+ `required`/`transform`/`alias`), `@Output`, `@HostBinding`, `@HostListener`, `@Attribute` | Componente (decoradores), Directivas (decoradores) | leer la metadata completa de una clase decorada desde un test |
+| 4 | **Metadata (sin codegen)**: primitivo `defineComponent(clase, def)` + `ComponentDef`/`DirectiveDef`/…; piel JS `component()`/`directive()`/`pipe()`/`injectable()` + marcadores `input()`/`output()`/`model()`; piel TS `@Component`/`@Directive` (+ `exportAs`)/`@Pipe`/`@NgModule` + `@Input` (+ `required`/`transform`/`alias`)/`@Output`/`@HostBinding`/`@HostListener`/`@Attribute`; reflector con fallback `static ngComponent` → `reflect-metadata` (`EventEmitter` ya vive en etapa 1) | Componente (decoradores), Directivas (decoradores), «Superficie de autoría — JS y TS a la par» | la misma clase vía `component('x', class{…})`, vía `static ngComponent` y vía `@Component` da el mismo `ComponentDef` |
 | 5 | **Lifecycle + wiring del inyector**: interfaces `OnInit`/`OnChanges`/`OnDestroy`/`DoCheck`/`AfterView*`/`AfterContent*` + `SimpleChanges`, decorador de `$controller` (`ngX`→`$X`, monta `ViewQueryRegistry`, **crea el `ElementInjectorNode` del componente con `providers`, lo ancla por `$element.data`/`inheritedData`, resuelve los params del ctor contra el nodo, teardown en `$destroy`**), `afterNextRender`/`afterRender` (`$$postDigest`) | Componente (ciclo de vida, bridge), `@Component({ providers })` | controller con `ngOnInit`/`ngOnChanges`/`ngOnDestroy` recibe las llamadas; `@Component({ providers: [X] })` da instancia nueva de `X` por componente y un hijo la resuelve; `afterNextRender` corre tras el digest |
 | 6 | **Refs y vistas** (portar de `reference/`): `ElementRef`, `ComponentRef` (`setInput`/`instance`/`destroy`), `ViewRef`, `EmbeddedViewRef`, `ViewContainerRef`, `TemplateRef`, `createComponent` (acepta una clase recién importada y la registra vía providers capturados si falta) | Proyección y vistas dinámicas (refs + componentes lazy), Primitivas de `ngjs-core` | tests portados (`view-container-ref`, `create-component`) verdes; `createComponent` de un `@Component` cargado con `import()` |
 | 7 | **Queries** (portar): `viewChild`/`viewChildren`/`contentChild`/`contentChildren` (+ decoradores), `QueryList`, registry, `ng-ref` bridge | `@ViewChild(ren)` / `@ContentChild(ren)`, `QueryList` | test `dynamic-children-queries` portado verde |
@@ -601,7 +801,7 @@ Cada sección de este documento cae en alguna etapa (columna «cubre»).
 | 9 | **`ChangeDetectorRef` (passthrough) + `NgDisabled`**: `detectChanges`→`$digest`, `markForCheck`→no-op, `detach`/`reattach` opcional; `NgDisabled` (portar de `reference/`) | `ChangeDetectorRef`, `[disabled]`/`NgDisabled` | `detectChanges()` fuerza un `$digest`; test de `NgDisabled` portado verde |
 | 10 | **Transform MVP** (`ng-js-vite`/CLI): leer etapa 4 + ctor metadata → `angular.module()` + `.component()`/`.directive()`/`.service()`/`.filter()`, `bindings` de `@Input`/`@Output`, `$inject`, `require` de queries con `read`, `transclude` según `<ng-content>`, `link` de `@HostBinding`/`@HostListener`, `$attrs` de `@Attribute`; `environment` por modo de build | CLI §2 + §5, Componente/Directivas (codegen), `@Pipe` (codegen), Build y entornos | un `@Component` + `@Directive` + `@Pipe` + `@Injectable` nuevos se registran y renderizan en jsdom; `environment` cambia entre dev/prod |
 | 11 | **Pipes**: `PipeTransform`, filtros built-in que faltan (`titlecase`/`percent`/`keyvalue`), `AsyncPipe` (`\| async`) | Pipes | `\| async` refleja emisiones; `keyvalue` sobre un objeto |
-| 12 | **rxjs-interop**: `takeUntilDestroyed(destroyRef?)`, `DestroyRef`, `outputToObservable`/`outputFromObservable`, `EventEmitter` (clase) | Reactividad §interop | `takeUntilDestroyed` completa en `$destroy` |
+| 12 | **rxjs-interop**: `takeUntilDestroyed(destroyRef?)`, `DestroyRef`, `outputToObservable`/`outputFromObservable` (el `EventEmitter` ya vive en etapa 1) | Reactividad §interop | `takeUntilDestroyed` completa en `$destroy` |
 | 13 | **HTTP**: `HttpClient` (`$http`→`Observable` vía `from`), `HttpHeaders`/`HttpParams`, `HttpInterceptor`→`$httpProvider.interceptors`, `HttpErrorResponse` | Reactividad (filas HTTP) | `HttpClient.get()` emite y su continuación corre bajo el digest; un interceptor modifica el request |
 | 14 | **platform-browser**: `DomSanitizer` (`$sce`+`$sanitize`), `bypassSecurityTrust*`, `SafeHtml`/`SafeUrl`/`SafeResourceUrl`, `Title`, `Meta`, `DOCUMENT`, `Location`/`LocationStrategy`/`PlatformLocation` (`$location`), `ViewportScroller` (`$anchorScroll`), `BreakpointObserver`/`Breakpoints`/`MediaMatcher` (sobre `matchMedia`) | Servicios de plataforma | `[innerHTML]` sanitizado; `Location.go()` cambia la URL; `BreakpointObserver` emite al cruzar un breakpoint |
 | 15 | **Forms**: `FormControl`/`FormGroup`/`FormArray`, `FormBuilder`, `Validators.*`, `ControlValueAccessor`/`NG_VALUE_ACCESSOR` ↔ `NgModelController`, `NG_VALIDATORS`/`NG_ASYNC_VALIDATORS`→`$validators`/`$asyncValidators`, directivas `[formGroup]`/`formControlName`/`formArrayName`, `updateOn`→`ngModelOptions`, errores (`ngMessages`), template-driven (`[(ngModel)]`/`#f="ngForm"`/`ngModelGroup`) | Forms | `formGroup` reactivo con validación sync+async, `valueChanges`, y un control custom vía CVA |

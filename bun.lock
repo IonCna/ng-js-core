@@ -4,6 +4,7 @@
   "workspaces": {
     "": {
       "dependencies": {
+        "@types/angular-animate": "^1.5.14",
         "@uirouter/angularjs": "^1.1.2",
         "angular": "1.8.3",
         "angular-animate": "1.8.3",
@@ -167,6 +168,8 @@
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
 
     "@types/angular": ["@types/angular@1.8.9", "", {}, "sha512-Z0HukqZkx0fotsV3QO00yqU9NzcQI+tMcrum+8MvfB4ePqCawZctF/gz6QiuII+T1ax+LitNoPx/eICTgnF4sg=="],
+
+    "@types/angular-animate": ["@types/angular-animate@1.5.14", "", { "dependencies": { "@types/angular": "*" } }, "sha512-FhcX3gUE7FC2ySAwQFDHAupAiCZFozT8vJ2OwP36h/4FLaUB/Oju44H5PSBpgHrWnKqd5lyzZdXf0lZZ9QGJvg=="],
 
     "@types/angular-mocks": ["@types/angular-mocks@1.7.4", "", { "dependencies": { "@types/angular": "*" } }, "sha512-rZJ8PCzbTU6RM0jw8ioA/g6LVN4t3vswdimTFnL4T5c7OfmUkcisTeTJGEObeZbaYAc4frBJEBDIvA04QhVIYw=="],
 
