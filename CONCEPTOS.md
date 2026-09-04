@@ -362,7 +362,28 @@ UI-Router el `{ states }` que espera. Así `loadChildren`/`loadComponent` con
 | `{ provide, multi: true }` | el nodo junta todos los providers del token en un array | shim | |
 | `ModuleWithProviders` | `.provider()` configurable en `.config()` | shim | |
 | `Injector` / `INJECTOR` token / `Injector.get()` | el nodo (con fallback a `$injector`) | shim | |
-| `forwardRef` | referencia por nombre string | directo | los strings no tienen orden de carga |
+| `forwardRef` | thunk `() => Clase` desenvuelto por `ReflectInjection.translate` recién al leer `$inject` | directo | ver límite abajo |
+
+**Límite de `forwardRef` con `design:paramtypes`.** El parámetro de ctor que usa
+`@Inject(forwardRef(() => X))` **no puede tiparse con `X` literal** (`param: X`) si `X` se
+define más abajo en el mismo archivo: `emitDecoratorMetadata` arma `design:paramtypes` como un
+array que necesita `X` ya evaluado, y eso truena con un TDZ real sin importar que `@Inject` lo
+vaya a pisar después — no es un bug de `ensureInject`, es cómo funciona `emitDecoratorMetadata`
+en sí. En el caso real (las dos clases en archivos separados, que es como se da una dependencia
+circular en la práctica) **sí hay tipado completo, sin perder nada**: tipar el parámetro con
+`import("./archivo").X` (sintaxis inline) en vez de importar `X` directo — confirmado con una
+prueba en este toolchain que TS emite `Object` para esa posición aunque `X` sea un valor real e
+importable, igual que con una interfaz, y `@Inject` la resuelve sin problema. El `import { X }`
+normal en el archivo (el que usa `forwardRef(() => X)`) no tiene drama aunque sea circular entre
+módulos: en ESM un import circular no truena al importar, solo si LEÉS el binding antes de que se
+haya asignado, y acá recién se lee dentro del closure de `forwardRef`, que corre mucho después
+de que ambos módulos terminaron de cargar. El único caso que sí pierde tipado (`unknown`) es
+mismo archivo + mismo scope — ahí TS siempre trata a la clase como "valor real disponible" sin
+importar el orden textual, sin truco posible; es un caso raro (normalmente el ciclo cruza
+archivos). `ensureInject` soporta el caso general: si `$inject` trae un `forwardRef` sin
+desenvolver, deja `$inject` como getter lazy en vez de resolver en el momento — la traducción
+real ocurre recién cuando algo lee `$inject` de verdad (que en AngularJS es al instanciar,
+momento en el que la clase referida ya existe).
 
 **Decisión abierta — `InjectionToken` con `factory` (tree-shakable).** `InjectionToken<T>`
 acepta `{ factory: () => T }` (sin `providedIn`: acá siempre es a nivel app, no hay otro

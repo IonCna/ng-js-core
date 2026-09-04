@@ -1,3 +1,4 @@
+import { isForwardRef, resolveForwardRef } from "@/core/di/forward-ref.ts";
 import { InjectionToken } from "@/core/di/injection-token.ts";
 import type { AbstractType, ProviderToken, Type } from "@/core/di/provider-token.ts";
 
@@ -13,20 +14,22 @@ function isNamedType(token: unknown): token is Type<unknown> | AbstractType<unkn
 
 export class ReflectInjection {
   static translate(token: InjectionEntry): string {
-    if (typeof token === "string") {
-      return token;
+    const resolved = resolveForwardRef(token);
+
+    if (typeof resolved === "string") {
+      return resolved;
     }
 
-    if (isInjectionToken(token)) {
-      return token.toString();
+    if (isInjectionToken(resolved)) {
+      return resolved.toString();
     }
 
-    if (isNamedType(token)) {
-      return token.$name;
+    if (isNamedType(resolved)) {
+      return resolved.$name;
     }
 
     throw new Error(
-      `ReflectInjection: no se pudo resolver el token "${String(token)}" a un nombre de $inject. ` +
+      `ReflectInjection: no se pudo resolver el token "${String(resolved)}" a un nombre de $inject. ` +
         `Usá un string, un InjectionToken, o una clase con "static readonly $name".`,
     );
   }
@@ -49,9 +52,31 @@ export class ReflectInjection {
  * declare `static $inject = [...tokens]` (no solo strings) deja de ser
  * asignable a `Function` para TS. Evitamos esa colisión sin tocar el tipo
  * ambiente, y leemos/escribimos `$inject` con un cast puntual.
+ *
+ * Si alguna entrada es un `forwardRef` sin desenvolver, no se traduce acá:
+ * la clase referida puede no existir todavía (por eso existe `forwardRef` —
+ * ver `forward-ref.ts`). En ese caso `$inject` queda como un getter que
+ * recién traduce cuando alguien lo lee de verdad — que en AngularJS pasa al
+ * instanciar, momento en el que la clase referida ya está definida. El
+ * `string[]` que devuelve esta función en ese caso queda vacío; lo que
+ * importa es `target.$inject` (lo que lee AngularJS), no el retorno.
  */
 export function ensureInject(target: object): string[] {
   const raw = (target as { $inject?: readonly InjectionEntry[] }).$inject ?? [];
+
+  if (raw.some(isForwardRef)) {
+    let cached: string[] | undefined;
+    Object.defineProperty(target, "$inject", {
+      configurable: true,
+      enumerable: true,
+      get(): string[] {
+        cached ??= ReflectInjection.toInject(raw);
+        return cached;
+      },
+    });
+    return [];
+  }
+
   const resolved = ReflectInjection.toInject(raw);
   (target as { $inject?: readonly string[] }).$inject = resolved;
   return resolved;

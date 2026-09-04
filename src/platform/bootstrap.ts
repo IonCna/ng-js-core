@@ -1,5 +1,7 @@
 import angular from "angular";
 import { NgCoreModule } from "@/core/core-module";
+import type { Provider, TypeProvider } from "@/core/di/provider.ts";
+import { ensureInject, ReflectInjection } from "@/core/di/reflect.ts";
 import { ApplicationRef } from "@/platform/application-ref";
 import { runAppInitializers } from "@/platform/app-initializer";
 import { NgZoneFactory } from "@/platform/digest-bridge";
@@ -88,6 +90,8 @@ export interface ApplicationConfig {
     modules?: string[];
     /** Host de la app. Default: se busca/crea `<root-component>`. */
     hostElement?: string | Element;
+    /** Providers a nivel app — ver etapa 3, `Provider`. */
+    providers?: Provider[];
 }
 
 /**
@@ -101,10 +105,87 @@ export function bootstrapApplication(
     config: ApplicationConfig = {},
 ): Promise<ApplicationRef> {
     const module = angular.module("ng.js.application", [...(config.modules ?? [])]);
+    registerProviders(module, config.providers ?? []);
 
     return platformBrowser().bootstrapModule(module.name, {
         hostElement: config.hostElement ?? ensureHost(rootComponent),
     });
+}
+
+type SingleProvider = Exclude<Provider, Provider[]>;
+
+function isTypeProvider(provider: SingleProvider): provider is TypeProvider {
+    return typeof provider === "function";
+}
+
+function registerProviders(module: angular.IModule, providers: Provider[]): void {
+    const flat = (providers as unknown[]).flat(Infinity) as SingleProvider[];
+    const single = new Map<string, SingleProvider>();
+    const multi = new Map<string, SingleProvider[]>();
+
+    for (const provider of flat) {
+        const token = isTypeProvider(provider) ? provider : provider.provide;
+        const name = ReflectInjection.translate(token);
+
+        if (!isTypeProvider(provider) && provider.multi) {
+            multi.set(name, [...(multi.get(name) ?? []), provider]);
+        } else {
+            single.set(name, provider); // el último gana, como en Angular
+        }
+    }
+
+    for (const [name, provider] of single) {
+        registerSingle(module, name, provider);
+    }
+
+    for (const [name, group] of multi) {
+        const memberNames = group.map((provider, i) => {
+            const memberName = `${name}#multi#${i}`;
+            registerSingle(module, memberName, provider);
+            return memberName;
+        });
+
+        module.factory(name, [
+            "$injector",
+            ($injector: angular.auto.IInjectorService) => memberNames.map((memberName) => $injector.get(memberName)),
+        ]);
+    }
+}
+
+function registerSingle(module: angular.IModule, name: string, provider: SingleProvider): void {
+    if (isTypeProvider(provider)) {
+        ensureInject(provider);
+        module.service(name, provider as unknown as Function);
+        return;
+    }
+
+    if ("useValue" in provider) {
+        module.constant(name, provider.useValue);
+        return;
+    }
+
+    if ("useClass" in provider) {
+        ensureInject(provider.useClass);
+        module.service(name, provider.useClass as unknown as Function);
+        return;
+    }
+
+    if ("useFactory" in provider) {
+        const deps = (provider.deps ?? []).map(ReflectInjection.translate);
+        module.factory(name, [...deps, provider.useFactory] as unknown as angular.Injectable<Function>);
+        return;
+    }
+
+    if ("useExisting" in provider) {
+        const existingName = ReflectInjection.translate(provider.useExisting);
+        module.factory(name, ["$injector", ($injector: angular.auto.IInjectorService) => $injector.get(existingName)]);
+        return;
+    }
+
+    // ConstructorProvider: `provide` es la propia clase, `deps` son sus argumentos de ctor.
+    const ctor = provider.provide as unknown as { $inject: string[] };
+    ctor.$inject = (provider.deps ?? []).map(ReflectInjection.translate);
+    module.service(name, provider.provide as unknown as Function);
 }
 
 function documentReady(): Promise<void> {
