@@ -14,6 +14,20 @@ export function injectable<T extends object>(target: T): T {
 }
 
 /**
+ * Guarda `{índice, token}` para un parámetro de ctor — lo usa `@Inject` y,
+ * con el mismo mecanismo, `@Attribute` (en `core/metadata/attribute.ts`, con
+ * un token string sintético en vez de uno de DI real).
+ */
+export function setInjectOverride(ctor: Function, parameterIndex: number, token: InjectionEntry): void {
+  let overrides = injectOverrides.get(ctor);
+  if (!overrides) {
+    overrides = new Map();
+    injectOverrides.set(ctor, overrides);
+  }
+  overrides.set(parameterIndex, token);
+}
+
+/**
  * Decorador de parámetro de ctor. Corre UNA VEZ, al definir la clase — no
  * puede resolver nada por su cuenta. Solo anota `{ índice, token }`; el valor
  * lo termina poniendo `$inject` nativo + `$injector.instantiate`, por
@@ -24,13 +38,7 @@ export function injectable<T extends object>(target: T): T {
 export function Inject(token: ProviderToken<unknown> | string): ParameterDecorator {
   return (target, _propertyKey, parameterIndex) => {
     // en un parámetro de ctor, `target` ya es la clase (no el prototype)
-    const ctor = target as unknown as Function;
-    let overrides = injectOverrides.get(ctor);
-    if (!overrides) {
-      overrides = new Map();
-      injectOverrides.set(ctor, overrides);
-    }
-    overrides.set(parameterIndex, token);
+    setInjectOverride(target as unknown as Function, parameterIndex, token);
   };
 }
 

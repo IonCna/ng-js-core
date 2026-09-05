@@ -1,6 +1,7 @@
-import { collectBindings } from "@/core/metadata/collect-bindings.ts";
+import { collectBindings, collectHost } from "@/core/metadata/collect-bindings.ts";
 import type { ComponentDef } from "@/core/metadata/def.ts";
 import { stampComponentDef } from "@/core/metadata/define-component.ts";
+import { SelectorRegistry } from "@/core/metadata/selector-registry.ts";
 
 /**
  * Piel JS — `component(Clase).define(def)`. Se prefiere sobre `component(Clase, def)`
@@ -11,7 +12,9 @@ export function component(Clase: Function): { define(def: ComponentDef): Functio
   return {
     define(def: ComponentDef): Function {
       const { inputs, outputs } = collectBindings(Clase);
-      return stampComponentDef(Clase, { ...def, inputs, outputs });
+      const host = collectHost(Clase);
+      SelectorRegistry.register(def.selector, Clase);
+      return stampComponentDef(Clase, { ...def, inputs, outputs, host });
     },
   };
 }

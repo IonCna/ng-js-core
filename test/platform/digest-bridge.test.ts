@@ -1,6 +1,7 @@
 import "zone.js";
 import type { IRootScopeService } from "angular";
 import { describe, expect, it } from "vitest";
+import { AfterRenderEventManager } from "@/core/lifecycle/after-render-event-manager";
 import { ApplicationRefImpl } from "@/platform/application-ref";
 import { NgZoneFactory } from "@/platform/digest-bridge";
 
@@ -25,7 +26,7 @@ function wire() {
 	const { rootScope, state } = createRootScope();
 	const ngZone = NgZoneFactory.create();
 	// ApplicationRefImpl se suscribe a onMicrotaskEmpty en su constructor.
-	new ApplicationRefImpl(rootScope, ngZone);
+	new ApplicationRefImpl(rootScope, ngZone, new AfterRenderEventManager());
 	return { ngZone, state };
 }
 

@@ -46,6 +46,36 @@ export function model<T>(defaultValue?: T): ModelMarker<T> {
 
 model.required = <T>(): ModelMarker<T> => new ModelMarker<T>(undefined, true);
 
+/**
+ * `@HostListener` para JS — clave del objeto es el nombre del **método** (no
+ * necesita truco de tipos como `bindings()`: el método se escribe normal, con
+ * su propia firma, no hay nada que inferir sobre `this`). Se lee de
+ * `static hostListeners = {...}` directo, sin envoltorio — ver `collectHost`.
+ */
+export class HostListenerMarker {
+  constructor(
+    public readonly eventName: string,
+    public readonly args?: string[],
+  ) {}
+}
+
+export function hostListener(eventName: string, args?: string[]): HostListenerMarker {
+  return new HostListenerMarker(eventName, args);
+}
+
+/**
+ * `@HostBinding` para JS — misma idea que `hostListener()`: la propiedad se
+ * escribe normal, con su propio valor (`isActive = false`), no hay nada que
+ * inferir. Se lee de `static hostBindings = {...}` directo — ver `collectHost`.
+ */
+export class HostBindingMarker {
+  constructor(public readonly hostProperty: string) {}
+}
+
+export function hostBinding(hostProperty: string): HostBindingMarker {
+  return new HostBindingMarker(hostProperty);
+}
+
 type BindingsMap = Record<string, InputMarker<unknown> | OutputMarker<unknown> | ModelMarker<unknown>>;
 
 /**

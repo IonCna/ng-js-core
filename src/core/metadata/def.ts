@@ -21,9 +21,20 @@ export interface OutputDef {
   bindingName: string;
 }
 
+export interface HostBindingDef {
+  propName: string;
+  hostProperty: string;
+}
+
+export interface HostListenerDef {
+  methodName: string;
+  eventName: string;
+  args?: string[];
+}
+
 export interface HostDef {
-  bindings?: Record<string, string>;
-  listeners?: Record<string, string>;
+  bindings?: HostBindingDef[];
+  listeners?: HostListenerDef[];
 }
 
 export interface ComponentDef {

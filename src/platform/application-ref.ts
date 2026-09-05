@@ -8,6 +8,7 @@ import {
     merge,
     type Observable,
 } from "rxjs";
+import { AfterRenderEventManager } from "@/core/lifecycle/after-render-event-manager.ts";
 import { NgZone } from "@/platform/ng-zone";
 
 /**
@@ -28,7 +29,7 @@ export abstract class ApplicationRef {
 }
 
 export class ApplicationRefImpl extends ApplicationRef {
-    static readonly $inject = ["$rootScope", NgZone.$name] as const;
+    static readonly $inject = ["$rootScope", NgZone.$name, AfterRenderEventManager.$name] as const;
 
     readonly isStable: Observable<boolean>;
 
@@ -38,6 +39,7 @@ export class ApplicationRefImpl extends ApplicationRef {
     constructor(
         private readonly $rootScope: IRootScopeService,
         private readonly ngZone: NgZone,
+        private readonly afterRenderEventManager: AfterRenderEventManager,
     ) {
         super();
 
@@ -58,6 +60,7 @@ export class ApplicationRefImpl extends ApplicationRef {
     tick(): void {
         if (this._destroyed || this.$rootScope.$$phase) return;
         this.$rootScope.$digest();
+        this.afterRenderEventManager.notify();
     }
 
     whenStable(): Promise<void> {

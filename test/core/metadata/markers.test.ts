@@ -85,4 +85,16 @@ describe("etapa 4 — input()/output()/bindings()", () => {
     w.inc();
     expect(w.total).toBe(6);
   });
+
+  it("un nieto de bindings() sigue viendo static bindings del abuelo (herencia de estáticos)", () => {
+    class Abuelo extends bindings({ count: input(0) }) {}
+    class Padre extends Abuelo {}
+    class Nieto extends Padre {}
+
+    expect(Nieto.bindings).toBe(Abuelo.bindings);
+
+    const n = new Nieto();
+    n.count = 5;
+    expect(n.count).toBe(5);
+  });
 });

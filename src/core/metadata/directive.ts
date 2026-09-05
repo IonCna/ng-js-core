@@ -1,4 +1,4 @@
-import { collectBindings } from "@/core/metadata/collect-bindings.ts";
+import { collectBindings, collectHost } from "@/core/metadata/collect-bindings.ts";
 import type { DirectiveDef, InputDef, OutputDef } from "@/core/metadata/def.ts";
 
 export type StampedDirectiveDef = DirectiveDef & { inputs: InputDef[]; outputs: OutputDef[] };
@@ -21,7 +21,8 @@ export function directive(Clase: Function): { define(def: DirectiveDef): Functio
   return {
     define(def: DirectiveDef): Function {
       const { inputs, outputs } = collectBindings(Clase);
-      return stampDirectiveDef(Clase, { ...def, inputs, outputs });
+      const host = collectHost(Clase);
+      return stampDirectiveDef(Clase, { ...def, inputs, outputs, host });
     },
   };
 }

@@ -1,5 +1,6 @@
 import angular, {type IExceptionHandlerService} from "angular";
 import {Injector, InjectorImpl} from "@/core/di/injector";
+import {AfterRenderEventManager} from "@/core/lifecycle/after-render-event-manager";
 import {NgZone} from "@/platform/ng-zone";
 import {ApplicationRef, ApplicationRefImpl} from "@/platform/application-ref";
 import {ErrorHandler, ErrorHandlerImpl} from "@/platform/error-handler";
@@ -79,6 +80,7 @@ export class NgCoreModule {
         module.service(ApplicationRef.$name, ApplicationRefImpl)
         module.service(ErrorHandler.$name, ErrorHandlerImpl)
         module.service(Injector.$name, InjectorImpl)
+        module.service(AfterRenderEventManager.$name, AfterRenderEventManager)
 
         module.decorator("$exceptionHandler", NgCoreModule.decorateErroHandler())
 

@@ -26,4 +26,31 @@ describe("etapa 4 — ngModule() / @NgModule", () => {
     class SinDef {}
     expect(getNgModuleDef(SinDef)).toBeUndefined();
   });
+
+  it("arrays parciales: declarar solo providers no pisa declarations/imports (quedan [])", () => {
+    class SomeProvider {
+      static readonly $name = "SomeProvider";
+    }
+    class AppModule {}
+    ngModule(AppModule).define({ providers: [SomeProvider] });
+
+    expect(getNgModuleDef(AppModule)).toEqual({
+      declarations: [],
+      imports: [],
+      providers: [SomeProvider],
+    });
+  });
+
+  it("bootstrap no se normaliza a [] — solo declarations/imports/providers", () => {
+    class Root {}
+    class AppModule {}
+    ngModule(AppModule).define({ bootstrap: [Root] });
+
+    expect(getNgModuleDef(AppModule)).toEqual({
+      declarations: [],
+      imports: [],
+      providers: [],
+      bootstrap: [Root],
+    });
+  });
 });

@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { Component, component } from "@/core/metadata/component.ts";
 import { getComponentDef } from "@/core/metadata/define-component.ts";
+import { HostListener } from "@/core/metadata/host-listener.ts";
 import { Input } from "@/core/metadata/input.ts";
-import { bindings, input, model, output } from "@/core/metadata/markers.ts";
+import { bindings, hostListener, input, model, output } from "@/core/metadata/markers.ts";
 import { Model } from "@/core/metadata/model.ts";
 import { Output } from "@/core/metadata/output.ts";
 import { EventEmitter } from "@/event-emitter.ts";
@@ -15,7 +16,13 @@ describe("etapa 4 — component() / @Component", () => {
 
     component(Foo).define({ selector: "foo", template: "hola" });
 
-    expect(getComponentDef(Foo)).toEqual({ selector: "foo", template: "hola", inputs: [], outputs: [] });
+    expect(getComponentDef(Foo)).toEqual({
+      selector: "foo",
+      template: "hola",
+      inputs: [],
+      outputs: [],
+      host: { bindings: [], listeners: [] },
+    });
   });
 
   it("@Component(def) produce el mismo ComponentDef que component(Clase).define(def)", () => {
@@ -53,6 +60,7 @@ describe("etapa 4 — component() / @Component", () => {
       selector: "counter",
       inputs: [{ propName: "count", bindingName: "count", required: undefined, transform: undefined }],
       outputs: [{ propName: "countChange", bindingName: "countChange" }],
+      host: { bindings: [], listeners: [] },
     });
   });
 
@@ -101,6 +109,7 @@ describe("etapa 4 — component() / @Component", () => {
       selector: "widget-js",
       inputs: [{ propName: "total", bindingName: "total", required: false, twoWay: true }],
       outputs: [],
+      host: { bindings: [], listeners: [] },
     });
 
     class WidgetTs {
@@ -112,6 +121,109 @@ describe("etapa 4 — component() / @Component", () => {
       selector: "widget-ts",
       inputs: [{ propName: "total", bindingName: "total", required: undefined, twoWay: true }],
       outputs: [],
+      host: { bindings: [], listeners: [] },
     });
+  });
+
+  it("mezcla static bindings (JS) y @Input/@Output (TS) en la misma clase sin pisarse", () => {
+    class Widget extends bindings({ count: input(0) }) {
+      @Input() step!: number;
+      @Output() countChange!: unknown;
+    }
+
+    component(Widget).define({ selector: "widget" });
+
+    const def = getComponentDef(Widget)!;
+    expect(def.inputs.map((i) => i.propName).sort()).toEqual(["count", "step"]);
+    expect(def.outputs.map((o) => o.propName)).toEqual(["countChange"]);
+  });
+
+  it("@Model mezclado con @Input/@Output normales en la misma clase", () => {
+    class Widget {
+      @Model() total!: number;
+      @Input() label!: string;
+      @Output() done!: unknown;
+    }
+
+    component(Widget).define({ selector: "widget" });
+
+    const def = getComponentDef(Widget)!;
+    expect(def.inputs).toContainEqual(expect.objectContaining({ propName: "total", twoWay: true }));
+    expect(def.inputs).toContainEqual(expect.objectContaining({ propName: "label" }));
+    expect(def.outputs).toEqual([{ propName: "done", bindingName: "done" }]);
+  });
+
+  it("un valor que no es InputMarker/OutputMarker/ModelMarker en static bindings se ignora en silencio", () => {
+    class Rara {
+      static bindings = { count: "no soy un marker" as unknown as ReturnType<typeof input> };
+    }
+
+    component(Rara).define({ selector: "rara" });
+
+    expect(getComponentDef(Rara)).toEqual({
+      selector: "rara",
+      inputs: [],
+      outputs: [],
+      host: { bindings: [], listeners: [] },
+    });
+  });
+
+  it("una subclase sin decorar hereda el ɵcmp del padre decorado (es una propiedad static)", () => {
+    @Component({ selector: "padre" })
+    class Padre {}
+
+    class Hijo extends Padre {}
+
+    expect(getComponentDef(Hijo)).toEqual(getComponentDef(Padre));
+  });
+
+  it("registrar la misma clase dos veces pisa limpio, sin arrastrar el def anterior", () => {
+    class Foo {
+      @Input() a!: string;
+    }
+
+    component(Foo).define({ selector: "foo-v1" });
+    expect(getComponentDef(Foo)!.selector).toBe("foo-v1");
+    expect(getComponentDef(Foo)!.inputs).toEqual([{ propName: "a", bindingName: "a", required: undefined, transform: undefined }]);
+
+    component(Foo).define({ selector: "foo-v2", template: "v2" });
+
+    expect(getComponentDef(Foo)).toEqual({
+      selector: "foo-v2",
+      template: "v2",
+      // el bucket de @Input es por prototype, no se limpia entre registros: sigue apareciendo
+      inputs: [{ propName: "a", bindingName: "a", required: undefined, transform: undefined }],
+      outputs: [],
+      host: { bindings: [], listeners: [] },
+    });
+  });
+
+  it("junta static hostListeners (JS, hostListener()) al registrar", () => {
+    class Widget {
+      static hostListeners = { onClick: hostListener("click"), onKeydown: hostListener("keydown", ["$event"]) };
+      onClick() {}
+      onKeydown() {}
+    }
+
+    component(Widget).define({ selector: "widget" });
+
+    const listeners = getComponentDef(Widget)!.host!.listeners!;
+    expect(listeners).toContainEqual({ methodName: "onClick", eventName: "click", args: undefined });
+    expect(listeners).toContainEqual({ methodName: "onKeydown", eventName: "keydown", args: ["$event"] });
+  });
+
+  it("mezcla @HostListener (TS) y static hostListeners (JS) en la misma clase sin pisarse", () => {
+    class Widget {
+      static hostListeners = { onKeydown: hostListener("keydown") };
+
+      @HostListener("click")
+      onClick() {}
+      onKeydown() {}
+    }
+
+    component(Widget).define({ selector: "widget" });
+
+    const listeners = getComponentDef(Widget)!.host!.listeners!;
+    expect(listeners.map((l) => l.eventName).sort()).toEqual(["click", "keydown"]);
   });
 });
