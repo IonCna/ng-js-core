@@ -1,6 +1,6 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { decorateControllerViewContainerRef } from "@/core/lifecycle/view-container-ref-bridge.ts";
+import { decorateControllerViewContainerRef } from "@/runtime/bridges/view-container-ref-bridge.ts";
 import { ViewContainerRef, ViewContainerRefImpl } from "@/core/refs/view-container-ref.ts";
 
 let counter = 0;

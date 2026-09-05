@@ -210,22 +210,25 @@ Leyenda: ✅ cerrada · 🚧 en progreso · ⬜ no empezada.
 - [ ] errores (`ngMessages`)
 - [ ] template-driven (`[(ngModel)]` / `#f="ngForm"` / `ngModelGroup`)
 
-## Etapa 16 — Router ⬜
+## Etapa 16 — Router 🚧
 
 **Cubre:** Router.
-**Criterio de cierre:** navegación entre 2 rutas + guard + resolve + `ActivatedRoute.paramMap` emite; una ruta con `loadComponent: () => import(...)` nativo carga y monta el chunk.
+**Criterio de cierre:** navegación entre 2 rutas + guard + resolve + `ActivatedRoute.paramMap` emite; una ruta con `loadComponent: () => import(...)` nativo carga y monta el chunk. **✅ pasa** (`test/router/{router,router-lazy}.test.ts`).
 
-- [x] tipos `Route`/`Routes` (`src/router/route.ts` — adaptados a ui-router: sin `matcher`/`outlet`/`runGuardsAndResolvers`/`canLoad`; el `name` de cada estado se deriva del árbol, nunca lo escribe el consumidor)
-- [ ] traductor `Routes → $stateProvider.state()` (deriva `name` del árbol, resuelve `data`/`resolve` directo)
-- [ ] `RouterModule.forRoot`/`forChild` (sobre `$stateProvider`)
-- [ ] `<router-outlet>` (+ `name`) → `<ui-view>` (CLI/tpl, no runtime)
-- [ ] `routerLink` / `routerLinkActive` → `ui-sref` / `ui-sref-active` (CLI/tpl, no runtime)
-- [ ] `Router.navigate` / `navigateByUrl` (sobre `$state.go`/`$state.href`)
-- [ ] `ActivatedRoute` shim (RxJS sobre `$transitions`)
-- [ ] `CanActivate` / `CanDeactivate` / `CanMatch` (hooks `$transitions`)
-- [ ] `Resolve` / `resolve`
-- [ ] `Route.data` / `title` / `TitleStrategy`
-- [ ] `loadChildren` / `loadComponent` → `lazyLoad` + wrapper que adapta el `import()` nativo al contrato `{ states }` de UI-Router + registro diferido
+Subpath propio: `ngjs-core/router`. `RouterModule.forRoot(routes)`/`forChild(routes)` devuelven un `angular.IModule` (que `@NgModule({ imports: [...] })` acepta) — encaja con `bootstrapModuleRuntime` sin CLI.
+
+- [x] tipos `Route`/`Routes` (`src/router/route.ts`)
+- [x] traductor `Routes → $stateProvider.state()` (`state-translator.ts`): deriva `name` del árbol, URL relativa al padre, `component` de `ɵcmp.selector` en camelCase, `resolve` a la forma `{ key: ["$stateParams", fn] }`, `data` directo
+- [x] `RouterModule.forRoot`/`forChild` (`router-module.ts` — `angular.module` con dep `ui.router`, `.config($stateProvider)`, `$urlRouterProvider.otherwise`)
+- [x] `<router-outlet>` → directiva que renderiza `<ui-view>` (runtime, no CLI)
+- [ ] `routerLink` / `routerLinkActive` → `ui-sref` / `ui-sref-active` (CLI/tpl — usar `ui-sref` o `Router.navigate` por ahora)
+- [x] `Router.navigate` / `navigateByUrl` (`router.ts` — sobre `$location.url` + `$transitions`; la promesa resuelve al `onSuccess`/`onError` real)
+- [x] `ActivatedRoute` shim (`activated-route.ts` — `params`/`paramMap`/`data` como `BehaviorSubject` sobre `$transitions.onSuccess`; `snapshot` sincrónico)
+- [x] `CanActivate` (`.run($transitions.onBefore({ to })`, guard `=== false` → aborta)
+- [ ] `CanDeactivate` / `CanMatch` (hooks `onExit`/`onBefore` — pendiente)
+- [x] `Resolve` / `resolve` (solo `ResolveFn`; tokens `Type<T>` fuera del MVP)
+- [x] `Route.data`; `title` / `TitleStrategy` pendiente
+- [x] `loadComponent` → `lazyLoad` que hace `import()`, registra el `@Component` vía `ConfigProviderFactory.current` y reemplaza el estado (mismo nombre) por el registry en vivo. `loadChildren` pendiente.
 
 ## Etapa 17 — Animations ⬜
 

@@ -2,11 +2,11 @@ import "reflect-metadata";
 import "zone.js";
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { createComponent } from "@/core/create-component.ts";
-import { decorateControllerLifecycle } from "@/core/lifecycle/lifecycle-bridge.ts";
+import { createComponent } from "@/runtime/create-component.ts";
+import { decorateControllerLifecycle } from "@/runtime/bridges/lifecycle-bridge.ts";
 import { component } from "@/core/metadata/component.ts";
 import { Input } from "@/core/metadata/input.ts";
-import { PlatformRefImpl } from "@/platform/bootstrap.ts";
+import { PlatformRefImpl } from "@/core/platform/bootstrap.ts";
 
 let counter = 0;
 function uniqueName(prefix: string): string {

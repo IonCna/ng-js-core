@@ -1,7 +1,7 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { NgTemplateOutlet } from "@/common/ng-template-outlet.ts";
-import { decorateNgRefDirective } from "@/core/queries/ng-ref-bridge.ts";
+import { NgTemplateOutlet } from "@/runtime/common/ng-template-outlet.ts";
+import { decorateNgRefDirective } from "@/runtime/bridges/ng-ref-bridge.ts";
 import { TemplateRef } from "@/core/refs/template-ref.ts";
 
 let counter = 0;

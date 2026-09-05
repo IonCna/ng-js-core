@@ -1,6 +1,6 @@
 import type angular from "angular";
 import type { IPromise, IQService } from "angular";
-import { createComponent } from "@/core/create-component.ts";
+import { createComponent } from "@/runtime/create-component.ts";
 import type { ComponentRef } from "@/core/refs/component-ref.ts";
 import type { ElementRefImpl } from "@/core/refs/element-ref.ts";
 import type { EmbeddedViewRefImpl } from "@/core/refs/embedded-view-ref.ts";

@@ -1,6 +1,6 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { decorateControllerHostBindings } from "@/core/lifecycle/host-binding-bridge.ts";
+import { decorateControllerHostBindings } from "@/runtime/bridges/host-binding-bridge.ts";
 import { Component, component } from "@/core/metadata/component.ts";
 import { HostBinding } from "@/core/metadata/host-binding.ts";
 import { hostBinding } from "@/core/metadata/markers.ts";

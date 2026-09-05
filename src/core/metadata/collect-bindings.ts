@@ -1,5 +1,11 @@
 import type { HostDef, InputDef, OutputDef } from "@/core/metadata/def.ts";
-import { HostBindingMarker, HostListenerMarker, InputMarker, ModelMarker, OutputMarker } from "@/core/metadata/markers.ts";
+import {
+  HostBindingMarker,
+  HostListenerMarker,
+  InputMarker,
+  ModelMarker,
+  OutputMarker,
+} from "@/core/metadata/markers.ts";
 import { collectMetadata } from "@/core/metadata/store.ts";
 
 interface WithJsBindings {

@@ -44,7 +44,11 @@ export function addHostListenerDef(prototype: object, def: HostListenerDef): voi
 /** Junta el bucket propio de `prototype` con el heredado (padre → hijo, en ese orden). */
 export function collectMetadata(prototype: object): MetadataBucket {
   const chain: object[] = [];
-  for (let current: object | null = prototype; current && current !== Object.prototype; current = Object.getPrototypeOf(current)) {
+  for (
+    let current: object | null = prototype;
+    current && current !== Object.prototype;
+    current = Object.getPrototypeOf(current)
+  ) {
     chain.unshift(current);
   }
 

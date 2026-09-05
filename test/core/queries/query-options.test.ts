@@ -1,7 +1,9 @@
 import "reflect-metadata";
+import "zone.js";
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { CommonModule } from "@/common/common-module.ts";
+import { commonModule } from "@/runtime/common/index.ts";
+import { configureCore } from "@/runtime/core-module.ts";
 import { ContentChild } from "@/core/queries/content-child.ts";
 import { ContentChildren } from "@/core/queries/content-children.ts";
 import type { QueryList } from "@/core/queries/query-list.ts";
@@ -9,11 +11,18 @@ import { ViewChild } from "@/core/queries/view-child.ts";
 import { ElementRef } from "@/core/refs/element-ref.ts";
 import { TemplateRef } from "@/core/refs/template-ref.ts";
 import { ViewContainerRef } from "@/core/refs/view-container-ref.ts";
+import { NgZoneFactory } from "@/core/platform/digest-bridge.ts";
 
 let counter = 0;
 function uniqueName(prefix: string): string {
   counter++;
   return `${prefix}${counter}`;
+}
+
+/** Nombre de `ng.js.common` con `ng.js.core` ya preparado (constante `NgZone`), como en el bootstrap real. */
+function commonModuleName(): string {
+  configureCore(NgZoneFactory.create());
+  return commonModule().name;
 }
 
 describe("query options", () => {
@@ -27,7 +36,7 @@ describe("query options", () => {
 
     const name = uniqueName("queryReadVcr");
     angular
-      .module(name, [CommonModule.name])
+      .module(name, [commonModuleName()])
       .component("child", { template: "child", controller: Child })
       .component("host", {
         template: '<child ng-ref="container" ng-ref-read="viewContainerRef"></child>',
@@ -63,14 +72,11 @@ describe("query options", () => {
     }
 
     const name = uniqueName("queryReadTemplate");
-    angular
-      .module(name, [CommonModule.name])
-      .directive("headerMarker", HeaderMarker.$factory)
-      .component("host", {
-        template: "<ng-content></ng-content>",
-        transclude: true,
-        controller: Host,
-      });
+    angular.module(name, [commonModuleName()]).directive("headerMarker", HeaderMarker.$factory).component("host", {
+      template: "<ng-content></ng-content>",
+      transclude: true,
+      controller: Host,
+    });
 
     const host = document.createElement("div");
     host.innerHTML = "<host><ng-template header-marker>header</ng-template></host>";
@@ -90,7 +96,7 @@ describe("query options", () => {
 
     const name = uniqueName("queryReadElement");
     angular
-      .module(name, [CommonModule.name])
+      .module(name, [commonModuleName()])
       .component("child", { template: "child", controller: Child })
       .component("host", { template: "<child></child>", controller: Host });
 
@@ -112,7 +118,7 @@ describe("query options", () => {
 
     const name = uniqueName("queryDescendantsFalse");
     angular
-      .module(name, [CommonModule.name])
+      .module(name, [commonModuleName()])
       .directive("marker", () => ({ restrict: "A", controller: Marker }))
       .component("host", {
         template: "<ng-content></ng-content>",
@@ -121,7 +127,7 @@ describe("query options", () => {
       });
 
     const host = document.createElement("div");
-    host.innerHTML = '<host><span marker></span><div><span marker></span></div></host>';
+    host.innerHTML = "<host><span marker></span><div><span marker></span></div></host>";
     document.body.appendChild(host);
     angular.bootstrap(host, [name], { strictDi: false });
 

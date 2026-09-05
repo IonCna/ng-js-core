@@ -1,8 +1,8 @@
 import "reflect-metadata";
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { NgContent } from "@/common/ng-content.ts";
-import { decorateControllerViewChildQueries } from "@/core/queries/ng-ref-bridge.ts";
+import { NgContent } from "@/runtime/common/ng-content.ts";
+import { decorateControllerViewChildQueries } from "@/runtime/bridges/ng-ref-bridge.ts";
 import { ContentChild, contentChild } from "@/core/queries/content-child.ts";
 import { ContentChildren } from "@/core/queries/content-children.ts";
 import { QueryList } from "@/core/queries/query-list.ts";

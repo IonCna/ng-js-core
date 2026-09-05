@@ -2,7 +2,7 @@ import "zone.js";
 import angular from "angular";
 import { describe, expect, it } from "vitest";
 import { afterNextRender, afterRender } from "@/core/lifecycle/after-render.ts";
-import { PlatformRefImpl } from "@/platform/bootstrap.ts";
+import { PlatformRefImpl } from "@/core/platform/bootstrap.ts";
 
 let moduleCounter = 0;
 function uniqueModuleName(prefix: string): string {

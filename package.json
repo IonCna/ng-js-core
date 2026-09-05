@@ -32,6 +32,61 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js",
+      "default": "./dist/core/index.js"
+    },
+    "./common": {
+      "types": "./dist/common/index.d.ts",
+      "import": "./dist/common/index.js",
+      "default": "./dist/common/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime/index.d.ts",
+      "import": "./dist/runtime/index.js",
+      "default": "./dist/runtime/index.js"
+    },
+    "./runtime/core": {
+      "types": "./dist/runtime/core/index.d.ts",
+      "import": "./dist/runtime/core/index.js",
+      "default": "./dist/runtime/core/index.js"
+    },
+    "./runtime/common": {
+      "types": "./dist/runtime/common/index.d.ts",
+      "import": "./dist/runtime/common/index.js",
+      "default": "./dist/runtime/common/index.js"
+    },
+    "./runtime/testing": {
+      "types": "./dist/runtime/testing/index.d.ts",
+      "import": "./dist/runtime/testing/index.js",
+      "default": "./dist/runtime/testing/index.js"
+    },
+    "./compat": {
+      "types": "./dist/compat/index.d.ts",
+      "import": "./dist/compat/index.js",
+      "default": "./dist/compat/index.js"
+    },
+    "./router": {
+      "types": "./dist/router/index.d.ts",
+      "import": "./dist/router/index.js",
+      "default": "./dist/router/index.js"
+    },
+    "./platform": {
+      "types": "./dist/core/platform/index.d.ts",
+      "import": "./dist/core/platform/index.js",
+      "default": "./dist/core/platform/index.js"
+    },
+    "./rxjs-interop": {
+      "types": "./dist/rxjs-interop/index.d.ts",
+      "import": "./dist/rxjs-interop/index.js",
+      "default": "./dist/rxjs-interop/index.js"
+    },
+    "./interop": {
+      "types": "./dist/rxjs-interop/index.d.ts",
+      "import": "./dist/rxjs-interop/index.js",
+      "default": "./dist/rxjs-interop/index.js"
     }
   },
   "files": [
@@ -42,7 +97,6 @@
     "build": "bun run build:js && bun run build:types",
     "build:js": "bun esbuild.config.ts",
     "build:types": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
-    "demo": "bun reference/esbuild.demo.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",

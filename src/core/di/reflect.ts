@@ -1,6 +1,7 @@
 import { isForwardRef, resolveForwardRef } from "@/core/di/forward-ref.ts";
+import { getInjectableId } from "@/core/di/injectable-registry.ts";
 import { InjectionToken } from "@/core/di/injection-token.ts";
-import type { AbstractType, ProviderToken, Type } from "@/core/di/provider-token.ts";
+import type { ProviderToken } from "@/core/di/provider-token.ts";
 
 export type InjectionEntry = ProviderToken<unknown> | string;
 
@@ -8,7 +9,7 @@ function isInjectionToken(token: unknown): token is InjectionToken<unknown> {
   return token instanceof InjectionToken;
 }
 
-function isNamedType(token: unknown): token is Type<unknown> | AbstractType<unknown> {
+function isNamedType(token: unknown): token is { $name: string } {
   return typeof token === "function" && typeof (token as { $name?: unknown }).$name === "string";
 }
 
@@ -22,6 +23,11 @@ export class ReflectInjection {
 
     if (isInjectionToken(resolved)) {
       return resolved.toString();
+    }
+
+    if (typeof resolved === "function") {
+      const id = getInjectableId(resolved);
+      if (id) return id;
     }
 
     if (isNamedType(resolved)) {
@@ -78,6 +84,10 @@ export function ensureInject(target: object): string[] {
   }
 
   const resolved = ReflectInjection.toInject(raw);
+  if (raw.length === resolved.length && raw.every((token, index) => token === resolved[index])) {
+    return resolved;
+  }
+
   (target as { $inject?: readonly string[] }).$inject = resolved;
   return resolved;
 }

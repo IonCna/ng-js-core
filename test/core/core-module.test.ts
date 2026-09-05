@@ -1,15 +1,22 @@
 import "reflect-metadata";
+import "zone.js";
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { CommonModule } from "@/common/common-module.ts";
-import { CoreModule } from "@/core/core-module.ts";
+import { commonModule } from "@/runtime/common/index.ts";
 import { ChangeDetectorRef } from "@/core/change-detection/change-detector-ref.ts";
+import { configureCore } from "@/runtime/core-module.ts";
 import { ViewContainerRef } from "@/core/refs/view-container-ref.ts";
+import { NgZoneFactory } from "@/core/platform/digest-bridge.ts";
 
 let counter = 0;
 function uniqueName(prefix: string): string {
   counter++;
   return `${prefix}${counter}`;
+}
+
+/** Prepara `ng.js.core` como lo hace `PlatformRef`: con una instancia de `NgZone`. */
+function coreName(): string {
+  return configureCore(NgZoneFactory.create());
 }
 
 describe("CoreModule/CommonModule", () => {
@@ -24,7 +31,7 @@ describe("CoreModule/CommonModule", () => {
     }
 
     const name = uniqueName("coreModule");
-    angular.module(name, [CoreModule.name]).component("widget", { template: "ok", controller: Widget });
+    angular.module(name, [coreName()]).component("widget", { template: "ok", controller: Widget });
 
     const host = document.createElement("div");
     host.innerHTML = "<widget></widget>";
@@ -36,9 +43,13 @@ describe("CoreModule/CommonModule", () => {
     expect(ctrl.vcr).toBeInstanceOf(ViewContainerRef);
   });
 
-  it("CommonModule registra ng-template + ng-template-outlet", () => {
+  it("CommonModule importa CoreModule y registra ng-template + ng-template-outlet", () => {
+    // CommonModule declara `imports: [CoreModule]`, así que su grafo ya trae core;
+    // solo falta la constante NgZone que aporta el bootstrap real.
+    configureCore(NgZoneFactory.create());
+
     const name = uniqueName("commonModule");
-    angular.module(name, [CommonModule.name]).component("widget", {
+    angular.module(name, [commonModule().name]).component("widget", {
       template:
         '<ng-template ng-ref="$ctrl.tpl" let-item="$implicit"><span>{{item}}</span></ng-template>' +
         '<div ng-template-outlet="$ctrl.tpl" ng-template-outlet-context="{$implicit: \'ok\'}"></div>',

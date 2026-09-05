@@ -3,7 +3,7 @@ import angular from "angular";
 import { describe, expect, it } from "vitest";
 import { InjectionToken } from "@/core/di/injection-token.ts";
 import type { Provider } from "@/core/di/provider.ts";
-import { bootstrapApplication } from "@/platform/bootstrap.ts";
+import { bootstrapApplication } from "@/core/platform/bootstrap.ts";
 
 let counter = 0;
 function uniqueComponentName(prefix: string): string {

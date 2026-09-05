@@ -1,6 +1,6 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { decorateNgDisabledDirective, NgDisabledController, NgDisabledImpl } from "@/core/ng-disabled.ts";
+import { decorateNgDisabledDirective, NgDisabledController, NgDisabledImpl } from "@/runtime/bridges/ng-disabled-bridge.ts";
 
 let counter = 0;
 function uniqueName(prefix: string): string {

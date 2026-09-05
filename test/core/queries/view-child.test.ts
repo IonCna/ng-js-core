@@ -1,8 +1,8 @@
 import "reflect-metadata";
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { decorateControllerLifecycle } from "@/core/lifecycle/lifecycle-bridge.ts";
-import { decorateControllerViewChildQueries } from "@/core/queries/ng-ref-bridge.ts";
+import { decorateControllerLifecycle } from "@/runtime/bridges/lifecycle-bridge.ts";
+import { decorateControllerViewChildQueries } from "@/runtime/bridges/ng-ref-bridge.ts";
 import { ViewChild, viewChild } from "@/core/queries/view-child.ts";
 
 let counter = 0;

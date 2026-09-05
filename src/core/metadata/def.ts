@@ -1,3 +1,4 @@
+import type angular from "angular";
 import type { Provider } from "@/core/di/provider.ts";
 
 /**
@@ -10,6 +11,10 @@ import type { Provider } from "@/core/di/provider.ts";
 export interface InputDef {
   propName: string;
   bindingName: string;
+  /**
+   * `true` → binding sin `?` (`'<'`) + assert de presencia, como `@Input({ required: true })`.
+   * Ausente/`false` → binding opcional (`'<?'`), que es el default de Angular.
+   */
   required?: boolean;
   transform?: (value: unknown) => unknown;
   /** `true` → binding `'='` de AngularJS (two-way nativo) en vez de `'<'`. Viene de `model()`/`@Model`. */
@@ -43,6 +48,10 @@ export interface ComponentDef {
   providers?: Provider[];
   template?: string;
   templateUrl?: string;
+  bindings?: Record<string, string>;
+  transclude?: boolean | Record<string, string>;
+  controllerAs?: string;
+  require?: Record<string, string>;
   styles?: string | string[];
   styleUrl?: string;
   exportAs?: string;
@@ -54,6 +63,18 @@ export interface DirectiveDef {
   host?: HostDef;
   providers?: Provider[];
   exportAs?: string;
+  restrict?: string;
+  scope?: boolean | Record<string, string>;
+  bindToController?: boolean | Record<string, string>;
+  require?: string | string[] | Record<string, string>;
+  transclude?: boolean | "element" | Record<string, string>;
+  template?: string;
+  templateUrl?: string;
+  controllerAs?: string;
+  priority?: number;
+  terminal?: boolean;
+  compile?: angular.IDirectiveCompileFn;
+  link?: angular.IDirectiveLinkFn | angular.IDirectivePrePost;
 }
 
 export interface PipeDef {
@@ -63,8 +84,14 @@ export interface PipeDef {
 }
 
 export interface NgModuleDef {
+  /**
+   * Nombre del `angular.module` que representa a esta clase. Opcional: si falta,
+   * se deriva de `Clase.name` (con contador de desempate). Declararlo solo cuando
+   * hace falta un nombre estable y conocido (tests con `angular.mock.module("...")`,
+   * interop con un `angular.module` escrito a mano).
+   */
+  id?: string;
   declarations?: Function[];
-  imports?: Function[];
+  imports?: (Function | angular.IModule | string)[];
   providers?: Provider[];
-  bootstrap?: Function[];
 }

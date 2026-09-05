@@ -1,12 +1,12 @@
 import "zone.js";
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { provideAppInitializer } from "@/platform/app-initializer";
-import { ApplicationRef } from "@/platform/application-ref";
-import { bootstrapApplication, PlatformRefImpl, platformBrowser } from "@/platform/bootstrap";
-import { ConfigProviderFactory } from "@/platform/config-providers";
-import { ErrorHandler } from "@/platform/error-handler";
-import { NgZone } from "@/platform/ng-zone";
+import { provideAppInitializer } from "@/core/platform/app-initializer";
+import { ApplicationRef } from "@/core/platform/application-ref";
+import { bootstrapApplication, PlatformRefImpl, platformBrowser } from "@/core/platform/bootstrap";
+import { ConfigProviderFactory } from "@/core/platform/config-providers";
+import { ErrorHandler } from "@/core/platform/error-handler";
+import { NgZone } from "@/core/platform/ng-zone";
 
 let moduleCounter = 0;
 function uniqueModuleName(prefix: string): string {

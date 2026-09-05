@@ -36,6 +36,16 @@ describe("etapa 4 — @Input / @Output / bucket por prototype", () => {
     );
   });
 
+  it("@Input() sin opciones no marca required (binding opcional por default)", () => {
+    class Foo {
+      @Input() count!: number;
+    }
+
+    expect(collectMetadata(Foo.prototype).inputs).toEqual([
+      { propName: "count", bindingName: "count", required: undefined, transform: undefined },
+    ]);
+  });
+
   it("@Output() sin alias usa el propio nombre del campo", () => {
     class Foo {
       @Output() countChange!: unknown;

@@ -1,6 +1,6 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { decorateControllerHostListeners } from "@/core/lifecycle/host-listener-bridge.ts";
+import { decorateControllerHostListeners } from "@/runtime/bridges/host-listener-bridge.ts";
 import { Component, component } from "@/core/metadata/component.ts";
 import { HostListener } from "@/core/metadata/host-listener.ts";
 import { hostListener } from "@/core/metadata/markers.ts";

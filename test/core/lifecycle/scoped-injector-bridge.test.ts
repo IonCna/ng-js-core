@@ -3,7 +3,7 @@ import angular from "angular";
 import { describe, expect, it } from "vitest";
 import { Inject, Injectable } from "@/core/di/injectable.ts";
 import { Optional, Self, SkipSelf } from "@/core/di/inject-flags.ts";
-import { decorateControllerScopedInjector } from "@/core/lifecycle/scoped-injector-bridge.ts";
+import { decorateControllerScopedInjector } from "@/runtime/bridges/scoped-injector-bridge.ts";
 import { component } from "@/core/metadata/component.ts";
 
 let counter = 0;

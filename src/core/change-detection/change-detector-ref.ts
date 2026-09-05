@@ -35,7 +35,10 @@ export class ChangeDetectorRefImpl extends ChangeDetectorRef {
   }
 
   detectChanges(): void {
-    if (this.cdDestroyed || this.scope.$$phase) return;
+    // `$$phase` se setea en la raíz durante un `$digest`; un scope hijo puede
+    // tenerlo en `null` mientras la app está en pleno digest. Chequear ambos
+    // para no tirar `$rootScope:inprog` si se llama desde adentro de un ciclo.
+    if (this.cdDestroyed || this.scope.$$phase || this.scope.$root?.$$phase) return;
     this.scope.$digest();
   }
 

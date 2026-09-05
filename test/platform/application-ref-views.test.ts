@@ -3,8 +3,8 @@ import angular from "angular";
 import { describe, expect, it } from "vitest";
 import { AfterRenderEventManager } from "@/core/lifecycle/after-render-event-manager.ts";
 import { ViewRefImpl } from "@/core/refs/view-ref.ts";
-import { ApplicationRefImpl } from "@/platform/application-ref.ts";
-import { NgZoneFactory } from "@/platform/digest-bridge.ts";
+import { ApplicationRefImpl } from "@/core/platform/application-ref.ts";
+import { NgZoneFactory } from "@/core/platform/digest-bridge.ts";
 
 describe("ApplicationRef views", () => {
   it("attachView/detachView controlan ownership y viewCount", () => {

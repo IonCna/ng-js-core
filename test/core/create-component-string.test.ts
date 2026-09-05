@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { createComponent } from "@/core/create-component.ts";
+import { createComponent } from "@/runtime/create-component.ts";
 
 describe("createComponent por nombre AngularJS", () => {
   it("crea un componente ya registrado y respeta bindings @", async () => {

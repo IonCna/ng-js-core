@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { describe, expect, it, vi } from "vitest";
-import { ElementInjectorNode } from "@/core/di/element-injector-node.ts";
+import { ElementInjectorNode } from "@/runtime/element-injector-node.ts";
 import { Injectable } from "@/core/di/injectable.ts";
 
 function fakeAppInjector(services: Record<string, unknown> = {}) {

@@ -3,8 +3,8 @@ import type angular from "angular";
 import type { IRootScopeService } from "angular";
 import { describe, expect, it } from "vitest";
 import { AfterRenderEventManager } from "@/core/lifecycle/after-render-event-manager";
-import { ApplicationRefImpl } from "@/platform/application-ref";
-import { NgZoneFactory } from "@/platform/digest-bridge";
+import { ApplicationRefImpl } from "@/core/platform/application-ref";
+import { NgZoneFactory } from "@/core/platform/digest-bridge";
 
 function createRootScope() {
 	const state = { digests: 0, phase: null as string | null };

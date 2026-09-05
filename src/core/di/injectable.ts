@@ -1,73 +1,58 @@
-import { ensureInject, type InjectionEntry } from "@/core/di/reflect.ts";
+import { applyConstructorInject, setInjectOverride } from "@/core/di/ctor-inject.ts";
+import { deriveInjectableName, setInjectableId as setRegisteredInjectableId } from "@/core/di/injectable-registry.ts";
 import type { ProviderToken } from "@/core/di/provider-token.ts";
 
-const injectOverrides = new WeakMap<Function, Map<number, InjectionEntry>>();
+export { setInjectOverride };
+
+export interface InjectableOptions {
+  id?: string;
+  providedIn?: "root";
+}
+
+export interface InjectableDefinition<T extends object> extends InjectableOptions {
+  value: T;
+}
 
 /**
- * Piel JS — la parte pública para consumidores sin decoradores. `ensureInject`
- * es un primitivo interno (lo usan `injectable()`, `Injectable()`, y el
- * registro de providers); esta es la función que se documenta/exporta.
+ * Estampa la clave de registro AngularJS (`$name`) de un `@Injectable`. Con `id`
+ * explícito usa ese; sin `id`, la deriva de `Clase.name`. Un `static $name` propio
+ * ya declarado se respeta y no se pisa (compat con clases estilo AngularJS puro).
  */
-export function injectable<T extends object>(target: T): T {
-  ensureInject(target);
+function stampInjectableName(target: object, options?: InjectableOptions): void {
+  if (options?.id) {
+    setRegisteredInjectableId(target, options.id);
+    (target as { $name?: string }).$name = options.id;
+    return;
+  }
+  if (!Object.hasOwn(target, "$name")) {
+    (target as { $name?: string }).$name = deriveInjectableName(target as Function);
+  }
+}
+
+export function injectable<T extends object>(target: T, options?: InjectableOptions): T;
+export function injectable<T extends object>(definition: InjectableDefinition<T>): T;
+export function injectable<T extends object>(
+  targetOrDefinition: T | InjectableDefinition<T>,
+  options?: InjectableOptions,
+): T {
+  const target = "value" in targetOrDefinition ? targetOrDefinition.value : targetOrDefinition;
+  const resolvedOptions = "value" in targetOrDefinition ? targetOrDefinition : options;
+
+  stampInjectableName(target, resolvedOptions);
+  applyConstructorInject(target as unknown as Function);
   return target;
 }
 
-/**
- * Guarda `{índice, token}` para un parámetro de ctor — lo usa `@Inject` y,
- * con el mismo mecanismo, `@Attribute` (en `core/metadata/attribute.ts`, con
- * un token string sintético en vez de uno de DI real).
- */
-export function setInjectOverride(ctor: Function, parameterIndex: number, token: InjectionEntry): void {
-  let overrides = injectOverrides.get(ctor);
-  if (!overrides) {
-    overrides = new Map();
-    injectOverrides.set(ctor, overrides);
-  }
-  overrides.set(parameterIndex, token);
-}
-
-/**
- * Decorador de parámetro de ctor. Corre UNA VEZ, al definir la clase — no
- * puede resolver nada por su cuenta. Solo anota `{ índice, token }`; el valor
- * lo termina poniendo `$inject` nativo + `$injector.instantiate`, por
- * instancia, como cualquier parámetro de ctor. Hace falta para los casos que
- * `design:paramtypes` no puede resolver solo (primitivos → `String`/`Number`,
- * interfaces → `Object`).
- */
 export function Inject(token: ProviderToken<unknown> | string): ParameterDecorator {
   return (target, _propertyKey, parameterIndex) => {
-    // en un parámetro de ctor, `target` ya es la clase (no el prototype)
     setInjectOverride(target as unknown as Function, parameterIndex, token);
   };
 }
 
-function getDesignParamTypes(target: Function): unknown[] {
-  const withMetadata = Reflect as unknown as {
-    getMetadata?: (key: string, target: Function) => unknown;
-  };
-  if (typeof withMetadata.getMetadata !== "function") return [];
-  return (withMetadata.getMetadata("design:paramtypes", target) as unknown[] | undefined) ?? [];
-}
-
-/**
- * Arma `$inject` a partir de `design:paramtypes` (requiere TS +
- * `emitDecoratorMetadata`), pisando por índice con lo que haya anotado
- * `@Inject`. Sin `reflect-metadata`/metadata emitida, corre sobre una lista
- * vacía — equivalente a una clase sin ctor deps declaradas acá (usá
- * `static $inject`/`inject()` en ese caso).
- */
-export function Injectable(_config?: { providedIn?: "root" }): ClassDecorator {
+export function Injectable(config?: InjectableOptions): ClassDecorator {
   return (target) => {
     const ctor = target as unknown as Function;
-    const paramTypes = getDesignParamTypes(ctor);
-    const overrides = injectOverrides.get(ctor);
-
-    const entries: InjectionEntry[] = paramTypes.map(
-      (paramType, index) => (overrides?.get(index) ?? paramType) as InjectionEntry,
-    );
-
-    (ctor as unknown as { $inject?: readonly InjectionEntry[] }).$inject = entries;
-    injectable(ctor); // @Injectable llama a la piel JS de fondo, como @Component -> component()
+    stampInjectableName(ctor, config);
+    applyConstructorInject(ctor);
   };
 }

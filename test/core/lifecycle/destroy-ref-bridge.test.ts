@@ -1,6 +1,6 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { decorateControllerDestroyRef } from "@/core/lifecycle/destroy-ref-bridge.ts";
+import { decorateControllerDestroyRef } from "@/runtime/bridges/destroy-ref-bridge.ts";
 import { DestroyRef } from "@/rxjs-interop/destroy-ref.ts";
 
 let counter = 0;

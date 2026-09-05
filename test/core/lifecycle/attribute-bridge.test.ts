@@ -2,7 +2,7 @@ import "reflect-metadata";
 import angular from "angular";
 import { describe, expect, it } from "vitest";
 import { Injectable } from "@/core/di/injectable.ts";
-import { decorateControllerAttributes } from "@/core/lifecycle/attribute-bridge.ts";
+import { decorateControllerAttributes } from "@/runtime/bridges/attribute-bridge.ts";
 import { Attribute } from "@/core/metadata/attribute.ts";
 import { component } from "@/core/metadata/component.ts";
 

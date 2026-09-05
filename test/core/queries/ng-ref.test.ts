@@ -1,7 +1,7 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { decorateControllerViewContainerRef } from "@/core/lifecycle/view-container-ref-bridge.ts";
-import { decorateNgRefDirective, decorateControllerViewChildQueries } from "@/core/queries/ng-ref-bridge.ts";
+import { decorateControllerViewContainerRef } from "@/runtime/bridges/view-container-ref-bridge.ts";
+import { decorateNgRefDirective, decorateControllerViewChildQueries } from "@/runtime/bridges/ng-ref-bridge.ts";
 import { ViewChild, viewChild } from "@/core/queries/view-child.ts";
 import { ElementRef, ElementRefImpl } from "@/core/refs/element-ref.ts";
 import { TemplateRef } from "@/core/refs/template-ref.ts";

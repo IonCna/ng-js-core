@@ -1,3 +1,4 @@
+import { applyConstructorInject } from "@/core/di/ctor-inject.ts";
 import { collectBindings, collectHost } from "@/core/metadata/collect-bindings.ts";
 import type { DirectiveDef, InputDef, OutputDef } from "@/core/metadata/def.ts";
 
@@ -22,6 +23,7 @@ export function directive(Clase: Function): { define(def: DirectiveDef): Functio
     define(def: DirectiveDef): Function {
       const { inputs, outputs } = collectBindings(Clase);
       const host = collectHost(Clase);
+      applyConstructorInject(Clase);
       return stampDirectiveDef(Clase, { ...def, inputs, outputs, host });
     },
   };

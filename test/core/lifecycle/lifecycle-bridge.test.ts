@@ -1,6 +1,6 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { decorateControllerLifecycle } from "@/core/lifecycle/lifecycle-bridge.ts";
+import { decorateControllerLifecycle } from "@/runtime/bridges/lifecycle-bridge.ts";
 
 let counter = 0;
 function uniqueName(prefix: string): string {

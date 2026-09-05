@@ -1,7 +1,7 @@
 import angular from "angular";
 import { Subject } from "rxjs";
 import { describe, expect, it } from "vitest";
-import { decorateControllerAsyncPipe } from "@/core/lifecycle/async-pipe-bridge.ts";
+import { decorateControllerAsyncPipe } from "@/runtime/bridges/async-pipe-bridge.ts";
 import { AsyncPipe, AsyncPipeImpl } from "@/pipes/async-pipe.ts";
 
 let counter = 0;

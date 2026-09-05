@@ -1,7 +1,7 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { NgContainer } from "@/common/ng-container.ts";
-import { decorateControllerViewContainerRef } from "@/core/lifecycle/view-container-ref-bridge.ts";
+import { NgContainer } from "@/runtime/common/ng-container.ts";
+import { decorateControllerViewContainerRef } from "@/runtime/bridges/view-container-ref-bridge.ts";
 import { ViewRefImpl } from "@/core/refs/view-ref.ts";
 import type { ViewContainerRefImpl } from "@/core/refs/view-container-ref.ts";
 

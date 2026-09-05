@@ -1,7 +1,7 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
 import { ensureInject } from "@/core/di/reflect.ts";
-import { decorateControllerElementRef } from "@/core/lifecycle/element-ref-bridge.ts";
+import { decorateControllerElementRef } from "@/runtime/bridges/element-ref-bridge.ts";
 import { ElementRef } from "@/core/refs/element-ref.ts";
 
 let counter = 0;

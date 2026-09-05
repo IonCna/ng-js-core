@@ -5,7 +5,7 @@ import { inject } from "@/core/di/inject.ts";
 import { InjectionToken } from "@/core/di/injection-token.ts";
 import { Injector } from "@/core/di/injector.ts";
 import type { Provider } from "@/core/di/provider.ts";
-import { bootstrapApplication } from "@/platform/bootstrap.ts";
+import { bootstrapApplication } from "@/core/platform/bootstrap.ts";
 
 let counter = 0;
 function uniqueComponentName(prefix: string): string {
@@ -27,7 +27,7 @@ async function boot(providers: Provider[] = []) {
   return { appRef, $injector };
 }
 
-describe("etapa 2 + 3 — Injector queda cableado por NgCoreModule.create", () => {
+describe("etapa 2 + 3 — Injector queda cableado por CoreModule (configureCore)", () => {
   it("Injector se puede pedir del $injector real de una app bootstrappeada", async () => {
     const { appRef, $injector } = await boot();
 
