@@ -149,14 +149,14 @@ Leyenda: ✅ cerrada · 🚧 en progreso · ⬜ no empezada.
 - [ ] `$attrs` de `@Attribute`
 - [ ] `environment` por modo de build
 
-## Etapa 11 — Pipes ⬜
+## Etapa 11 — Pipes ✅
 
-**Cubre:** Pipes.
+**Cubre:** Pipes. Sin nada portable en `reference/` (no existe ahí) — diseño nuevo, no adaptación.
 **Criterio de cierre:** `| async` refleja emisiones; `keyvalue` sobre un objeto.
 
-- [ ] `PipeTransform`
-- [ ] filtros built-in que faltan (`titlecase`/`percent`/`keyvalue`)
-- [ ] `AsyncPipe` (`| async`)
+- [x] `PipeTransform` (`src/pipes/pipe-transform.ts`) — `createPipeFilter(Clase)` envuelve una clase `@Pipe` en un factory de `.filter()`; como el resto del framework, sigue siendo registro manual (`module.filter(name, createPipeFilter(Clase))`), `@Pipe` solo estampa metadata. `pure:false` marca `$stateful` (mecanismo nativo de AngularJS — hay que ponerlo en la función que `$filter(name)` REALMENTE devuelve, no en el factory de registro; confirmado leyendo `isStateless()` en `angular.js`)
+- [x] filtros built-in que faltan (`src/pipes/{title-case,percent,key-value}.ts`) — `keyvalue` es `$stateful` a propósito (como el real) pero **memoiza el resultado** (mismas claves/valores → misma referencia de array): sin eso, al ser `$stateful` se llama siempre y devolvía objetos nuevos cada vez, lo que metía a `ng-repeat` en loop infinito de digest (`$rootScope:infdig`) — encontrado con un test real, no asumido
+- [x] `AsyncPipe` (`src/pipes/async-pipe.ts` + `core/lifecycle/async-pipe-bridge.ts`) — **no** es un `.filter()` global (esos son singleton de toda la app, sin acceso al `$scope` de quien lo usa). Se inyecta POR-INSTANCIA, igual que `ElementRef`/`ViewContainerRef` (`augmentLocals`, un `AsyncPipeImpl` nuevo por controller, ya resuelto contra su propio `$scope`) — se limpia solo en `$destroy`, sin pasarle nada a mano. Sintaxis en template: `{{ $ctrl.async.transform(value$) }}` en vez de `{{ value$ | async }}` (cambio de sintaxis a propósito, discutido con el usuario — es el costo de que la limpieza funcione de verdad)
 
 ## Etapa 12 — rxjs-interop ⬜
 

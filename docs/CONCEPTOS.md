@@ -492,7 +492,7 @@ modelo dispara un `$digest` al vaciarse la microtask queue.
 | Angular | ngjs | Migra | Nota |
 |---|---|---|---|
 | `EventEmitter` | RxJS `Subject` | directo | `EventEmitter` ya extiende `Subject` |
-| `AsyncPipe` (`| async`) | filtro que subscribe, asigna al scope y `markForCheck` | shim | |
+| `AsyncPipe` (`| async`) | **no** es `.filter()` (esos son singleton de toda la app, sin `$scope` de quien lo usa) — se inyecta por-instancia como `ElementRef` (`AsyncPipeImpl`, un `$scope` propio ya resuelto); en template: `$ctrl.async.transform(value$)`, no `value$ \| async` | shim | cambio de sintaxis a propósito — es el costo de que la limpieza en `$destroy` funcione de verdad |
 | `HttpClient` (Observable) | `$http` (Promise) → `from(...)` como `Observable` | shim | corre bajo el digest |
 | `HttpHeaders` / `HttpParams` | objetos `headers` / `params` de la config de `$http` | shim | inmutabilidad emulada |
 | `HttpInterceptor` | `$httpProvider.interceptors` | shim | |
