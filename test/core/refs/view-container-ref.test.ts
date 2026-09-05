@@ -1,8 +1,36 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
 import { ElementRefImpl } from "@/core/refs/element-ref.ts";
+import { TemplateRef } from "@/core/refs/template-ref.ts";
 import { ViewContainerRefImpl } from "@/core/refs/view-container-ref.ts";
 import { ViewRefImpl } from "@/core/refs/view-ref.ts";
+
+let templateCounter = 0;
+function uniqueTemplateModuleName(prefix: string): string {
+  templateCounter++;
+  return `${prefix}${templateCounter}`;
+}
+
+function bootTemplateRef(html: string): { templateRef: TemplateRef; $rootScope: angular.IRootScopeService } {
+  const captured: TemplateRef[] = [];
+  const name = uniqueTemplateModuleName("vcrEmbeddedViewTest");
+  angular
+    .module(name, [])
+    .directive("ngTemplate", TemplateRef.$factory)
+    .directive("captureTemplateRef", () => ({
+      require: "ngTemplate",
+      link: (_scope: angular.IScope, _el: unknown, _attrs: unknown, ctrl?: TemplateRef) => {
+        if (ctrl) captured.push(ctrl);
+      },
+    }));
+
+  const host = document.createElement("div");
+  host.innerHTML = html;
+  document.body.appendChild(host);
+
+  const injector = angular.bootstrap(host, [name], { strictDi: false });
+  return { templateRef: captured[0], $rootScope: injector.get<angular.IRootScopeService>("$rootScope") };
+}
 
 function freshScope(): angular.IScope {
   const injector = angular.injector(["ng"]);
@@ -152,5 +180,50 @@ describe("etapa 6 — ViewContainerRef (DOM real, sin createComponent)", () => {
 
     expect(vcr.length).toBe(1);
     expect(vcr.get(0)).toBe(b);
+  });
+});
+
+describe("etapa 8 — ViewContainerRef.createEmbeddedView (con un TemplateRef real)", () => {
+  it("crea la vista embebida, la inserta en el DOM, y queda dentro de la lista del container", () => {
+    const { templateRef, $rootScope } = bootTemplateRef(
+      '<ng-template capture-template-ref let-item="$implicit"><span>{{item}}</span></ng-template>',
+    );
+    const { vcr, parent } = makeContainer();
+
+    const viewRef = vcr.createEmbeddedView(templateRef, { $implicit: "hola" });
+    $rootScope.$digest();
+
+    expect(vcr.length).toBe(1);
+    expect(vcr.get(0)).toBe(viewRef);
+    expect(textOf(parent)).toContain("hola");
+  });
+
+  it("acepta index como número o como { index }, igual que insert()", () => {
+    const { templateRef, $rootScope } = bootTemplateRef(
+      '<ng-template capture-template-ref let-item="$implicit"><span>{{item}}</span></ng-template>',
+    );
+    const { vcr, parent } = makeContainer();
+
+    vcr.insert(makeView("a"));
+    vcr.insert(makeView("c"));
+    vcr.createEmbeddedView(templateRef, { $implicit: "b" }, 1);
+    $rootScope.$digest();
+
+    expect(textOf(parent)).toEqual(["a", "b", "c"]);
+  });
+
+  it("remove()/destroy() de la vista embebida saca sus rootNodes del DOM", () => {
+    const { templateRef, $rootScope } = bootTemplateRef(
+      '<ng-template capture-template-ref let-item="$implicit"><span>{{item}}</span></ng-template>',
+    );
+    const { vcr, parent } = makeContainer();
+
+    vcr.createEmbeddedView(templateRef, { $implicit: "hola" });
+    $rootScope.$digest();
+    expect(textOf(parent)).toEqual(["hola"]);
+
+    vcr.remove(0);
+    expect(textOf(parent)).toEqual([]);
+    expect(vcr.length).toBe(0);
   });
 });

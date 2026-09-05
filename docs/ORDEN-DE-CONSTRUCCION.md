@@ -110,20 +110,20 @@ Leyenda: ✅ cerrada · 🚧 en progreso · ⬜ no empezada.
 - [x] `ViewQueryRegistry` (`core/queries/view-query-registry.ts`) + `query-context.ts` (lookup de registry por `$scope`) + `controller-tokens.ts` (clase + ancestras) — resolución automática por clase, sin `ng-ref` todavía; sin orden de documento (candidatos en orden de construcción)
 - [x] `ng-ref-bridge.ts` (`core/queries/ng-ref-bridge.ts`) — arma el registry por instancia, resuelve en `$postLink`. De paso: arreglé un bug real de composición en `lifecycle-bridge.ts` (pisaba `$postLink` con "si no existe" — con dos bridges queriendo el mismo hook, uno se quedaba afuera; ahora `chainInstanceMethod` en `shared.ts` encadena en vez de pisar)
 
-## Etapa 8 — Common ⬜
+## Etapa 8 — Common ✅
 
-**Cubre:** Proyección (`<ng-content>`, `<ng-template>`, `*ngTemplateOutlet`, `NgComponentOutlet`), `@ContentChild`/`@ContentChildren` y `ng-ref` (locator por string + `read`) — los tres movidos de etapa 7, los tres necesitan lo que se construye acá.
+**Cubre:** Proyección (`<ng-content>`, `<ng-template>`, `*ngTemplateOutlet`, `<ng-container>`), `@ContentChild`/`@ContentChildren` y `ng-ref` (locator por string + `read`) — los tres movidos de etapa 7, los tres necesitan lo que se construye acá. `NgComponentOutlet` quedó afuera: no hay nada portable en `reference/` (nunca se itemizó como entregable concreto) — si hace falta más adelante, es una pieza nueva a diseñar, no un port.
 **Criterio de cierre:** proyección multi-nivel + outlet con contexto; `@ContentChild`/`@ContentChildren` resuelven contenido proyectado real; `ng-ref`/`ng-ref-read` completo (`$element`, otra directiva por nombre, `ngTemplate`, `viewContainerRef`).
 
-- [ ] `TemplateRef` (movido de etapa 6: en `reference/` es un solo archivo que mezcla la clase `createEmbeddedView` con el directive completo de `<ng-template>` — acá se construyen juntos, cuando haya un `$transclude` real contra el que probarlo)
-- [ ] `ng-template` (+ `let-*`/`$implicit`)
-- [ ] `ViewContainerRef.createEmbeddedView` (retomado de etapa 6, ahora que existe `TemplateRef`)
-- [ ] Hacer `ViewContainerRef` descubrible por `$element` (hoy solo se inyecta por locals, `view-container-ref-bridge.ts`) — lo necesita `ng-ref-read="viewContainerRef"`
-- [ ] `ng-content` (+ `select`, reproyección) — acá va el binding scope-transcluido→registry que le falta a `@ContentChild`/`@ContentChildren`
-- [ ] `@ContentChild` / `@ContentChildren` (movidos de etapa 7): mismo `ViewQueryRegistry`/store que `viewChild`, agregando `contentReferences` + el binding de `ng-content`
-- [ ] `ng-ref` (movido de etapa 7): locator por string + `read` (`$element` / otra directiva por nombre / `ngTemplate` / `viewContainerRef`) — decorando la directiva `ngRef` NATIVA de AngularJS, no una nueva
-- [ ] `ng-container`
-- [ ] `ng-template-outlet`
+- [x] `TemplateRef` (`core/refs/template-ref.ts`, movido de etapa 6) — decorado con `@Directive({selector: "ng-template"})` (solo metadata, como el resto del framework); registro real vía `TemplateRef.$factory` a mano. Hallazgo empírico: para `restrict:'E'` + `transclude:'element'`, el controller NO queda recuperable con `.controller(nombre)`/`.data()` sobre el comentario placeholder — hace falta `require` desde otra directiva co-ubicada (confirmado con test real)
+- [x] `ng-template` (+ `let-*`/`$implicit`) — `let-nombre="clave"` resuelve contra `context.clave` (`$implicit` por default)
+- [x] `ViewContainerRef.createEmbeddedView` (`core/refs/view-container-ref.ts`, retomado de etapa 6, ahora que existe `TemplateRef`)
+- [x] `ViewContainerRef` descubrible por `$element` (`view-container-ref-bridge.ts` ahora también hace `$element.data('$viewContainerRefController', vcr)`) — a diferencia de `reference/` (que solo lo exponía vía el directive `<ng-container>`), acá cualquier elemento con controller lo tiene, sin necesitar ese directive aparte
+- [x] `ng-content` (`common/ng-content.ts`; falta `select`/reproyección) — llama `$transclude` a mano y bindea el scope transcluido como dueño de contenido de los registries de su propio scope + los heredados (proyección multi-nivel)
+- [x] `@ContentChild` / `@ContentChildren` (`core/queries/content-child(ren).ts`, movidos de etapa 7): mismo mecanismo que `viewChild`/`viewChildren`, con `contentQueries`/`contentCandidates` separados en `ViewQueryRegistry`. **Bug real encontrado e integrando**: `registerScopeQueryRegistry` guardaba UN registry por `$scope` (`.set()`, pisa) — pero un directive sin scope propio (`<ng-content>`, vive en el mismo scope que el componente que lo declara) también pasa por ahí, y pisaba el registry de ese componente (con su `@ContentChild` ya registrada) con uno vacío. Pasado a `WeakMap<scope, registry[]>` (agrega, no pisa), confirmado con debug de `$scope.$id` real antes de arreglarlo
+- [x] `ng-ref` (`core/queries/ng-ref-bridge.ts`, movido de etapa 7): locator por string + `read` (`$element` / otra directiva por nombre / `ngTemplate` vía `require` / `viewContainerRef` vía `$element.data()`). **Reemplaza la directiva nativa por completo, no la deja correr al lado** — la nativa tiene `priority: -1` (la más baja posible) así que su `pre`-link corre DESPUÉS de cualquiera con prioridad más alta y pisaría el valor resuelto acá; peor, para `ng-ref-read="ngTemplate"` la nativa intenta su propio `.data()` que ya confirmamos roto para `transclude:'element'` y tira error. Confirmado leyendo el código fuente real de `ngRefDirective` en `angular.js` (no asumido) antes de decidir el reemplazo en vez de agregar al lado como hace `reference/`
+- [x] `ng-container` (`common/ng-container.ts`) — sin huella en el DOM (`transclude:'element'`, no renderiza su propio contenido solo); expone el `ViewContainerRef` ya inyectado por ctor (no uno propio, evita duplicar instancia)
+- [x] `ng-template-outlet` (`common/ng-template-outlet.ts`) — binding nativo (`bindToController` con `<`, `$onChanges` nativo de AngularJS, no el forwarding `ngX→$X`), destruye+recrea la vista embebida en cada cambio de template
 
 ## Etapa 9 — `NgDisabled` ⬜
 

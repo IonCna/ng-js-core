@@ -3,6 +3,8 @@ import type { IPromise, IQService } from "angular";
 import { createComponent } from "@/core/create-component.ts";
 import type { ComponentRef } from "@/core/refs/component-ref.ts";
 import type { ElementRefImpl } from "@/core/refs/element-ref.ts";
+import type { EmbeddedViewRefImpl } from "@/core/refs/embedded-view-ref.ts";
+import type { TemplateRef } from "@/core/refs/template-ref.ts";
 import { claimView, getViewOwner, releaseView, type ViewOwner } from "@/core/refs/view-owner.ts";
 import type { ViewRef, ViewRefImpl } from "@/core/refs/view-ref.ts";
 
@@ -13,6 +15,8 @@ export abstract class ViewContainerRef {
   abstract clear(): void;
   abstract get(index: number): ViewRef | null;
   abstract readonly length: number;
+  abstract createEmbeddedView<C>(templateRef: TemplateRef<C>, context?: C, options?: { index?: number }): EmbeddedViewRefImpl<C>;
+  abstract createEmbeddedView<C>(templateRef: TemplateRef<C>, context?: C, index?: number): EmbeddedViewRefImpl<C>;
   abstract insert(viewRef: ViewRef, index?: number): ViewRef;
   abstract move(viewRef: ViewRef, currentIndex: number): ViewRef;
   abstract indexOf(viewRef: ViewRef): number;
@@ -29,11 +33,6 @@ export abstract class ViewContainerRef {
   ): IPromise<ComponentRef<C>>;
 }
 
-/**
- * `TemplateRef`/`createEmbeddedView` quedaron para etapa 8 (necesitan un
- * `$transclude` real, que da el directive de `<ng-template>`) — ver
- * `docs/ORDEN-DE-CONSTRUCCION.md`.
- */
 export class ViewContainerRefImpl extends ViewContainerRef implements ViewOwner {
   readonly viewOwnerKind = "container" as const;
   private readonly views: ViewRef[] = [];
@@ -79,6 +78,24 @@ export class ViewContainerRefImpl extends ViewContainerRef implements ViewOwner 
         return $q.reject(error);
       }
     });
+  }
+
+  createEmbeddedView<C>(
+    templateRef: TemplateRef<C>,
+    context?: C,
+    optionsOrIndex?: { index?: number } | number,
+  ): EmbeddedViewRefImpl<C> {
+    const viewRef = templateRef.createEmbeddedView(context ?? ({} as C));
+    const index = typeof optionsOrIndex === "number" ? optionsOrIndex : optionsOrIndex?.index;
+
+    try {
+      this.insert(viewRef, index);
+    } catch (error) {
+      viewRef.destroy();
+      throw error;
+    }
+
+    return viewRef;
   }
 
   get(index: number): ViewRef | null {
