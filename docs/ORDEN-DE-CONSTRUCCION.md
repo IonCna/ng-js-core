@@ -125,15 +125,15 @@ Leyenda: ✅ cerrada · 🚧 en progreso · ⬜ no empezada.
 - [x] `ng-container` (`common/ng-container.ts`) — sin huella en el DOM (`transclude:'element'`, no renderiza su propio contenido solo); expone el `ViewContainerRef` ya inyectado por ctor (no uno propio, evita duplicar instancia)
 - [x] `ng-template-outlet` (`common/ng-template-outlet.ts`) — binding nativo (`bindToController` con `<`, `$onChanges` nativo de AngularJS, no el forwarding `ngX→$X`), destruye+recrea la vista embebida en cada cambio de template
 
-## Etapa 9 — `NgDisabled` ⬜
+## Etapa 9 — `NgDisabled` ✅
 
 **Cubre:** `[disabled]`/`NgDisabled`. `ChangeDetectorRef` se adelantó a etapa 6 (dependencia dura de `ViewRef`) — ver esa sección.
 **Criterio de cierre:** test de `NgDisabled` portado verde.
 
-- [ ] `ChangeDetectorRef` (passthrough): `detectChanges` → `$digest`
-- [ ] `markForCheck` → no-op
-- [ ] `detach` / `reattach` (opcional)
-- [ ] `NgDisabled` (portar de `reference/`)
+- [x] `ChangeDetectorRef` (passthrough): `detectChanges` → `$digest` (etapa 6)
+- [x] `markForCheck` → no-op (etapa 6)
+- [x] `detach` / `reattach` (etapa 6)
+- [x] `NgDisabled` (`core/ng-disabled.ts`) — **no reemplaza** la directiva nativa `ngDisabled` (a diferencia de `ng-ref`, acá no hay conflicto: nativa no tenía controller propio), solo le agrega `NgDisabledController` para que otra directiva co-ubicada se entere de los cambios (`require: '?ngDisabled'`) sin reimplementar el watch booleano. **Bug real encontrado con un probe**: `$attrs.$observe('disabled', ...)` entrega el valor ya como **booleano** (`disabled` es un `BOOLEAN_ATTR` nativo), no como string `"disabled"`/`"true"` — el reference original chequeaba contra strings, no funcionaba; confirmado logueando el valor observado antes de corregirlo
 
 ## Etapa 10 — Transform MVP ⬜
 
