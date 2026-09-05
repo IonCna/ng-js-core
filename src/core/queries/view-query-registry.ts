@@ -3,35 +3,26 @@ import type { ContentChildrenQuery } from "@/core/queries/content-children.ts";
 import type { QueryToken } from "@/core/queries/query-types.ts";
 import type { ViewChildQuery } from "@/core/queries/view-child.ts";
 import type { ViewChildrenQuery } from "@/core/queries/view-children.ts";
+import { ElementRef, ElementRefImpl } from "@/core/refs/element-ref.ts";
+import { TemplateRef } from "@/core/refs/template-ref.ts";
+import { ViewContainerRef } from "@/core/refs/view-container-ref.ts";
 
 interface Candidate {
-  /** Vacío para candidatos de `ng-ref` (no publican por clase, publican por `locator`). */
   tokens: readonly QueryToken<unknown>[];
-  /** String real (`ng-ref="nombre"`) — ausente en los candidatos automáticos por clase. */
   locator?: string;
   value: unknown;
+  node?: Node;
 }
 
 interface QueryLike {
   readonly locator: QueryToken<unknown>;
+  readonly options?: { readonly read?: QueryToken<unknown>; readonly descendants?: boolean };
 }
 
 function matches(query: QueryLike, candidate: Candidate): boolean {
   return typeof query.locator === "string" ? candidate.locator === query.locator : candidate.tokens.includes(query.locator);
 }
 
-/**
- * Uno por controller instanciado (creado en `ng-ref-bridge.ts`). Junta las
- * queries QUE declaró ese controller (`queries`/`childrenQueries` para
- * `@ViewChild(ren)`, `contentQueries`/`contentChildrenQueries` para
- * `@ContentChild(ren)`) y los candidatos que le fueron publicando — de vista
- * (`candidates`, automático vía `$scope.$parent`, o por `ng-ref="nombre"`) o
- * de contenido (`contentCandidates`, requiere el binding de `<ng-content>`,
- * ver `query-context.ts`). `resolve()` se llama en `$postLink`, cuando ya
- * está garantizado que todos los hijos terminaron de publicarse. Sin orden
- * de documento todavía: los candidatos quedan en el orden en que se
- * construyeron/linkearon.
- */
 export class ViewQueryRegistry {
   private readonly queries: ViewChildQuery<unknown>[] = [];
   private readonly childrenQueries: ViewChildrenQuery<unknown>[] = [];
@@ -39,6 +30,7 @@ export class ViewQueryRegistry {
   private readonly contentChildrenQueries: ContentChildrenQuery<unknown>[] = [];
   private readonly candidates: Candidate[] = [];
   private readonly contentCandidates: Candidate[] = [];
+  private readonly contentRoots = new Set<Node>();
 
   get hasContentQueries(): boolean {
     return this.contentQueries.length > 0 || this.contentChildrenQueries.length > 0;
@@ -60,50 +52,85 @@ export class ViewQueryRegistry {
     this.contentChildrenQueries.push(query);
   }
 
-  registerCandidate(tokens: readonly QueryToken<unknown>[], value: unknown): void {
-    this.candidates.push({ tokens, value });
+  registerCandidate(tokens: readonly QueryToken<unknown>[], value: unknown, node?: Node): void {
+    this.candidates.push({ tokens, value, node });
   }
 
-  registerContentCandidate(tokens: readonly QueryToken<unknown>[], value: unknown): void {
-    this.contentCandidates.push({ tokens, value });
+  registerContentCandidate(tokens: readonly QueryToken<unknown>[], value: unknown, node?: Node): void {
+    this.contentCandidates.push({ tokens, value, node });
   }
 
-  /** `ng-ref="nombre"` — publica por locator string, no por clase (ver `ng-ref-bridge.ts`). */
-  registerNamedCandidate(locator: string, value: unknown): void {
-    this.candidates.push({ tokens: [], locator, value });
+  registerNamedCandidate(locator: string, value: unknown, node?: Node): void {
+    this.candidates.push({ tokens: [], locator, value, node });
   }
 
-  registerNamedContentCandidate(locator: string, value: unknown): void {
-    this.contentCandidates.push({ tokens: [], locator, value });
+  registerNamedContentCandidate(locator: string, value: unknown, node?: Node): void {
+    this.contentCandidates.push({ tokens: [], locator, value, node });
+  }
+
+  registerContentRoots(nodes: Iterable<Node>): void {
+    for (const node of nodes) this.contentRoots.add(node);
   }
 
   resolve(): void {
     for (const query of this.queries) {
       const match = this.candidates.find((candidate) => matches(query, candidate));
-      if (match) query.resolve(match.value);
+      if (match) query.resolve(readCandidate(query, match));
       else query.reset();
     }
 
     for (const query of this.childrenQueries) {
       const found = this.candidates.filter((candidate) => matches(query, candidate));
-      query.resolve(found.map((candidate) => candidate.value));
+      query.resolve(found.map((candidate) => readCandidate(query, candidate)).filter((value) => value !== undefined));
     }
 
     for (const query of this.contentQueries) {
-      const match = this.contentCandidates.find((candidate) => matches(query, candidate));
-      if (match) query.resolve(match.value);
+      const match = this.contentCandidates.find((candidate) => matches(query, candidate) && matchesContentDepth(query, candidate, this.contentRoots));
+      if (match) query.resolve(readCandidate(query, match));
       else query.reset();
     }
 
     for (const query of this.contentChildrenQueries) {
-      const found = this.contentCandidates.filter((candidate) => matches(query, candidate));
-      query.resolve(found.map((candidate) => candidate.value));
+      const found = this.contentCandidates.filter((candidate) => matches(query, candidate) && matchesContentDepth(query, candidate, this.contentRoots));
+      query.resolve(found.map((candidate) => readCandidate(query, candidate)).filter((value) => value !== undefined));
     }
   }
 
-  /** Llamar en `$scope.$on('$destroy', ...)` — completa el `changes` de cada `QueryList` viva. */
   destroy(): void {
     for (const query of this.childrenQueries) query.destroy();
     for (const query of this.contentChildrenQueries) query.destroy();
   }
+}
+
+function matchesContentDepth(query: QueryLike, candidate: Candidate, roots: ReadonlySet<Node>): boolean {
+  if (query.options?.descendants !== false || roots.size === 0) return true;
+  return candidate.node !== undefined && roots.has(candidate.node);
+}
+
+function readCandidate(query: QueryLike, candidate: Candidate): unknown {
+  const read = query.options?.read;
+  if (!read) return candidate.value;
+
+  if (read === ElementRef) return candidate.node ? new ElementRefImpl(candidate.node as HTMLElement) : undefined;
+  if (read === TemplateRef && candidate.value instanceof TemplateRef) return candidate.value;
+  if (read === ViewContainerRef && candidate.value instanceof ViewContainerRef) return candidate.value;
+
+  if (typeof read !== "string") {
+    if (candidate.tokens.includes(read)) return candidate.value;
+
+    const owned = readOwnedToken(candidate.value, read);
+    if (owned !== undefined) return owned;
+  }
+
+  return undefined;
+}
+
+function readOwnedToken<T>(value: unknown, token: { readonly prototype: T }): T | undefined {
+  if (!value || typeof value !== "object") return undefined;
+
+  for (const property of Object.values(value)) {
+    if (property instanceof (token as Function)) return property as T;
+  }
+
+  return undefined;
 }

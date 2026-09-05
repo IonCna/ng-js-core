@@ -6,3 +6,9 @@
  * es un locator de `ng-ref="nombre"` (ver `ng-ref-bridge.ts`).
  */
 export type QueryToken<T> = string | { readonly prototype: T };
+
+export interface QueryOptions<T = unknown> {
+  readonly read?: QueryToken<T>;
+  readonly static?: boolean;
+  readonly descendants?: boolean;
+}

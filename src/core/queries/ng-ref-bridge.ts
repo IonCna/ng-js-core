@@ -10,6 +10,8 @@ import { ViewQueryRegistry } from "@/core/queries/view-query-registry.ts";
 import { ElementRefImpl } from "@/core/refs/element-ref.ts";
 import type { TemplateRef } from "@/core/refs/template-ref.ts";
 
+const controllerNodes = new WeakMap<object, Node>();
+
 /**
  * Por cada controller instanciado: arma su propio `ViewQueryRegistry`,
  * "instala" sus queries (`viewChild()`/`@ViewChild`/`contentChild()`/
@@ -26,7 +28,10 @@ export function decorateControllerViewChildQueries($delegate: angular.IControlle
       if (!instance || typeof instance !== "object") return;
 
       const $scope = locals?.$scope as angular.IScope | undefined;
+      const $element = locals?.$element as angular.IAugmentedJQuery | undefined;
+      const node = $element?.[0] as Node | undefined;
       const registry = new ViewQueryRegistry();
+      if (node) controllerNodes.set(instance, node);
 
       installOwnQueries(instance, registry);
 
@@ -86,13 +91,14 @@ function install(instance: object, key: PropertyKey, enumerable: boolean, getVal
 function publishToOwners(instance: object, $scope: angular.IScope): void {
   const tokens = getControllerTokens(instance);
   if (tokens.length === 0) return;
+  const node = controllerNodes.get(instance);
 
   for (const registry of getAncestorQueryRegistries($scope)) {
-    registry.registerCandidate(tokens, instance);
+    registry.registerCandidate(tokens, instance, node);
   }
 
   for (const owner of getContentQueryOwners($scope)) {
-    owner.registerContentCandidate(tokens, instance);
+    owner.registerContentCandidate(tokens, instance, node);
   }
 }
 
@@ -174,11 +180,19 @@ function resolveNgRefValue(
 }
 
 function publishNgRefCandidate(scope: angular.IScope, locator: string, value: unknown): void {
+  const node = getValueNode(value);
+
   for (const registry of [...getScopeViewQueryRegistries(scope), ...getAncestorQueryRegistries(scope)]) {
-    registry.registerNamedCandidate(locator, value);
+    registry.registerNamedCandidate(locator, value, node);
   }
 
   for (const owner of getContentQueryOwners(scope)) {
-    owner.registerNamedContentCandidate(locator, value);
+    owner.registerNamedContentCandidate(locator, value, node);
   }
+}
+
+function getValueNode(value: unknown): Node | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const nativeElement = (value as { nativeElement?: unknown }).nativeElement;
+  return nativeElement instanceof Node ? nativeElement : undefined;
 }

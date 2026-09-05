@@ -23,12 +23,14 @@ export abstract class ViewContainerRef {
   abstract remove(index?: number): void;
   abstract detach(index?: number): ViewRef | null;
   abstract createComponent<C>(
-    componentType: Function,
+    componentType: Function | string,
     options?: {
       index?: number;
+      injector?: angular.auto.IInjectorService;
+      environmentInjector?: angular.auto.IInjectorService;
       projectableNodes?: Node[][];
       directives?: string[];
-      bindings?: Readonly<Record<string, unknown>>;
+      bindings?: Readonly<Record<string, unknown>> | readonly Readonly<Record<string, unknown>>[];
     },
   ): IPromise<ComponentRef<C>>;
 }
@@ -54,18 +56,21 @@ export class ViewContainerRefImpl extends ViewContainerRef implements ViewOwner 
   }
 
   createComponent<C>(
-    componentType: Function,
+    componentType: Function | string,
     options?: {
       index?: number;
+      injector?: angular.auto.IInjectorService;
+      environmentInjector?: angular.auto.IInjectorService;
       projectableNodes?: Node[][];
       directives?: string[];
-      bindings?: Readonly<Record<string, unknown>>;
+      bindings?: Readonly<Record<string, unknown>> | readonly Readonly<Record<string, unknown>>[];
     },
   ): IPromise<ComponentRef<C>> {
     const $q = this.injector.get<IQService>("$q");
 
     return createComponent<C>(componentType, {
-      injector: this.injector,
+      injector: options?.injector ?? this.injector,
+      environmentInjector: options?.environmentInjector,
       projectableNodes: options?.projectableNodes,
       directives: options?.directives,
       bindings: options?.bindings,

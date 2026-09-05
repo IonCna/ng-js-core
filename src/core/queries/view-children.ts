@@ -1,5 +1,5 @@
 import { QueryList } from "@/core/queries/query-list.ts";
-import type { QueryToken } from "@/core/queries/query-types.ts";
+import type { QueryOptions, QueryToken } from "@/core/queries/query-types.ts";
 
 /**
  * Como `ViewChildQuery` pero junta TODOS los hijos que matcheen, no el
@@ -14,6 +14,7 @@ export class ViewChildrenQuery<T> {
   constructor(
     public readonly locator: QueryToken<T>,
     asQueryList: boolean,
+    public readonly options: QueryOptions<T> = {},
   ) {
     if (asQueryList) this.queryList = new QueryList<T>();
   }
@@ -40,21 +41,21 @@ export class ViewChildrenQuery<T> {
 }
 
 /** Piel JS — `class Foo { hijos = viewChildren(Hijo) }`. Array plano, snapshot resuelto en `$postLink`. */
-export function viewChildren<T>(locator: QueryToken<T>): readonly T[] {
-  return new ViewChildrenQuery(locator, false) as unknown as readonly T[];
+export function viewChildren<T>(locator: QueryToken<unknown>, options?: QueryOptions<T>): readonly T[] {
+  return new ViewChildrenQuery(locator, false, options) as unknown as readonly T[];
 }
 
-const decoratedQueries = new WeakMap<object, Map<PropertyKey, QueryToken<unknown>>>();
+const decoratedQueries = new WeakMap<object, Map<PropertyKey, { locator: QueryToken<unknown>; options?: QueryOptions }>>();
 
 /** Piel TS — `@ViewChildren(Hijo) hijos!: QueryList<Hijo>`. Mismo patrón por-prototipo que `@ViewChild`. */
-export function ViewChildren(locator: QueryToken<unknown>): PropertyDecorator {
+export function ViewChildren(locator: QueryToken<unknown>, options?: QueryOptions): PropertyDecorator {
   return (target, propertyKey) => {
     let byProperty = decoratedQueries.get(target);
     if (!byProperty) {
       byProperty = new Map();
       decoratedQueries.set(target, byProperty);
     }
-    byProperty.set(propertyKey, locator);
+    byProperty.set(propertyKey, { locator, options });
   };
 }
 
@@ -73,8 +74,8 @@ export function createDecoratedViewChildrenQueries(controller: object): Decorate
   for (const proto of chain) {
     const byProperty = decoratedQueries.get(proto);
     if (!byProperty) continue;
-    for (const [propertyKey, locator] of byProperty) {
-      results.push({ propertyKey, query: new ViewChildrenQuery(locator, true) });
+    for (const [propertyKey, definition] of byProperty) {
+      results.push({ propertyKey, query: new ViewChildrenQuery(definition.locator, true, definition.options) });
     }
   }
   return results;

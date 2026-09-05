@@ -1,10 +1,38 @@
 import angular, {type IExceptionHandlerService} from "angular";
 import {Injector, InjectorImpl} from "@/core/di/injector";
+import { decorateControllerChangeDetectorRef } from "@/core/lifecycle/change-detector-ref-bridge.ts";
+import { decorateControllerAsyncPipe } from "@/core/lifecycle/async-pipe-bridge.ts";
+import { decorateControllerAttributes } from "@/core/lifecycle/attribute-bridge.ts";
+import { decorateControllerDestroyRef } from "@/core/lifecycle/destroy-ref-bridge.ts";
+import { decorateControllerElementRef } from "@/core/lifecycle/element-ref-bridge.ts";
+import { decorateControllerHostBindings } from "@/core/lifecycle/host-binding-bridge.ts";
+import { decorateControllerHostListeners } from "@/core/lifecycle/host-listener-bridge.ts";
+import { decorateControllerLifecycle } from "@/core/lifecycle/lifecycle-bridge.ts";
+import { decorateControllerScopedInjector } from "@/core/lifecycle/scoped-injector-bridge.ts";
+import { decorateControllerViewContainerRef } from "@/core/lifecycle/view-container-ref-bridge.ts";
 import {AfterRenderEventManager} from "@/core/lifecycle/after-render-event-manager";
+import { decorateNgDisabledDirective } from "@/core/ng-disabled.ts";
+import { decorateControllerViewChildQueries, decorateNgRefDirective } from "@/core/queries/ng-ref-bridge.ts";
 import {NgZone} from "@/platform/ng-zone";
 import {ApplicationRef, ApplicationRefImpl} from "@/platform/application-ref";
 import {ErrorHandler, ErrorHandlerImpl} from "@/platform/error-handler";
 import {ConfigProviderFactory, type IAnimateProvider} from "@/platform/config-providers";
+
+export const CoreModule = angular
+    .module("ng.js.core.runtime", [])
+    .decorator("$controller", decorateControllerScopedInjector)
+    .decorator("$controller", decorateControllerElementRef)
+    .decorator("$controller", decorateControllerAttributes)
+    .decorator("$controller", decorateControllerChangeDetectorRef)
+    .decorator("$controller", decorateControllerViewContainerRef)
+    .decorator("$controller", decorateControllerViewChildQueries)
+    .decorator("$controller", decorateControllerAsyncPipe)
+    .decorator("$controller", decorateControllerDestroyRef)
+    .decorator("$controller", decorateControllerHostListeners)
+    .decorator("$controller", decorateControllerHostBindings)
+    .decorator("$controller", decorateControllerLifecycle)
+    .decorator("ngDisabledDirective", decorateNgDisabledDirective)
+    .decorator("ngRefDirective", decorateNgRefDirective);
 
 export class NgCoreModule {
     static provideApplicationRef() {

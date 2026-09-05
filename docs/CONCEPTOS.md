@@ -493,12 +493,12 @@ modelo dispara un `$digest` al vaciarse la microtask queue.
 |---|---|---|---|
 | `EventEmitter` | RxJS `Subject` | directo | `EventEmitter` ya extiende `Subject` |
 | `AsyncPipe` (`| async`) | **no** es `.filter()` (esos son singleton de toda la app, sin `$scope` de quien lo usa) — se inyecta por-instancia como `ElementRef` (`AsyncPipeImpl`, un `$scope` propio ya resuelto); en template: `$ctrl.async.transform(value$)`, no `value$ \| async` | shim | cambio de sintaxis a propósito — es el costo de que la limpieza en `$destroy` funcione de verdad |
-| `HttpClient` (Observable) | `$http` (Promise) → `from(...)` como `Observable` | shim | corre bajo el digest |
-| `HttpHeaders` / `HttpParams` | objetos `headers` / `params` de la config de `$http` | shim | inmutabilidad emulada |
-| `HttpInterceptor` | `$httpProvider.interceptors` | shim | |
-| `HttpErrorResponse` | rechazo de `$http` (`{ status, data, headers, statusText }`) | shim | |
-| `DestroyRef` | `$scope.$on('$destroy')` del controller | shim | |
-| `takeUntilDestroyed(destroyRef?)` (`@angular/core/rxjs-interop`) | operador que completa en `$destroy`; `ngjs-core` lo provee tomando el `$scope` del contexto | shim | |
+| `HttpClient` (Observable) | **no** envuelve `$http` — pega directo contra `$httpBackend` (transporte crudo, sin el pipeline de `$http`), control total del armado request/response | shim | corre bajo el digest; unsubscribe() cancela de verdad (vía el `timeout`-como-Promise que ya soporta `$httpBackend` nativo) |
+| `HttpHeaders` / `HttpParams` | clases inmutables propias (`set`/`append`/`delete` devuelven copia), se aplanan recién al armar la llamada a `$httpBackend` | directo | |
+| `HttpInterceptor` | cadena tipo "onion" armada a mano (`buildInterceptorChain`), registrados con `multi: true` (`HTTP_INTERCEPTORS`, mismo mecanismo de etapa 3) | directo | no `$httpProvider.interceptors` — eso es de `$http` |
+| `HttpErrorResponse` | se emite como error del Observable (no como valor) | directo | |
+| `DestroyRef` (`core/lifecycle/destroy-ref-bridge.ts`) | se inyecta por-instancia como `ElementRef`/`AsyncPipe` (no hay `inject(DestroyRef)` ambiental) | shim | por dentro es un `Subject` de RxJS directo, no un `Set` a mano |
+| `takeUntilDestroyed(destroyRef)` (`@angular/core/rxjs-interop`) | operador que completa en `$destroy`; `destroyRef` es SIEMPRE explícito acá (real Angular lo resuelve solo con `inject()` ambiental, nosotros no tenemos eso) | shim | |
 | `outputToObservable(ref.x)` | el `@Output` **ya es** un `Subject` | directo | identidad |
 | `outputFromObservable(obs$)` | `@Output` respaldado por `obs$` | shim | |
 | `Promise` que muta el modelo | Zone la parchea → dispara `$digest` | directo | ya no hace falta `$q` |

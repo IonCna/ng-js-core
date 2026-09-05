@@ -158,24 +158,27 @@ Leyenda: ✅ cerrada · 🚧 en progreso · ⬜ no empezada.
 - [x] filtros built-in que faltan (`src/pipes/{title-case,percent,key-value}.ts`) — `keyvalue` es `$stateful` a propósito (como el real) pero **memoiza el resultado** (mismas claves/valores → misma referencia de array): sin eso, al ser `$stateful` se llama siempre y devolvía objetos nuevos cada vez, lo que metía a `ng-repeat` en loop infinito de digest (`$rootScope:infdig`) — encontrado con un test real, no asumido
 - [x] `AsyncPipe` (`src/pipes/async-pipe.ts` + `core/lifecycle/async-pipe-bridge.ts`) — **no** es un `.filter()` global (esos son singleton de toda la app, sin acceso al `$scope` de quien lo usa). Se inyecta POR-INSTANCIA, igual que `ElementRef`/`ViewContainerRef` (`augmentLocals`, un `AsyncPipeImpl` nuevo por controller, ya resuelto contra su propio `$scope`) — se limpia solo en `$destroy`, sin pasarle nada a mano. Sintaxis en template: `{{ $ctrl.async.transform(value$) }}` en vez de `{{ value$ | async }}` (cambio de sintaxis a propósito, discutido con el usuario — es el costo de que la limpieza funcione de verdad)
 
-## Etapa 12 — rxjs-interop ⬜
+## Etapa 12 — rxjs-interop ✅
 
 **Cubre:** Reactividad §interop.
 **Criterio de cierre:** `takeUntilDestroyed` completa en `$destroy`.
 
-- [ ] `takeUntilDestroyed(destroyRef?)`
-- [ ] `DestroyRef`
-- [ ] `outputToObservable` / `outputFromObservable` (el `EventEmitter` ya vive en etapa 1)
+- [x] `DestroyRef` (`src/rxjs-interop/destroy-ref.ts`) + `core/lifecycle/destroy-ref-bridge.ts` — por-instancia como `ElementRef`/`AsyncPipe`. Implementado sobre un `Subject` de RxJS directo (no un `Set`/bandera a mano): al completarse, cualquier `.subscribe()` posterior recibe `complete()` sincrónico solo (confirmado leyendo `Subject._innerSubscribe`/`_checkFinalizedStatuses` en la fuente de rxjs) — es justo el comportamiento de "avisar ya mismo si ya se destruyó" que necesitábamos, gratis
+- [x] `takeUntilDestroyed(destroyRef)` (`src/rxjs-interop/take-until-destroyed.ts`) — `destroyRef` es SIEMPRE explícito, no opcional (real Angular lo resuelve con `inject(DestroyRef)` ambiental; acá no hay eso). **Bug real encontrado leyendo la fuente de `takeUntil` en rxjs**: ese operador reacciona solo al `next()` del notifier, ignora su `complete()` (`noop` a propósito) — así que si el `DestroyRef` ya estaba destruido, un notifier ya completo nunca dispara nada vía `takeUntil` solo; hace falta el caso aparte (`EMPTY`) para cuando ya pasó
+- [x] `outputToObservable` / `outputFromObservable` (`src/rxjs-interop/output-interop.ts`) — casi triviales, `EventEmitter` ya es un `Subject` (etapa 1)
 
-## Etapa 13 — HTTP ⬜
+## Etapa 13 — HTTP ✅
 
 **Cubre:** Reactividad (filas HTTP).
 **Criterio de cierre:** `HttpClient.get()` emite y su continuación corre bajo el digest; un interceptor modifica el request.
 
-- [ ] `HttpClient` (`$http` → `Observable` vía `from`)
-- [ ] `HttpHeaders` / `HttpParams`
-- [ ] `HttpInterceptor` → `$httpProvider.interceptors`
-- [ ] `HttpErrorResponse`
+**Decisión de diseño (distinta de lo que decía este doc originalmente)**: `HttpClient` NO envuelve `$http` — pega directo contra `$httpBackend` (transporte crudo, sin el pipeline propio de `$http`) para tener control total del armado del request/response al estilo Angular real, con `HttpHeaders`/`HttpParams` como azúcar inmutable de verdad.
+
+- [x] `HttpClient` (`src/http/http-client.ts`) — `$httpBackend` directo, no `$http`/`from(...)`
+- [x] `HttpHeaders` / `HttpParams` (`src/http/http-{headers,params}.ts`) — inmutables, `set`/`append`/`delete` devuelven copia
+- [x] `HttpInterceptor` → cadena tipo "onion" armada a mano (`src/http/http-interceptor.ts`, `buildInterceptorChain`), registrados vía `multi: true` (`HTTP_INTERCEPTORS`, mismo mecanismo de etapa 3) — no `$httpProvider.interceptors` (eso es de `$http`, que no usamos)
+- [x] `HttpErrorResponse` (`src/http/http-response.ts`) — se emite como error del Observable, no como valor
+- [x] Cancelación real: unsubscribe() aborta el XHR de verdad, vía el mecanismo de `timeout` como Promise que ya soporta `$httpBackend` nativo (confirmado leyendo su fuente real, no asumido) — un timeout numérico se implementa arriba con el mismo mecanismo
 
 ## Etapa 14 — platform-browser ⬜
 

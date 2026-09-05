@@ -26,6 +26,8 @@ export class NgContent implements IController {
 
     runWithContentQueryOwners(owners, () => {
       this.$transclude?.((clone, transcludedScope) => {
+        const rootNodes = clone ? Array.from(clone) as Node[] : [];
+        for (const owner of owners) owner.registerContentRoots(rootNodes);
         if (transcludedScope) bindContentQueryOwners(transcludedScope, owners);
         if (!clone) return;
         this.$element.after(clone);
