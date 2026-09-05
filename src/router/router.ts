@@ -1,5 +1,13 @@
-import type { TransitionService } from "@uirouter/angularjs";
+import type { StateService, Transition, TransitionService } from "@uirouter/angularjs";
 import type { ILocationService, IRootScopeService } from "angular";
+import { type Observable, Subject } from "rxjs";
+import {
+  NavigationCancel,
+  NavigationEnd,
+  NavigationError,
+  NavigationStart,
+  type RouterEvent,
+} from "@/router/events.ts";
 
 export interface NavigationExtras {
   replaceUrl?: boolean;
@@ -15,23 +23,34 @@ export abstract class Router {
   static readonly $name = "Router";
 
   abstract get url(): string;
+  abstract readonly events: Observable<RouterEvent>;
   abstract navigateByUrl(url: string, extras?: NavigationExtras): Promise<boolean>;
   abstract navigate(commands: unknown[], extras?: NavigationExtras): Promise<boolean>;
 }
 
+const REJECT_ERROR = 6; // RejectType.ERROR de UI-Router; el resto (SUPERSEDED/ABORTED/…) = cancel.
+
 export class RouterImpl extends Router {
-  static readonly $inject = ["$location", "$transitions", "$rootScope"] as const;
+  static readonly $inject = ["$location", "$transitions", "$rootScope", "$state"] as const;
+
+  private readonly events$ = new Subject<RouterEvent>();
 
   constructor(
     private readonly $location: ILocationService,
     private readonly $transitions: TransitionService,
     private readonly $rootScope: IRootScopeService,
+    private readonly $state: StateService,
   ) {
     super();
+    this.wireEvents();
   }
 
   get url(): string {
     return this.$location.url();
+  }
+
+  get events(): Observable<RouterEvent> {
+    return this.events$.asObservable();
   }
 
   navigateByUrl(url: string, extras?: NavigationExtras): Promise<boolean> {
@@ -65,5 +84,31 @@ export class RouterImpl extends Router {
       .join("/")
       .replace(/\/{2,}/g, "/");
     return this.navigateByUrl(path, extras);
+  }
+
+  private targetUrl(transition: Transition): string {
+    try {
+      return this.$state.href(transition.to().name ?? "", transition.params()) ?? this.$location.url();
+    } catch {
+      return this.$location.url();
+    }
+  }
+
+  private wireEvents(): void {
+    this.$transitions.onBefore({}, (transition) => {
+      this.events$.next(new NavigationStart(Number(transition.$id), this.targetUrl(transition)));
+    });
+    this.$transitions.onSuccess({}, (transition) => {
+      this.events$.next(new NavigationEnd(Number(transition.$id), this.targetUrl(transition), this.$location.url()));
+    });
+    this.$transitions.onError({}, (transition) => {
+      const rejection = transition.error() as { type?: number; message?: string; detail?: unknown } | undefined;
+      const url = this.targetUrl(transition);
+      if (rejection?.type === REJECT_ERROR) {
+        this.events$.next(new NavigationError(Number(transition.$id), url, rejection.detail ?? rejection));
+      } else {
+        this.events$.next(new NavigationCancel(Number(transition.$id), url, rejection?.message ?? "cancelled"));
+      }
+    });
   }
 }

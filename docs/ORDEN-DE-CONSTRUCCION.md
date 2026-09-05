@@ -210,12 +210,14 @@ Leyenda: ✅ cerrada · 🚧 en progreso · ⬜ no empezada.
 - [ ] errores (`ngMessages`)
 - [ ] template-driven (`[(ngModel)]` / `#f="ngForm"` / `ngModelGroup`)
 
-## Etapa 16 — Router 🚧
+## Etapa 16 — Router 🚧 (estable — falta solo `loadChildren`)
 
 **Cubre:** Router.
 **Criterio de cierre:** navegación entre 2 rutas + guard + resolve + `ActivatedRoute.paramMap` emite; una ruta con `loadComponent: () => import(...)` nativo carga y monta el chunk. **✅ pasa** (`test/router/{router,router-lazy}.test.ts`).
 
 Subpath propio: `ngjs-core/router`. `RouterModule.forRoot(routes)`/`forChild(routes)` devuelven un `angular.IModule` (que `@NgModule({ imports: [...] })` acepta) — encaja con `bootstrapModuleRuntime` sin CLI.
+
+**Estado "estable"** (T1–T4 sin lazy): rutas anidadas · params / `queryParamMap` / `fragment` · `canActivate` + `canActivateChild` con `inject()` · `resolve` (con `data` mergeada) · `redirectTo` · `path: '**'` · `Route.title` → `document.title` + `ActivatedRoute.title` · `Router.navigate`/`navigateByUrl`/`url`/`events` · `routerLink`/`routerLinkActive` (+ `router-link-active-exact`) · `loadComponent` lazy · `withHashLocation()` (default html5). Tests: `test/router/*.test.ts` (11 casos).
 
 - [x] tipos `Route`/`Routes` (`src/router/route.ts`)
 - [x] traductor `Routes → $stateProvider.state()` (`state-translator.ts`): deriva `name` del árbol, URL relativa al padre, `component` de `ɵcmp.selector` en camelCase, `resolve` a la forma `{ key: ["$stateParams", fn] }`, `data` directo
@@ -224,11 +226,20 @@ Subpath propio: `ngjs-core/router`. `RouterModule.forRoot(routes)`/`forChild(rou
 - [ ] `routerLink` / `routerLinkActive` → `ui-sref` / `ui-sref-active` (CLI/tpl — usar `ui-sref` o `Router.navigate` por ahora)
 - [x] `Router.navigate` / `navigateByUrl` (`router.ts` — sobre `$location.url` + `$transitions`; la promesa resuelve al `onSuccess`/`onError` real)
 - [x] `ActivatedRoute` shim (`activated-route.ts` — `params`/`paramMap`/`data` como `BehaviorSubject` sobre `$transitions.onSuccess`; `snapshot` sincrónico)
-- [x] `CanActivate` (`.run($transitions.onBefore({ to })`, guard `=== false` → aborta)
+- [x] `CanActivate` (`.run($transitions.onBefore({ to })`, guard `=== false` → aborta). **Guards funcionales inyectan servicios**: `canActivate: [() => inject(AuthService).ok]` funciona porque `inject()` lee `InjectorImpl.current` global, sin necesitar contexto (`test/router/router-guard-inject.test.ts`)
+- [x] fix de colisión de nombres derivados (`dedupe` por padre; `"a/b"` y `"a.b"` → `"a_b"` / `"a_b_2"`)
+- [x] `<router-outlet name="x">` → `<ui-view name="x">` (passthrough del atributo)
 - [ ] `CanDeactivate` / `CanMatch` (hooks `onExit`/`onBefore` — pendiente)
 - [x] `Resolve` / `resolve` (solo `ResolveFn`; tokens `Type<T>` fuera del MVP)
-- [x] `Route.data`; `title` / `TitleStrategy` pendiente
+- [x] `Route.data`
+- [x] **Tier 2**: `redirectTo` (resuelve a state name: path hermano + `/absoluto`, sin `../`; `pathMatch` se ignora — UI-Router matchea la URL entera ≈ `'full'`; gana sobre `component`) · `path: '**'` (state con url greedy `/{ngjsCatchAll:.+}` — `.+` para no pisar la raíz `/`; último `**` gana) · `Route.title` string y `ResolveFn<string>` → `document.title` (`.run($transitions.onSuccess)`, side-map `Map<stateName, title>`, sin tocar `data`) + `ActivatedRoute.title: Observable<string>` (por eso `ActivatedRoute` se registra como `factory` que cierra sobre el map) · **`withHashLocation()`** — mismo nombre/semántica que `@angular/router`: **default = html5** (`$locationProvider.html5Mode({ enabled, requireBase: false })`), el feature → hashbang. Tests: `test/router/{router-guard-inject,router-name-collision,router-tier2}.test.ts`.
 - [x] `loadComponent` → `lazyLoad` que hace `import()`, registra el `@Component` vía `ConfigProviderFactory.current` y reemplaza el estado (mismo nombre) por el registry en vivo. `loadChildren` pendiente.
+
+- [x] **Tier 3**: `ActivatedRoute` con `queryParams`/`queryParamMap` (de `$location.search()`), `fragment` (`$location.hash()`), refrescados en `onSuccess` + `$locationChangeSuccess`; `data` mergea los valores de `resolve` desde `transition.injector()` (`resolveKeys` del translator); `snapshot` con `queryParams`/`fragment` (opcionales — ausentes en el snapshot de guards/resolvers) · `routerLink`/`routerLinkActive` **integrados con UI-Router**: `$urlService.match(url)` → `{ stateName, params }`, `href` = `$state.href`, click → `$state.go`, active → `$state.includes`; en runtime `router-link` es expresión AngularJS (`['/about', id]` / `'/about'`) · `Router.events: Observable<RouterEvent>` (`NavigationStart`/`End`/`Cancel`/`Error` desde `$transitions`; `id` = `transition.$id`; cancel/error por `RejectType`). Tests: `test/router/router-tier3-{activated,link}.test.ts`.
+- [x] **Tier 4** (parcial): `CanActivateChild` (glob `$transitions.onBefore({ to: "${name}.**" })` + skip-self; agarra descendientes lazy porque el glob se wirea en `forRoot`) · `routerLinkActive` con `router-link-active-exact` (attr pelado → `$state.is` en vez de `$state.includes`). Tests: `test/router/router-tier4.test.ts`.
+- [ ] `loadChildren: () => import(...)` — **diferido** (usa `import()` nativo + registro runtime, igual que `loadComponent`; no necesita CLI, pero es complejo y de bajo payoff para "estable"). Se cierra después.
+
+**Brecha documentada:** árbol de `ActivatedRoute` (`.parent`/`.children`/params-por-nivel), `CanDeactivate`, `CanMatch`, redirect con `UrlTree` desde guard, resolvers `Type<T>`, `Route.providers`, navegación relativa (`relativeTo`).
 
 ## Etapa 17 — Animations ⬜
 

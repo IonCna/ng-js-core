@@ -4,6 +4,13 @@
  * etapa 16.
  */
 export { ActivatedRoute } from "@/router/activated-route.ts";
+export {
+  NavigationCancel,
+  NavigationEnd,
+  NavigationError,
+  NavigationStart,
+  type RouterEvent,
+} from "@/router/events.ts";
 export { convertToParamMap, type ParamMap } from "@/router/param-map.ts";
 export type {
   ActivatedRouteSnapshot,
@@ -20,4 +27,4 @@ export type {
   Routes,
 } from "@/router/route.ts";
 export { type NavigationExtras, Router } from "@/router/router.ts";
-export { RouterModule } from "@/router/router-module.ts";
+export { RouterModule, withHashLocation } from "@/router/router-module.ts";

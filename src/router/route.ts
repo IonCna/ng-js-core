@@ -16,6 +16,9 @@ export type Data = Record<string, unknown>;
 export interface ActivatedRouteSnapshot {
   readonly params: Record<string, string>;
   readonly data: Data;
+  /** Presentes en `ActivatedRoute.snapshot`; ausentes en el snapshot que reciben guards/resolvers. */
+  readonly queryParams?: Record<string, string>;
+  readonly fragment?: string | null;
 }
 
 export type ResolveFn<T> = (route: ActivatedRouteSnapshot) => T | Promise<T>;
