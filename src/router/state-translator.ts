@@ -31,6 +31,8 @@ export interface TranslatedRoutes {
   wildcardState?: string;
   /** Full path desde root → state name (para resolver `redirectTo`). */
   pathToName: Map<string, string>;
+  /** `{ nombre camelCase → clase @Component }` — lo usa `loadChildren` para registrar los componentes del chunk lazy. */
+  components: { name: string; cls: Function }[];
 }
 
 const WILDCARD = "**";
@@ -151,6 +153,106 @@ interface StateRegistryLike {
   register(state: Ng1StateDeclaration): unknown;
 }
 
+interface GuardTransition {
+  to(): { name: string };
+  params(): Record<string, string>;
+}
+
+// Compatible estructuralmente con `TransitionService` de UI-Router (solo lo que se usa).
+// biome-ignore lint/suspicious/noExplicitAny: la firma real de `onBefore` es más amplia
+type TransitionsLike = { onBefore(criteria: any, callback: (transition: any) => any): unknown };
+
+/**
+ * Registra un guard (`canActivate` / `canActivateChild`) como hook `onBefore`.
+ * Reusado por `RouterModule` (guards eager) y por el handler de `loadChildren`
+ * (guards del subárbol lazy — se wirean con el `$transitions` de la transición).
+ */
+export function wireGuardHook($transitions: TransitionsLike, guard: GuardBinding): void {
+  const criteria = guard.forChildren ? { to: `${guard.stateName}.**` } : { to: guard.stateName };
+  $transitions.onBefore(criteria, async (transition: GuardTransition) => {
+    if (guard.forChildren && transition.to().name === guard.stateName) return true;
+    const snapshot = {
+      params: transition.params(),
+      data: guard.data,
+    } as ActivatedRouteSnapshot;
+    for (const canActivate of guard.canActivate) {
+      if ((await canActivate(snapshot)) === false) return false;
+    }
+    return true;
+  });
+}
+
+function unwrapLazyRoutes(loaded: Routes | { routes: Routes } | { default: Routes }): Routes {
+  if (Array.isArray(loaded)) return loaded;
+  if ("routes" in loaded && Array.isArray(loaded.routes)) return loaded.routes;
+  if ("default" in loaded && Array.isArray(loaded.default)) return loaded.default;
+  throw new Error("RouterModule: loadChildren no resolvió Routes / { routes } / { default }.");
+}
+
+interface LazyChildrenTransition {
+  router: { stateRegistry: StateRegistryLike };
+  injector(): { get(token: string): unknown };
+}
+
+/**
+ * Handler `lazyLoad` del *future state* `${stateName}.**`. Al navegar a una URL
+ * bajo `stateName`: baja el chunk (`import()`), traduce su subárbol rooteado en
+ * `stateName`, registra sus estados + componentes (idempotente) + guards +
+ * titles/resolveKeys, y reemplaza el future state por el `stateName` real.
+ * UI-Router reintenta la transición y ahí ya resuelve.
+ */
+function lazyLoadChildrenFor(
+  route: Route,
+  stateName: string,
+  url: string,
+  fullPath: string,
+  data: Data,
+  out: TranslatedRoutes,
+) {
+  const load = route.loadChildren;
+  if (!load) throw new Error("lazyLoadChildrenFor: ruta sin loadChildren");
+
+  return async (transition: LazyChildrenTransition) => {
+    const childRoutes = unwrapLazyRoutes(await load());
+    const sub = translate(childRoutes, stateName, fullPath);
+
+    const registrar = ConfigProviderFactory.current;
+    if (!registrar) throw new Error("RouterModule: no hay config-providers capturados.");
+    const registry = transition.router.stateRegistry;
+    const $injector = transition.injector().get("$injector") as { has(name: string): boolean };
+
+    // Componentes del chunk lazy — idempotente (en compat se auto-registran al `import()`).
+    for (const { name, cls } of sub.components) {
+      if ($injector.has(`${name}Directive`)) continue;
+      const def = getComponentDef(cls);
+      if (!def) continue;
+      registrar.$compile.component(name, {
+        controller: cls as never,
+        template: def.template,
+        templateUrl: def.templateUrl,
+        controllerAs: def.controllerAs,
+        bindings: def.bindings ?? bindingsFromDefs(def.inputs, def.outputs),
+      });
+    }
+
+    for (const state of sub.states) registry.register(state);
+
+    // `titles` / `resolveKeys` → los `Map`s vivos del closure de `RouterModule`.
+    for (const [key, value] of sub.titles) out.titles.set(key, value);
+    for (const [key, value] of sub.resolveKeys) out.resolveKeys.set(key, value);
+
+    if (sub.guards.length) {
+      const $transitions = transition.injector().get("$transitions") as TransitionsLike;
+      for (const guard of sub.guards) wireGuardHook($transitions, guard);
+    }
+
+    // Reemplazar el future state por el `stateName` real (pass-through, sin componente
+    // propio — los hijos renderizan en el `<ui-view>` ancestro, como en Angular).
+    registry.deregister(`${stateName}.**`);
+    registry.register({ name: stateName, url, data });
+  };
+}
+
 /**
  * `redirectTo` (path, relativo al padre o absoluto `/x`) → state name destino.
  * Sin soporte para `../` (fuera del MVP). Si no matchea, se deja el string crudo
@@ -189,9 +291,17 @@ function walk(routes: Routes, ctx: WalkCtx): void {
       ctx.redirects.push({ state, redirectTo: route.redirectTo, parentPath: ctx.parentPath });
     } else if (route.loadComponent) {
       state.lazyLoad = lazyLoadFor(route, name, url, data) as never;
+    } else if (route.loadChildren) {
+      // Future state: el sufijo `.**` hace que la URL de este segmento matchee
+      // como prefijo y dispare `lazyLoad` aunque los hijos no existan todavía.
+      state.name = `${name}.**`;
+      state.lazyLoad = lazyLoadChildrenFor(route, name, url, fullPath, data, ctx.out) as never;
     } else {
       const comp = componentName(route);
-      if (comp) state.component = comp;
+      if (comp) {
+        state.component = comp;
+        ctx.out.components.push({ name: comp, cls: route.component as Function });
+      }
       const resolve = translateResolve(route.resolve, data);
       if (resolve) state.resolve = resolve as never;
     }
@@ -204,7 +314,13 @@ function walk(routes: Routes, ctx: WalkCtx): void {
     ctx.out.states.push(state);
 
     if (route.canActivate?.length) {
-      ctx.out.guards.push({ stateName: name, canActivate: route.canActivate, data });
+      // En una ruta `loadChildren`, `canActivate` guarda toda la rama (glob `.**`).
+      ctx.out.guards.push({
+        stateName: name,
+        canActivate: route.canActivate,
+        data,
+        forChildren: route.loadChildren ? true : undefined,
+      });
     }
     if (route.canActivateChild?.length) {
       ctx.out.guards.push({ stateName: name, canActivate: route.canActivateChild, data, forChildren: true });
@@ -216,20 +332,26 @@ function walk(routes: Routes, ctx: WalkCtx): void {
   });
 }
 
-export function routesToStates(routes: Routes): TranslatedRoutes {
+/** Traduce un árbol de `Routes` a estados, rooteado en `parentName`/`parentPath`. */
+function translate(routes: Routes, parentName: string | undefined, parentPath: string): TranslatedRoutes {
   const out: TranslatedRoutes = {
     states: [],
     guards: [],
     titles: new Map(),
     resolveKeys: new Map(),
     pathToName: new Map(),
+    components: [],
   };
   const redirects: WalkCtx["redirects"] = [];
-  walk(routes, { out, parentPath: "", redirects });
+  walk(routes, { out, parentName, parentPath, redirects });
 
-  for (const { state, redirectTo, parentPath } of redirects) {
-    state.redirectTo = resolveRedirect(redirectTo, parentPath, out.pathToName);
+  for (const { state, redirectTo, parentPath: pp } of redirects) {
+    state.redirectTo = resolveRedirect(redirectTo, pp, out.pathToName);
   }
 
   return out;
+}
+
+export function routesToStates(routes: Routes): TranslatedRoutes {
+  return translate(routes, undefined, "");
 }

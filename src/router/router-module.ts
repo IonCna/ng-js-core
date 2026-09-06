@@ -4,7 +4,7 @@ import angular, { type ILocationProvider, type ILocationService, type IRootScope
 import { ActivatedRoute, ActivatedRouteImpl } from "@/router/activated-route.ts";
 import type { ResolveFn, Routes } from "@/router/route.ts";
 import { Router, RouterImpl } from "@/router/router.ts";
-import { type GuardBinding, routesToStates } from "@/router/state-translator.ts";
+import { type GuardBinding, routesToStates, wireGuardHook } from "@/router/state-translator.ts";
 
 let moduleSeq = 0;
 
@@ -37,18 +37,7 @@ export function withHashLocation(): RouterFeature {
 
 function wireGuards(guards: GuardBinding[]) {
   const run = ($transitions: TransitionService) => {
-    for (const guard of guards) {
-      // `canActivateChild` → glob `parent.**` (parent + descendientes); se saltea el parent en sí.
-      const criteria = guard.forChildren ? { to: `${guard.stateName}.**` } : { to: guard.stateName };
-      $transitions.onBefore(criteria, async (transition) => {
-        if (guard.forChildren && transition.to().name === guard.stateName) return true;
-        const snapshot = { params: transition.params() as Record<string, string>, data: guard.data };
-        for (const canActivate of guard.canActivate) {
-          if ((await canActivate(snapshot)) === false) return false;
-        }
-        return true;
-      });
-    }
+    for (const guard of guards) wireGuardHook($transitions, guard);
   };
   run.$inject = ["$transitions"];
   return run;
@@ -107,7 +96,7 @@ export const RouterModule = {
       if (!hashRequested(features)) {
         $locationProvider.html5Mode({ enabled: true, requireBase: false });
       }
-      for (const state of states) $stateProvider.state(state);
+      for (const state of states) $stateProvider.state({ ...state }); // clon: UI-Router muta la decl (quita lazyLoad); no compartir entre bootstraps
 
       // La ruta `**` (si hay) matchea via su param greedy `/{ngjsCatchAll:.+}`.
       // `otherwise` solo cubre la URL raíz sin match → va a la raíz.
@@ -117,7 +106,8 @@ export const RouterModule = {
 
     mod.config(config);
     if (guards.length) mod.run(wireGuards(guards));
-    if (titles.size) mod.run(wireTitles(titles));
+    // Siempre — `loadChildren` puede agregar títulos al `Map` después (lo lee en cada transición).
+    mod.run(wireTitles(titles));
     mod.service(Router.$name, RouterImpl);
 
     const activatedRouteFactory = (
@@ -137,7 +127,7 @@ export const RouterModule = {
     const mod = angular.module(nextModuleName("ngjs.router.child"), ["ui.router"]);
 
     const config = ($stateProvider: StateProvider) => {
-      for (const state of states) $stateProvider.state(state);
+      for (const state of states) $stateProvider.state({ ...state }); // clon: UI-Router muta la decl (quita lazyLoad); no compartir entre bootstraps
     };
     config.$inject = ["$stateProvider"];
 

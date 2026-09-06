@@ -8,7 +8,6 @@
     "angular": "1.8.3",
     "angular-animate": "1.8.3",
     "angular-aria": "1.8.3",
-    "angular-dynamic-locale": "^0.1.38",
     "angular-messages": "1.8.3",
     "angular-sanitize": "1.8.3",
     "angular-translate": "^2.19.1",
@@ -77,6 +76,31 @@
       "types": "./dist/animations/index.d.ts",
       "import": "./dist/animations/index.js",
       "default": "./dist/animations/index.js"
+    },
+    "./a11y": {
+      "types": "./dist/a11y/index.d.ts",
+      "import": "./dist/a11y/index.js",
+      "default": "./dist/a11y/index.js"
+    },
+    "./runtime/a11y": {
+      "types": "./dist/runtime/a11y/index.d.ts",
+      "import": "./dist/runtime/a11y/index.js",
+      "default": "./dist/runtime/a11y/index.js"
+    },
+    "./i18n": {
+      "types": "./dist/i18n/index.d.ts",
+      "import": "./dist/i18n/index.js",
+      "default": "./dist/i18n/index.js"
+    },
+    "./i18n/locales/*": {
+      "types": "./dist/i18n/locales/*.d.ts",
+      "import": "./dist/i18n/locales/*.js",
+      "default": "./dist/i18n/locales/*.js"
+    },
+    "./runtime/i18n": {
+      "types": "./dist/runtime/i18n/index.d.ts",
+      "import": "./dist/runtime/i18n/index.js",
+      "default": "./dist/runtime/i18n/index.js"
     },
     "./router": {
       "types": "./dist/router/index.d.ts",

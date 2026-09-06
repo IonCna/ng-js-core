@@ -91,7 +91,18 @@ export function Injectable(config?: InjectableOptions): ClassDecorator {
 
 // --- Bootstrap -------------------------------------------------------------
 
-/** Monta todo lo definido hasta ahora en `rootSelector` y arranca la app. */
-export function bootstrap(root: string | Element, options?: BootstrapOptions): Promise<ApplicationRef> {
+/**
+ * Monta todo lo definido hasta ahora en `rootSelector` y arranca la app.
+ * - `options.imports` — `angular.IModule`s extra (`RouterModule.forRoot(routes)`,
+ *   `provideAnimations()`, `A11yModule`, …). Son funciones planas, andan sin compilador.
+ * - `options.i18n` (opt-in) engancha `angular-translate` + `ngAria` — ver `ngjs-core/runtime/i18n`.
+ */
+export function bootstrap(
+  root: string | Element,
+  options?: BootstrapOptions & {
+    i18n?: import("@/runtime/i18n/index.ts").I18nConfig;
+    imports?: import("angular").IModule[];
+  },
+): Promise<ApplicationRef> {
   return compatRegistry.bootstrap(root, options);
 }

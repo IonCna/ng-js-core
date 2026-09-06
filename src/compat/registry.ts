@@ -41,21 +41,36 @@ class CompatRegistry {
     this.pendingProviders.push(provider);
   }
 
-  bootstrap(root: string | Element, options?: BootstrapOptions): Promise<ApplicationRef> {
+  async bootstrap(
+    root: string | Element,
+    options?: BootstrapOptions & {
+      i18n?: import("@/runtime/i18n/index.ts").I18nConfig;
+      /** `angular.IModule`s extra para `@NgModule({ imports })` — `RouterModule.forRoot(routes)`, `provideAnimations()`, `A11yModule`, … */
+      imports?: angular.IModule[];
+    },
+  ): Promise<ApplicationRef> {
     installCoreModule();
     this.booted = true;
+
+    const { i18n, imports: extraImports, ...bootstrapOptions } = options ?? {};
+    const imports: angular.IModule[] = [commonModule(), ...(extraImports ?? [])];
+    if (i18n) {
+      // `import()` dinámico: `angular-translate` no entra al chunk base de compat.
+      const { i18nModule } = await import("@/runtime/i18n/index.ts");
+      imports.push(i18nModule(i18n));
+    }
 
     class CompatAppModule {}
     ngModule(CompatAppModule).define({
       id: "ngjs.compat.app",
-      imports: [commonModule()],
+      imports,
       declarations: [...this.pendingDeclarations],
       providers: [...this.pendingProviders],
     });
     this.pendingDeclarations.clear();
     this.pendingProviders.length = 0;
 
-    return bootstrapModuleRuntime(CompatAppModule, { hostElement: root, ...options });
+    return bootstrapModuleRuntime(CompatAppModule, { hostElement: root, ...bootstrapOptions });
   }
 }
 

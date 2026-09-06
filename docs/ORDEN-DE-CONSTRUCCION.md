@@ -218,10 +218,10 @@ hace el motor de `src/runtime/` — ver `docs/CAPAS.md`.)_
 - [ ] errores (`ngMessages`)
 - [ ] template-driven (`[(ngModel)]` / `#f="ngForm"` / `ngModelGroup`)
 
-## Etapa 16 — Router 🚧 (estable — falta solo `loadChildren`)
+## Etapa 16 — Router ✅
 
 **Cubre:** Router.
-**Criterio de cierre:** navegación entre 2 rutas + guard + resolve + `ActivatedRoute.paramMap` emite; una ruta con `loadComponent: () => import(...)` nativo carga y monta el chunk. **✅ pasa** (`test/router/{router,router-lazy}.test.ts`).
+**Criterio de cierre:** navegación entre 2 rutas + guard + resolve + `ActivatedRoute.paramMap` emite; `loadComponent` y `loadChildren` con `import()` nativo cargan y montan el chunk. **✅ pasa** (`test/router/{router,router-lazy,router-lazy-children,router-lazy-compat}.test.ts`).
 
 Subpath propio: `ngjs-core/router`. `RouterModule.forRoot(routes)`/`forChild(routes)` devuelven un `angular.IModule` (que `@NgModule({ imports: [...] })` acepta) — encaja con `bootstrapModuleRuntime`, sin build step.
 
@@ -240,13 +240,13 @@ Subpath propio: `ngjs-core/router`. `RouterModule.forRoot(routes)`/`forChild(rou
 - [x] `Resolve` / `resolve` (solo `ResolveFn`; tokens `Type<T>` fuera del MVP)
 - [x] `Route.data`
 - [x] **Tier 2**: `redirectTo` (resuelve a state name: path hermano + `/absoluto`, sin `../`; `pathMatch` se ignora — UI-Router matchea la URL entera ≈ `'full'`; gana sobre `component`) · `path: '**'` (state con url greedy `/{ngjsCatchAll:.+}` — `.+` para no pisar la raíz `/`; último `**` gana) · `Route.title` string y `ResolveFn<string>` → `document.title` (`.run($transitions.onSuccess)`, side-map `Map<stateName, title>`, sin tocar `data`) + `ActivatedRoute.title: Observable<string>` (por eso `ActivatedRoute` se registra como `factory` que cierra sobre el map) · **`withHashLocation()`** — mismo nombre/semántica que `@angular/router`: **default = html5** (`$locationProvider.html5Mode({ enabled, requireBase: false })`), el feature → hashbang. Tests: `test/router/{router-guard-inject,router-name-collision,router-tier2}.test.ts`.
-- [x] `loadComponent` → `lazyLoad` que hace `import()`, registra el `@Component` vía `ConfigProviderFactory.current` y reemplaza el estado (mismo nombre) por el registry en vivo. `loadChildren` pendiente.
+- [x] `loadComponent` → `lazyLoad` que hace `import()`, registra el `@Component` vía `ConfigProviderFactory.current` y reemplaza el estado (mismo nombre) por el registry en vivo.
 
 - [x] **Tier 3**: `ActivatedRoute` con `queryParams`/`queryParamMap` (de `$location.search()`), `fragment` (`$location.hash()`), refrescados en `onSuccess` + `$locationChangeSuccess`; `data` mergea los valores de `resolve` desde `transition.injector()` (`resolveKeys` del translator); `snapshot` con `queryParams`/`fragment` (opcionales — ausentes en el snapshot de guards/resolvers) · `Router.events: Observable<RouterEvent>` (`NavigationStart`/`End`/`Cancel`/`Error` desde `$transitions`; `id` = `transition.$id`; cancel/error por `RejectType`). Tests: `test/router/router-tier3-activated.test.ts`. _(`routerLink`/`routerLinkActive` estuvieron acá integrados con UI-Router; se quitaron del runtime — se usa `ui-sref`.)_
 - [x] **Tier 4** (parcial): `CanActivateChild` (glob `$transitions.onBefore({ to: "${name}.**" })` + skip-self; agarra descendientes lazy porque el glob se wirea en `forRoot`). Tests: `test/router/router-tier4.test.ts`. _(`routerLinkActive` + `router-link-active-exact` estuvieron acá; se quitaron del runtime — se usa `ui-sref-active`.)_
-- [ ] `loadChildren: () => import(...)` — **diferido** (usa `import()` nativo + registro runtime, igual que `loadComponent`; es complejo y de bajo payoff para "estable"). Se cierra después.
+- [x] `loadChildren: () => import(...)` — `state-translator.ts`: el traductor registra un **future state** `${name}.**` (el sufijo `.**` hace que la URL del segmento matchee como prefijo y dispare `lazyLoad` aunque los hijos no existan). El handler (`lazyLoadChildrenFor`) baja el chunk, re-traduce el subárbol rooteado en `${name}` (`translate(routes, parentName, parentPath)`), registra estados + componentes (**idempotente** — `$injector.has(name + "Directive")`, porque en compat se auto-registran al `import()`) + guards (`wireGuardHook` con el `$transitions` de la transición) + merge de `titles`/`resolveKeys` en los `Map`s vivos, y reemplaza el future state por `${name}` real (pass-through). Acepta `Routes` / `{ routes }` / `{ default }`. Recursivo: un `loadChildren` anidado en el chunk se vuelve otro future state. **Hook compat**: `compat.bootstrap(root, { imports: [RouterModule.forRoot(routes)] })` (`imports` genérico — sirve para router / animations / a11y). Tests: `test/router/{router-lazy-children,router-lazy-compat,router-lazy-esm-spike}.test.ts`. **Fix**: `RouterModule.forRoot` clona las decls (`$stateProvider.state({ ...state })`) porque UI-Router muta la decl para quitar `lazyLoad` — no se puede compartir entre bootstraps.
 
-**Brecha documentada:** árbol de `ActivatedRoute` (`.parent`/`.children`/params-por-nivel), `CanDeactivate`, `CanMatch`, redirect con `UrlTree` desde guard, resolvers `Type<T>`, `Route.providers`, navegación relativa (`relativeTo`).
+**Brecha documentada:** árbol de `ActivatedRoute` (`.parent`/`.children`/params-por-nivel), `CanDeactivate`, `CanMatch` (Angular lo corre antes de bajar el chunk), redirect con `UrlTree` desde guard, resolvers `Type<T>`, `Route.providers`, navegación relativa (`relativeTo`); `loadChildren` que devuelve una clase `@NgModule` (forma vieja de Angular); redirect en un subárbol lazy hacia un hermano eager.
 
 ## Etapa 17 — Animations ✅ (lo de core; la sintaxis de template `[@trigger]` es del CLI)
 
@@ -264,14 +264,36 @@ alcance; core usa las clases `.ng-enter`/`.ng-leave` nativas de `ngAnimate`.
 
 **Brecha documentada** (`CONCEPTOS.md` "Animaciones"): `keyframes()` sin `@keyframes` generado (usa el último frame); `query`/`stagger`/`group`/`sequence` — la orquestación fina de varios runners de `$animateCss` se pierde; `pause()`/`setPosition()` no-op (`$animateCss` no da control de posición).
 
-## Etapa 18 — i18n + a11y ⬜
+## Etapa 18 — i18n + a11y ✅
 
 **Cubre:** i18n, Accesibilidad.
-**Criterio de cierre:** `{{ 'KEY' | translate }}` + cambio de locale en runtime.
+**Criterio de cierre:** `{{ 'KEY' | translate }}` renderiza + `TranslateService.use('es')` cambia el idioma en runtime. **✅ pasa** (`test/i18n/*.test.ts`).
 
-- [ ] wrappers de `angular-translate` (`translate`, `$translate`)
-- [ ] `angular-dynamic-locale` (`LOCALE_ID`/`$locale`)
-- [ ] incluir `ngAria`
+- [x] `TranslateService` (abstract + `$name`) + `TranslateServiceImpl` (`$inject = ["$translate", "$rootScope"]`) — `src/i18n/translate.ts`. Shim imperativo sobre `$translate`: `instant` sync, `get`/`stream` Observable, `use`, `currentLang`, `onLangChange` (`Subject` sobre `$translateChangeSuccess`, completado en `$destroy`). Equivalente de `$localize` imperativo. `LOCALE_ID` = `InjectionToken<string>`. Tests: `test/i18n/translate.test.ts`
+- [x] `registerLocaleData(data, localeId?, extraData?)` — `src/i18n/locale-data.ts`. Misma firma que `@angular/core`; acá `data` es el objeto `$locale` de AngularJS (`ngjs-core/i18n/locales/<id>`), no el formato de `@angular/common/locales`. Registro global `Map<id, LocaleData>` (clase `LocaleRegistry`), con fallback al idioma base (`es-mx`→`es`). Locales incluidos: `en`, `es-MX` (resto: a demanda o a mano). Tests: `test/i18n/locale-data.test.ts`
+- [x] `src/runtime/i18n/index.ts` — `angular.module("ngjs.i18n.N", ["ng.js.core", "pascalprecht.translate", "ngAria"])` + `.config($translateProvider)` (translations, preferredLanguage, fallback, `useSanitizeValueStrategy("escape")`) + `.service(TranslateService.$name, …)` + `LOCALE_ID` factory (`$translate.use()`) + **`.run` que swapea `$locale`** (`angular.extend($locale, ɵgetRegisteredLocale(lang))`) en cada `$translateChangeSuccess` — sin HTTP ni assets. `TranslateModule.forRoot(config)` / `provideI18n(config)` → `angular.IModule` para `imports:`. Subpath `ngjs-core/runtime/i18n`. Tests: `test/i18n/runtime-i18n.test.ts`
+- [x] `ngAria` incluido (dep del módulo — `aria-*`/`role`/`tabindex`/teclado automáticos)
+- [x] hook compat: `compat.bootstrap(root, { i18n: { translations, defaultLanguage } })` (`import()` dinámico de `runtime/i18n` — no entra al chunk base)
+- [x] `src/types/i18n-shims.d.ts` — `declare module` de `angular-translate` / `angular-aria` (no publican tipos; `noUncheckedSideEffectImports`)
+
+### a11y avanzada — superficie `@angular/cdk/a11y` ✅
+
+Superficie y semántica de `@angular/cdk/a11y` tal cual.
+
+- [x] `LiveAnnouncer` (`src/a11y/live-announcer.ts`) — `announce(msg, politeness?, duration?)` con los overloads de CDK, región `aria-live` oculta lazy, delay 100ms + limpieza previa. `clear()`, `ngOnDestroy()`. Token `LIVE_ANNOUNCER_DEFAULT_OPTIONS`.
+- [x] `InteractivityChecker` (`src/a11y/interactivity-checker.ts`) — `isDisabled`/`isVisible`/`isFocusable`/`isTabbable` + `FOCUSABLE_SELECTOR`. Visibilidad tolerante (no mide geometría → anda en jsdom).
+- [x] `FocusTrap` + `FocusTrapFactory` (`src/a11y/focus-trap.ts`) — mecanismo de anclas de CDK (`tabindex=0` antes/después del host). `create(el: HTMLElement | ElementRef)`, `focusInitialElement`/`focusFirst/LastTabbableElement`/`attachAnchors`/`destroy`. `[cdkFocusInitial]` / `[cdkFocusRegionStart|End]` respetados.
+- [x] `FocusMonitor` (`src/a11y/focus-monitor.ts`) — `monitor(el): Observable<FocusOrigin>`, `stopMonitoring`, `focusVia`; listeners globales `keydown`/`mousedown`/`touchstart` + buffer 650ms; clases `.cdk-{keyboard,mouse,touch,program}-focused` + `.cdk-focused`.
+- [x] directivas (`src/runtime/a11y/`): `[cdkAriaLive]` (`MutationObserver` sobre el texto → `announce`), `[cdkTrapFocus]` (+ `cdkTrapFocusAutoCapture`), `[cdkMonitorElementFocus]` / `[cdkMonitorSubtreeFocus]` (evalúan `cdkFocusChange` con `$event`).
+- [x] `src/runtime/a11y/index.ts` — `angular.module("ng.js.a11y")` (memoizado sin config; `ngjs.a11y.N` con config) registra los 4 servicios + 4 directivas. `A11yModule` / `provideA11y(config?)`. Subpaths `ngjs-core/a11y` y `ngjs-core/runtime/a11y`. Sin deps externas — todo DOM. Tests: `test/a11y/*.test.ts` (30 casos).
+
+**Brechas documentadas** (`CONCEPTOS.md` "i18n" / "Accesibilidad"):
+- Extracción de `i18n="…"` / `$localize` a un catálogo → CLI (`ng-js-cli`), no acá.
+- `setTranslation` en runtime — `angular-translate` v2 solo carga tablas en config-time (`forRoot({ translations })`) o vía loader. Se puede levantar capturando `$translateProvider` (mismo truco que `ConfigProviderFactory`), pendiente.
+- ICU / MessageFormat plurals — necesita `angular-translate-interpolation-messageformat` (no instalado). Brecha parcial.
+- No se registra un pipe `translate` propio: choca con el filtro homónimo de `angular-translate`; se usa el de la lib. Si hace falta enganchar algo → `.decorator("translateFilter", …)`.
+- `FocusKeyManager`/`ListKeyManager` de CDK (navegación por teclado en listas) — fuera de alcance.
+- hook compat para a11y (`compat.bootstrap(root, { a11y })`) — pendiente (a11y no tiene deps externas, así que no urge).
 
 _(No hay etapa 19. El transform completo, el codemod inverso ngjs → Angular y el
 reporte de brechas del fuente son del CLI `ng-js-cli` / `ng-js-vite`.)_

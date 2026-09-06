@@ -30,8 +30,13 @@ export type CanActivateChildFn = CanActivateFn;
 export type CanDeactivateFn<T> = (component: T) => boolean | Promise<boolean>;
 export type CanMatchFn = (route: Route) => boolean | Promise<boolean>;
 
-/** Ver «UI-Router `lazyLoad` y ESM»: el `import()` nativo se adapta al contrato `{ states }`. */
-export type LoadChildrenCallback = () => Promise<{ routes: Routes } | Type<unknown>>;
+/**
+ * `loadChildren: () => import("./x").then(m => m.ROUTES)`. Se acepta el array de
+ * `Routes` pelado (forma moderna de Angular), `{ routes }` o `{ default }`. La
+ * forma vieja "clase `@NgModule`" queda fuera del MVP. El traductor registra un
+ * *future state* (`nombre.**`) y baja el chunk recién al navegar adentro.
+ */
+export type LoadChildrenCallback = () => Promise<Routes | { routes: Routes } | { default: Routes }>;
 export type LoadComponentCallback = () => Promise<Type<unknown> | { default: Type<unknown> }>;
 
 export interface Route {

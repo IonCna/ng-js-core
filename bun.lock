@@ -9,7 +9,6 @@
         "angular": "1.8.3",
         "angular-animate": "1.8.3",
         "angular-aria": "1.8.3",
-        "angular-dynamic-locale": "^0.1.38",
         "angular-messages": "1.8.3",
         "angular-sanitize": "1.8.3",
         "angular-translate": "^2.19.1",
@@ -192,8 +191,6 @@
     "angular-animate": ["angular-animate@1.8.3", "", {}, "sha512-/LtTKvy5sD6MZbV0v+nHgOIpnFF0mrUp+j5WIxVprVhcrJriYpuCZf4S7Owj1o76De/J0eRzANUozNJ6hVepnQ=="],
 
     "angular-aria": ["angular-aria@1.8.3", "", {}, "sha512-qTXclmTW/KGw5JNKKQPcCKKq6hCBZ39jYINmLgMsjUHBAoxULaMRRTaRj/L2VTOjKvK5f9enkx+EUqRqzXDSFQ=="],
-
-    "angular-dynamic-locale": ["angular-dynamic-locale@0.1.38", "", { "dependencies": { "@types/angular": "^1.8.4" } }, "sha512-O+bWvCNkIhnedBCYPUgYzVrzXlaYwN8Ke4XpoXoGDu4zIyWNdaFAzMWsuB+dnOD7pKrp8pVkk+ShPSGVnj/3uQ=="],
 
     "angular-messages": ["angular-messages@1.8.3", "", {}, "sha512-f/ywtg32lqzX8FnXkBJOyn13lbCbo333/xy/5TTFcsH/gZdXoiuERj+dLTOs8xHCkOeFQhFx0VD0DgtMgSag7A=="],
 
