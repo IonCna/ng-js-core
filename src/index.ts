@@ -1,3 +1,4 @@
+export * from "./animations/index.ts";
 export * from "./common/index.ts";
 export * from "./core/index.ts";
 export { EventEmitter } from "./event-emitter.ts";

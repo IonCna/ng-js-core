@@ -15,7 +15,7 @@ class NcOne {}
 @Component({ selector: "nc-two", template: "<h1>two</h1>" })
 class NcTwo {}
 
-@Component({ selector: "nc-root", controllerAs: "$", template: "<router-outlet></router-outlet>" })
+@Component({ selector: "nc-root", controllerAs: "$", template: "<ui-view></ui-view>" })
 class NcRoot {}
 
 // `"a/b"` y `"a.b"` sanitizan ambos a `"a_b"` — deben desambiguar sin romper el registro.

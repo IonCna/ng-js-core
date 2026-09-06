@@ -22,7 +22,7 @@ class GiHome {}
 @Component({ selector: "gi-secret", template: "<h1>secret</h1>" })
 class GiSecret {}
 
-@Component({ selector: "gi-root", controllerAs: "$", template: "<router-outlet></router-outlet>" })
+@Component({ selector: "gi-root", controllerAs: "$", template: "<ui-view></ui-view>" })
 class GiRoot {}
 
 const routes: Routes = [

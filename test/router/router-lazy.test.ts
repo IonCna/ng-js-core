@@ -12,7 +12,7 @@ import { bootstrapModuleRuntime } from "@/runtime/index.ts";
 @Component({ selector: "shell-page", template: "<h1>shell</h1>" })
 class ShellPage {}
 
-@Component({ selector: "lazy-root", controllerAs: "$", template: "<router-outlet></router-outlet>" })
+@Component({ selector: "lazy-root", controllerAs: "$", template: "<ui-view></ui-view>" })
 class LazyRoot {}
 
 const routes: Routes = [

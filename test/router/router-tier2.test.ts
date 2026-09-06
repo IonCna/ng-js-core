@@ -30,7 +30,7 @@ class ProfilePage {
 @Component({ selector: "t2-404", template: "<h1>not found</h1>" })
 class NotFoundPage {}
 
-@Component({ selector: "t2-root", controllerAs: "$", template: "<router-outlet></router-outlet>" })
+@Component({ selector: "t2-root", controllerAs: "$", template: "<ui-view></ui-view>" })
 class T2Root {}
 
 const routes: Routes = [

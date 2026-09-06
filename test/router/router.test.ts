@@ -26,7 +26,7 @@ class AboutPage {
   }
 }
 
-@Component({ selector: "app-root", controllerAs: "$", template: "<router-outlet></router-outlet>" })
+@Component({ selector: "app-root", controllerAs: "$", template: "<ui-view></ui-view>" })
 class AppRoot {}
 
 const routes: Routes = [

@@ -808,9 +808,12 @@ src/
                               control-value-accessor (↔ NgModelController),
                               directivas formGroup / formControlName
   router/                     wrappers sobre @uirouter/angularjs: RouterModule,
-                              router-outlet, router-link, ActivatedRoute, guards, resolve
-  animations/                 re-export DSL, trigger.directive, animate-css-runner,
-                              AnimationBuilder
+                              ActivatedRoute, guards, resolve, Router.navigate
+                              (template core-only = ui-view / ui-sref nativos;
+                              router-outlet / routerLink los agrega el CLI)
+  animations/                 DSL builders (metadata pura) + AnimationBuilder /
+                              AnimationPlayer sobre $animateCss
+                              (template core-only = ngAnimate nativo; [@trigger] = CLI)
   platform-browser/          DomSanitizer ($sce+$sanitize), Title, Meta, Location
   rxjs-interop/              takeUntilDestroyed, outputToObservable/outputFromObservable
   i18n/                       wrappers sobre angular-translate + angular-dynamic-locale

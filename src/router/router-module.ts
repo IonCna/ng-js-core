@@ -1,16 +1,9 @@
 import "@uirouter/angularjs";
 import type { StateProvider, StateService, TransitionService } from "@uirouter/angularjs";
-import angular, {
-  type IAttributes,
-  type IDirective,
-  type ILocationProvider,
-  type ILocationService,
-  type IRootScopeService,
-} from "angular";
+import angular, { type ILocationProvider, type ILocationService, type IRootScopeService } from "angular";
 import { ActivatedRoute, ActivatedRouteImpl } from "@/router/activated-route.ts";
 import type { ResolveFn, Routes } from "@/router/route.ts";
 import { Router, RouterImpl } from "@/router/router.ts";
-import { routerLinkActiveDirective, routerLinkDirective } from "@/router/router-link.ts";
 import { type GuardBinding, routesToStates } from "@/router/state-translator.ts";
 
 let moduleSeq = 0;
@@ -84,17 +77,6 @@ function wireTitles(titles: Map<string, string | ResolveFn<string>>) {
   return run;
 }
 
-function routerOutletDirective(): IDirective {
-  return {
-    restrict: "E",
-    // `<router-outlet name="aux">` → `<ui-view name="aux">` (outlets con nombre de UI-Router).
-    template: (_tElement: unknown, tAttrs: IAttributes): string => {
-      const name = String((tAttrs as IAttributes & { name?: string }).name ?? "").replace(/[^\w-]/g, "");
-      return name ? `<ui-view name="${name}"></ui-view>` : "<ui-view></ui-view>";
-    },
-  };
-}
-
 function hashRequested(features: RouterFeature[]): boolean {
   return features.some((f) => f.ɵkind === "hash-location");
 }
@@ -136,9 +118,6 @@ export const RouterModule = {
     mod.config(config);
     if (guards.length) mod.run(wireGuards(guards));
     if (titles.size) mod.run(wireTitles(titles));
-    mod.directive("routerOutlet", routerOutletDirective);
-    mod.directive("routerLink", routerLinkDirective);
-    mod.directive("routerLinkActive", routerLinkActiveDirective);
     mod.service(Router.$name, RouterImpl);
 
     const activatedRouteFactory = (

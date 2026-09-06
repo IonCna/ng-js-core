@@ -1,11 +1,29 @@
 # Orden de construcción
 
 Secuencial por dependencia. Cada etapa cierra cuando su criterio pasa en verde.
-Cada sección de `CONCEPTOS.md` cae en alguna etapa (columna «cubre»). Regla: una
-etapa **no** está lista solo porque los archivos existen — lo está cuando pasan
-sus contratos, comportamiento, registro y test.
+Cada sección de `CONCEPTOS.md` cae en alguna etapa (columna «cubre»), salvo las de
+codegen / transform / codemod, que son del CLI `ng-js-cli` (que parsea con
+`ng-js-vite`) y no de este repo. Regla: una etapa **no** está lista solo porque
+los archivos existen — lo está cuando pasan sus contratos, comportamiento,
+registro y test.
 
-Leyenda: ✅ cerrada · 🚧 en progreso · ⬜ no empezada.
+Leyenda: ✅ cerrada · 🚧 en progreso · ⬜ no empezada. La numeración salta 10 y 19
+(codegen y codemod inverso — ver arriba); el resto de las referencias cruzadas a
+números de etapa siguen valiendo.
+
+## Regla de coherencia — dónde vive cada superficie
+
+- **Core:** runtime + DI + metadata con **forma Angular en la clase** (`@Component`,
+  `@ViewChild`, `Routes`, `inject`, `Router`, `AnimationBuilder`). En el **template**,
+  core usa **solo AngularJS nativo** (`<ui-view>`, `ui-sref`, `ui-sref-active`,
+  `ng-ref`, `ng-if`, clases `.ng-enter`/`.ng-leave` de `ngAnimate`).
+- **Excepción:** construcciones con nombre Angular **sin equivalente nativo** son
+  primitivas y viven en core igual (`<ng-template>`, `<ng-content>`, `<ng-container>`).
+- **Fuera de alcance de este repo:** la sintaxis de template estilo Angular moderno
+  (`<router-outlet>`, `routerLink`, `#ref`, `*ngIf`, `[@trigger]`) y todo el
+  codegen / transform / codemod son del CLI `ng-js-cli` (que parsea con
+  `ng-js-vite`). Van de la mano con core pero son proyectos aparte — acá se
+  referencian, no se listan como pendientes.
 
 ---
 
@@ -135,19 +153,9 @@ Leyenda: ✅ cerrada · 🚧 en progreso · ⬜ no empezada.
 - [x] `detach` / `reattach` (etapa 6)
 - [x] `NgDisabled` (`core/ng-disabled.ts`) — **no reemplaza** la directiva nativa `ngDisabled` (a diferencia de `ng-ref`, acá no hay conflicto: nativa no tenía controller propio), solo le agrega `NgDisabledController` para que otra directiva co-ubicada se entere de los cambios (`require: '?ngDisabled'`) sin reimplementar el watch booleano. **Bug real encontrado con un probe**: `$attrs.$observe('disabled', ...)` entrega el valor ya como **booleano** (`disabled` es un `BOOLEAN_ATTR` nativo), no como string `"disabled"`/`"true"` — el reference original chequeaba contra strings, no funcionaba; confirmado logueando el valor observado antes de corregirlo
 
-## Etapa 10 — Transform MVP ⬜
-
-**Cubre:** CLI §2 + §5, Componente/Directivas (codegen), `@Pipe` (codegen), Build y entornos.
-**Criterio de cierre:** un `@Component` + `@Directive` + `@Pipe` + `@Injectable` nuevos se registran y renderizan en jsdom; `environment` cambia entre dev/prod.
-
-- [ ] leer etapa 4 + ctor metadata → `angular.module()` + `.component()`/`.directive()`/`.service()`/`.filter()`
-- [ ] `bindings` de `@Input`/`@Output`
-- [ ] `$inject`
-- [ ] `require` de queries con `read`
-- [ ] `transclude` según `<ng-content>`
-- [ ] `link` de `@HostBinding`/`@HostListener`
-- [ ] `$attrs` de `@Attribute`
-- [ ] `environment` por modo de build
+_(No hay etapa 10. El codegen de decoradores → `angular.module().component()/…` es
+del CLI `ng-js-cli` / `ng-js-vite`. En el modo sin build step el equivalente ya lo
+hace el motor de `src/runtime/` — ver `docs/CAPAS.md`.)_
 
 ## Etapa 11 — Pipes ✅
 
@@ -215,45 +223,46 @@ Leyenda: ✅ cerrada · 🚧 en progreso · ⬜ no empezada.
 **Cubre:** Router.
 **Criterio de cierre:** navegación entre 2 rutas + guard + resolve + `ActivatedRoute.paramMap` emite; una ruta con `loadComponent: () => import(...)` nativo carga y monta el chunk. **✅ pasa** (`test/router/{router,router-lazy}.test.ts`).
 
-Subpath propio: `ngjs-core/router`. `RouterModule.forRoot(routes)`/`forChild(routes)` devuelven un `angular.IModule` (que `@NgModule({ imports: [...] })` acepta) — encaja con `bootstrapModuleRuntime` sin CLI.
+Subpath propio: `ngjs-core/router`. `RouterModule.forRoot(routes)`/`forChild(routes)` devuelven un `angular.IModule` (que `@NgModule({ imports: [...] })` acepta) — encaja con `bootstrapModuleRuntime`, sin build step.
 
-**Estado "estable"** (T1–T4 sin lazy): rutas anidadas · params / `queryParamMap` / `fragment` · `canActivate` + `canActivateChild` con `inject()` · `resolve` (con `data` mergeada) · `redirectTo` · `path: '**'` · `Route.title` → `document.title` + `ActivatedRoute.title` · `Router.navigate`/`navigateByUrl`/`url`/`events` · `routerLink`/`routerLinkActive` (+ `router-link-active-exact`) · `loadComponent` lazy · `withHashLocation()` (default html5). Tests: `test/router/*.test.ts` (11 casos).
+**Estado "estable"** (T1–T4 sin lazy): rutas anidadas · params / `queryParamMap` / `fragment` · `canActivate` + `canActivateChild` con `inject()` · `resolve` (con `data` mergeada) · `redirectTo` · `path: '**'` · `Route.title` → `document.title` + `ActivatedRoute.title` · `Router.navigate`/`navigateByUrl`/`url`/`events` · `loadComponent` lazy · `withHashLocation()` (default html5). Tests: `test/router/*.test.ts`.
+
+**Template = AngularJS nativo** (ver "Regla de coherencia" arriba): el outlet es `<ui-view>`, los links `ui-sref` / `ui-sref-active`, o `Router.navigate` imperativo. Los equivalentes de sintaxis Angular (`<router-outlet>` / `routerLink`) están fuera de alcance — se quitaron del runtime (antes vivían en `src/router/router-link.ts`, borrado).
 
 - [x] tipos `Route`/`Routes` (`src/router/route.ts`)
 - [x] traductor `Routes → $stateProvider.state()` (`state-translator.ts`): deriva `name` del árbol, URL relativa al padre, `component` de `ɵcmp.selector` en camelCase, `resolve` a la forma `{ key: ["$stateParams", fn] }`, `data` directo
 - [x] `RouterModule.forRoot`/`forChild` (`router-module.ts` — `angular.module` con dep `ui.router`, `.config($stateProvider)`, `$urlRouterProvider.otherwise`)
-- [x] `<router-outlet>` → directiva que renderiza `<ui-view>` (runtime, no CLI)
-- [ ] `routerLink` / `routerLinkActive` → `ui-sref` / `ui-sref-active` (CLI/tpl — usar `ui-sref` o `Router.navigate` por ahora)
 - [x] `Router.navigate` / `navigateByUrl` (`router.ts` — sobre `$location.url` + `$transitions`; la promesa resuelve al `onSuccess`/`onError` real)
 - [x] `ActivatedRoute` shim (`activated-route.ts` — `params`/`paramMap`/`data` como `BehaviorSubject` sobre `$transitions.onSuccess`; `snapshot` sincrónico)
 - [x] `CanActivate` (`.run($transitions.onBefore({ to })`, guard `=== false` → aborta). **Guards funcionales inyectan servicios**: `canActivate: [() => inject(AuthService).ok]` funciona porque `inject()` lee `InjectorImpl.current` global, sin necesitar contexto (`test/router/router-guard-inject.test.ts`)
 - [x] fix de colisión de nombres derivados (`dedupe` por padre; `"a/b"` y `"a.b"` → `"a_b"` / `"a_b_2"`)
-- [x] `<router-outlet name="x">` → `<ui-view name="x">` (passthrough del atributo)
 - [ ] `CanDeactivate` / `CanMatch` (hooks `onExit`/`onBefore` — pendiente)
 - [x] `Resolve` / `resolve` (solo `ResolveFn`; tokens `Type<T>` fuera del MVP)
 - [x] `Route.data`
 - [x] **Tier 2**: `redirectTo` (resuelve a state name: path hermano + `/absoluto`, sin `../`; `pathMatch` se ignora — UI-Router matchea la URL entera ≈ `'full'`; gana sobre `component`) · `path: '**'` (state con url greedy `/{ngjsCatchAll:.+}` — `.+` para no pisar la raíz `/`; último `**` gana) · `Route.title` string y `ResolveFn<string>` → `document.title` (`.run($transitions.onSuccess)`, side-map `Map<stateName, title>`, sin tocar `data`) + `ActivatedRoute.title: Observable<string>` (por eso `ActivatedRoute` se registra como `factory` que cierra sobre el map) · **`withHashLocation()`** — mismo nombre/semántica que `@angular/router`: **default = html5** (`$locationProvider.html5Mode({ enabled, requireBase: false })`), el feature → hashbang. Tests: `test/router/{router-guard-inject,router-name-collision,router-tier2}.test.ts`.
 - [x] `loadComponent` → `lazyLoad` que hace `import()`, registra el `@Component` vía `ConfigProviderFactory.current` y reemplaza el estado (mismo nombre) por el registry en vivo. `loadChildren` pendiente.
 
-- [x] **Tier 3**: `ActivatedRoute` con `queryParams`/`queryParamMap` (de `$location.search()`), `fragment` (`$location.hash()`), refrescados en `onSuccess` + `$locationChangeSuccess`; `data` mergea los valores de `resolve` desde `transition.injector()` (`resolveKeys` del translator); `snapshot` con `queryParams`/`fragment` (opcionales — ausentes en el snapshot de guards/resolvers) · `routerLink`/`routerLinkActive` **integrados con UI-Router**: `$urlService.match(url)` → `{ stateName, params }`, `href` = `$state.href`, click → `$state.go`, active → `$state.includes`; en runtime `router-link` es expresión AngularJS (`['/about', id]` / `'/about'`) · `Router.events: Observable<RouterEvent>` (`NavigationStart`/`End`/`Cancel`/`Error` desde `$transitions`; `id` = `transition.$id`; cancel/error por `RejectType`). Tests: `test/router/router-tier3-{activated,link}.test.ts`.
-- [x] **Tier 4** (parcial): `CanActivateChild` (glob `$transitions.onBefore({ to: "${name}.**" })` + skip-self; agarra descendientes lazy porque el glob se wirea en `forRoot`) · `routerLinkActive` con `router-link-active-exact` (attr pelado → `$state.is` en vez de `$state.includes`). Tests: `test/router/router-tier4.test.ts`.
-- [ ] `loadChildren: () => import(...)` — **diferido** (usa `import()` nativo + registro runtime, igual que `loadComponent`; no necesita CLI, pero es complejo y de bajo payoff para "estable"). Se cierra después.
+- [x] **Tier 3**: `ActivatedRoute` con `queryParams`/`queryParamMap` (de `$location.search()`), `fragment` (`$location.hash()`), refrescados en `onSuccess` + `$locationChangeSuccess`; `data` mergea los valores de `resolve` desde `transition.injector()` (`resolveKeys` del translator); `snapshot` con `queryParams`/`fragment` (opcionales — ausentes en el snapshot de guards/resolvers) · `Router.events: Observable<RouterEvent>` (`NavigationStart`/`End`/`Cancel`/`Error` desde `$transitions`; `id` = `transition.$id`; cancel/error por `RejectType`). Tests: `test/router/router-tier3-activated.test.ts`. _(`routerLink`/`routerLinkActive` estuvieron acá integrados con UI-Router; se quitaron del runtime — se usa `ui-sref`.)_
+- [x] **Tier 4** (parcial): `CanActivateChild` (glob `$transitions.onBefore({ to: "${name}.**" })` + skip-self; agarra descendientes lazy porque el glob se wirea en `forRoot`). Tests: `test/router/router-tier4.test.ts`. _(`routerLinkActive` + `router-link-active-exact` estuvieron acá; se quitaron del runtime — se usa `ui-sref-active`.)_
+- [ ] `loadChildren: () => import(...)` — **diferido** (usa `import()` nativo + registro runtime, igual que `loadComponent`; es complejo y de bajo payoff para "estable"). Se cierra después.
 
 **Brecha documentada:** árbol de `ActivatedRoute` (`.parent`/`.children`/params-por-nivel), `CanDeactivate`, `CanMatch`, redirect con `UrlTree` desde guard, resolvers `Type<T>`, `Route.providers`, navegación relativa (`relativeTo`).
 
-## Etapa 17 — Animations ⬜
+## Etapa 17 — Animations ✅ (lo de core; la sintaxis de template `[@trigger]` es del CLI)
 
 **Cubre:** Animaciones.
-**Criterio de cierre:** `[@trigger]` anima entre 2 estados; `:enter` en un `*ngIf`.
+**Criterio de cierre:** `AnimationBuilder.build([...]).create(el).play()` corre `$animateCss` y resuelve `onDone`; `NoopAnimationsModule` apaga las animaciones y devuelve un player no-op. **✅ pasa** (`test/animations/*.test.ts`).
 
-- [ ] re-export DSL (`trigger`/`state`/`style`/`animate`/`transition`/`keyframes`)
-- [ ] directiva `[@trigger]`
-- [ ] runner de `$animateCss`
-- [ ] `(@t.start)` / `(@t.done)`
-- [ ] `:enter` / `:leave` / `:increment` / `:decrement`
-- [ ] `[@.disabled]`
-- [ ] `AnimationBuilder` / `AnimationPlayer`
-- [ ] `BrowserAnimationsModule` / `provideAnimations` / `NoopAnimationsModule`
+Core entrega la DSL de metadata (para `@Component({ animations: [...] })`) y la API
+imperativa (`AnimationBuilder`) sobre `$animateCss` de `ngAnimate`. La sintaxis de
+template (`[@trigger]`, `(@t.*)`, `:enter`/`:leave`, `[@.disabled]`) está fuera de
+alcance; core usa las clases `.ng-enter`/`.ng-leave` nativas de `ngAnimate`.
+
+- [x] DSL builders + re-export (`trigger`/`state`/`style`/`animate`/`transition`/`keyframes`/`group`/`sequence`/`query`/`stagger`/`animation`/`useAnimation`/`animateChild`) — `src/animations/dsl.ts`, funciones puras, forma de nodo idéntica a `@angular/animations` (`type` entero). Tests: `test/animations/dsl.test.ts`
+- [x] `AnimationBuilder` / `AnimationFactory` / `AnimationPlayer` sobre `$animateCss` — `src/animations/animation-builder.ts` (`BrowserAnimationBuilder` + `NoopAnimationPlayer`/`NoopAnimationBuilder`). Aplanado metadata → segmentos de `$animateCss` en `ɵflattenAnimationToSegments` / `ɵparseAnimationTimings`. Tests: `test/animations/animation-builder.test.ts`
+- [x] `BrowserAnimationsModule` / `provideAnimations()` / `NoopAnimationsModule` / `provideNoopAnimations()` — `src/runtime/animations/index.ts` (`angular.module` con dep `ngAnimate`, bindea `AnimationBuilder`; noop hace `$animate.enabled(false)`). Subpath `ngjs-core/runtime/animations`. Tests: `test/animations/runtime-animations.test.ts`
+
+**Brecha documentada** (`CONCEPTOS.md` "Animaciones"): `keyframes()` sin `@keyframes` generado (usa el último frame); `query`/`stagger`/`group`/`sequence` — la orquestación fina de varios runners de `$animateCss` se pierde; `pause()`/`setPosition()` no-op (`$animateCss` no da control de posición).
 
 ## Etapa 18 — i18n + a11y ⬜
 
@@ -264,16 +273,8 @@ Subpath propio: `ngjs-core/router`. `RouterModule.forRoot(routes)`/`forChild(rou
 - [ ] `angular-dynamic-locale` (`LOCALE_ID`/`$locale`)
 - [ ] incluir `ngAria`
 
-## Etapa 19 — Transform completo + codemod inverso + diagnóstico ⬜
-
-**Cubre:** CLI §3, §6, §7.
-**Criterio de cierre:** un componente ngjs se reescribe a Angular; se listan las brechas del fuente.
-
-- [ ] transform cubre `animations`
-- [ ] i18n (`i18n`/`$localize` → catálogo)
-- [ ] si se cierra la opción B: sintaxis de template
-- [ ] codemod ngjs → Angular
-- [ ] reporte de brechas
+_(No hay etapa 19. El transform completo, el codemod inverso ngjs → Angular y el
+reporte de brechas del fuente son del CLI `ng-js-cli` / `ng-js-vite`.)_
 
 ---
 

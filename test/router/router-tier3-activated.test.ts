@@ -15,7 +15,7 @@ class HomeT3 {}
 @Component({ selector: "t3a-item", template: "<h1>item</h1>" })
 class ItemT3 {}
 
-@Component({ selector: "t3a-root", controllerAs: "$", template: "<router-outlet></router-outlet>" })
+@Component({ selector: "t3a-root", controllerAs: "$", template: "<ui-view></ui-view>" })
 class RootT3 {}
 
 const routes: Routes = [
