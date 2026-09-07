@@ -27,7 +27,23 @@ export type ResolveData = Record<string, ResolveFn<unknown> | Type<unknown>>;
 
 export type CanActivateFn = (route: ActivatedRouteSnapshot) => boolean | Promise<boolean>;
 export type CanActivateChildFn = CanActivateFn;
-export type CanDeactivateFn<T> = (component: T) => boolean | Promise<boolean>;
+
+/**
+ * Snapshot del estado del router (Angular: `RouterStateSnapshot`). Acá es **plano**:
+ * `root` es el snapshot de la ruta activa más profunda, sin `.children`/`.firstChild`
+ * (misma brecha que el árbol de `ActivatedRoute`, ver `activated-route.ts`).
+ */
+export interface RouterStateSnapshot {
+  readonly url: string;
+  readonly root: ActivatedRouteSnapshot;
+}
+
+export type CanDeactivateFn<T> = (
+  component: T | null,
+  currentRoute: ActivatedRouteSnapshot,
+  currentState: RouterStateSnapshot,
+  nextState: RouterStateSnapshot,
+) => boolean | Promise<boolean>;
 export type CanMatchFn = (route: Route) => boolean | Promise<boolean>;
 
 /**

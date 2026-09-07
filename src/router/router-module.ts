@@ -4,7 +4,15 @@ import angular, { type ILocationProvider, type ILocationService, type IRootScope
 import { ActivatedRoute, ActivatedRouteImpl } from "@/router/activated-route.ts";
 import type { ResolveFn, Routes } from "@/router/route.ts";
 import { Router, RouterImpl } from "@/router/router.ts";
-import { type GuardBinding, routesToStates, wireGuardHook } from "@/router/state-translator.ts";
+import {
+  type DeactivateBinding,
+  type GuardBinding,
+  type MatchBinding,
+  routesToStates,
+  wireDeactivateHook,
+  wireGuardHook,
+  wireMatchHook,
+} from "@/router/state-translator.ts";
 
 let moduleSeq = 0;
 
@@ -38,6 +46,22 @@ export function withHashLocation(): RouterFeature {
 function wireGuards(guards: GuardBinding[]) {
   const run = ($transitions: TransitionService) => {
     for (const guard of guards) wireGuardHook($transitions, guard);
+  };
+  run.$inject = ["$transitions"];
+  return run;
+}
+
+function wireDeactivateGuards(bindings: DeactivateBinding[]) {
+  const run = ($transitions: TransitionService) => {
+    for (const binding of bindings) wireDeactivateHook($transitions, binding);
+  };
+  run.$inject = ["$transitions"];
+  return run;
+}
+
+function wireMatchGuards(bindings: MatchBinding[]) {
+  const run = ($transitions: TransitionService) => {
+    for (const binding of bindings) wireMatchHook($transitions, binding);
   };
   run.$inject = ["$transitions"];
   return run;
@@ -78,7 +102,7 @@ function hashRequested(features: RouterFeature[]): boolean {
 export const RouterModule = {
   forRoot(routes: Routes, ...features: RouterFeature[]): angular.IModule {
     const translated = routesToStates(routes);
-    const { states, guards, titles, resolveKeys } = translated;
+    const { states, guards, deactivateGuards, matchGuards, titles, resolveKeys } = translated;
 
     const root = states.find((state) => !state.name?.includes("."));
     // El root (con componente o con `redirectTo`) matchea la carga inicial en `/`.
@@ -106,6 +130,8 @@ export const RouterModule = {
 
     mod.config(config);
     if (guards.length) mod.run(wireGuards(guards));
+    if (deactivateGuards.length) mod.run(wireDeactivateGuards(deactivateGuards));
+    if (matchGuards.length) mod.run(wireMatchGuards(matchGuards));
     // Siempre — `loadChildren` puede agregar títulos al `Map` después (lo lee en cada transición).
     mod.run(wireTitles(titles));
     mod.service(Router.$name, RouterImpl);

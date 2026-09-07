@@ -5,12 +5,16 @@ import { ConfigProviderFactory } from "@/core/platform/config-providers.ts";
 import type {
   ActivatedRouteSnapshot,
   CanActivateFn,
+  CanDeactivateFn,
+  CanMatchFn,
   Data,
   ResolveData,
   ResolveFn,
   Route,
   Routes,
+  RouterStateSnapshot,
 } from "@/router/route.ts";
+import { resolveRouteComponentInstance } from "@/router/route-component-registry.ts";
 
 export interface GuardBinding {
   stateName: string;
@@ -20,9 +24,30 @@ export interface GuardBinding {
   forChildren?: boolean;
 }
 
+export interface DeactivateBinding {
+  stateName: string;
+  /** camelCase del route component — para resolver su instancia en el `onExit`. */
+  componentName?: string;
+  /** `data` estática del state que sale — puebla `currentRoute.data`. */
+  data: Data;
+  guards: CanDeactivateFn<unknown>[];
+}
+
+export interface MatchBinding {
+  stateName: string;
+  /** Criterio `to` del hook: el state name, o `${name}.**` si es una ruta `loadChildren`. */
+  criteria: string;
+  route: Route;
+  guards: CanMatchFn[];
+}
+
 export interface TranslatedRoutes {
   states: Ng1StateDeclaration[];
   guards: GuardBinding[];
+  /** `canDeactivate` por state — se corre en `onExit` (Angular: recibe la instancia del componente). */
+  deactivateGuards: DeactivateBinding[];
+  /** `canMatch` por state — se corre en `onBefore` (no hay fallthrough en UI-Router: aborta o redirige al `**`). */
+  matchGuards: MatchBinding[];
   /** `title` por state name — el `.run` de `RouterModule` setea `document.title`. */
   titles: Map<string, string | ResolveFn<string>>;
   /** Keys de `resolve` por state name — `ActivatedRoute.data` las mergea desde `transition.injector()`. */
@@ -31,8 +56,8 @@ export interface TranslatedRoutes {
   wildcardState?: string;
   /** Full path desde root → state name (para resolver `redirectTo`). */
   pathToName: Map<string, string>;
-  /** `{ nombre camelCase → clase @Component }` — lo usa `loadChildren` para registrar los componentes del chunk lazy. */
-  components: { name: string; cls: Function }[];
+  /** Componentes de ruta (`{ camelCase, clase, state }`) — `loadChildren` los registra en el chunk lazy; `canDeactivate` los trackea. */
+  components: { name: string; cls: Function; stateName: string }[];
 }
 
 const WILDCARD = "**";
@@ -158,9 +183,19 @@ interface GuardTransition {
   params(): Record<string, string>;
 }
 
+interface DeactivateTransition {
+  params(which: "to" | "from"): Record<string, string>;
+  to(): { name: string; data?: Data };
+  from(): { name: string; data?: Data };
+  router: { stateService: { href(name: string, params?: Record<string, string>): string | null } };
+}
+
 // Compatible estructuralmente con `TransitionService` de UI-Router (solo lo que se usa).
-// biome-ignore lint/suspicious/noExplicitAny: la firma real de `onBefore` es más amplia
-type TransitionsLike = { onBefore(criteria: any, callback: (transition: any) => any): unknown };
+// biome-ignore lint/suspicious/noExplicitAny: la firma real de estos hooks es más amplia
+type TransitionsLike = {
+  onBefore(criteria: any, callback: (transition: any) => any): unknown;
+  onExit(criteria: any, callback: (transition: any) => any): unknown;
+};
 
 /**
  * Registra un guard (`canActivate` / `canActivateChild`) como hook `onBefore`.
@@ -177,6 +212,52 @@ export function wireGuardHook($transitions: TransitionsLike, guard: GuardBinding
     } as ActivatedRouteSnapshot;
     for (const canActivate of guard.canActivate) {
       if ((await canActivate(snapshot)) === false) return false;
+    }
+    return true;
+  });
+}
+
+/** `{ url, root }` plano desde el `transition` (Angular: `RouterStateSnapshot`). */
+function buildStateSnapshot(transition: DeactivateTransition, which: "to" | "from"): RouterStateSnapshot {
+  const decl = which === "to" ? transition.to() : transition.from();
+  const params = transition.params(which);
+  const url = (transition.router.stateService.href(decl.name, params) ?? "").replace(/^#/, "");
+  return { url, root: { params, data: (decl.data ?? {}) as Data } };
+}
+
+/**
+ * `canDeactivate` → hook `onExit` sobre el estado: dispara exactamente cuando el
+ * componente va a destruirse (salga por navegación directa o al dejar la rama).
+ * Firma de Angular: `(component, currentRoute, currentState, nextState)`.
+ * `component` sale de `RouteComponentRegistry` (`null` si no resuelve);
+ * `currentRoute` es `{ params(from), data }`; `currentState`/`nextState` son
+ * `{ url, root }` planos (sin árbol `.children` — brecha). `false` aborta.
+ */
+export function wireDeactivateHook($transitions: TransitionsLike, binding: DeactivateBinding): void {
+  $transitions.onExit({ exiting: binding.stateName }, async (transition: DeactivateTransition) => {
+    const instance = binding.componentName
+      ? (resolveRouteComponentInstance(binding.componentName) ?? null)
+      : null;
+    const currentRoute: ActivatedRouteSnapshot = { params: transition.params("from"), data: binding.data };
+    const currentState = buildStateSnapshot(transition, "from");
+    const nextState = buildStateSnapshot(transition, "to");
+    for (const canDeactivate of binding.guards) {
+      if ((await canDeactivate(instance, currentRoute, currentState, nextState)) === false) return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * `canMatch` → hook `onBefore` (corre antes de resolver `lazyLoad`, así una ruta
+ * `loadChildren` no baja el chunk si no matchea). UI-Router no tiene fallthrough:
+ * si algún guard da `false`, se **aborta** la transición (la app se queda donde
+ * estaba). "Probá la siguiente ruta / caé al `**`" no se replica — brecha.
+ */
+export function wireMatchHook($transitions: TransitionsLike, binding: MatchBinding): void {
+  $transitions.onBefore({ to: binding.criteria }, async () => {
+    for (const canMatch of binding.guards) {
+      if ((await canMatch(binding.route)) === false) return false;
     }
     return true;
   });
@@ -241,10 +322,10 @@ function lazyLoadChildrenFor(
     for (const [key, value] of sub.titles) out.titles.set(key, value);
     for (const [key, value] of sub.resolveKeys) out.resolveKeys.set(key, value);
 
-    if (sub.guards.length) {
-      const $transitions = transition.injector().get("$transitions") as TransitionsLike;
-      for (const guard of sub.guards) wireGuardHook($transitions, guard);
-    }
+    const $transitions = transition.injector().get("$transitions") as TransitionsLike;
+    for (const guard of sub.guards) wireGuardHook($transitions, guard);
+    for (const binding of sub.deactivateGuards) wireDeactivateHook($transitions, binding);
+    for (const binding of sub.matchGuards) wireMatchHook($transitions, binding);
 
     // Reemplazar el future state por el `stateName` real (pass-through, sin componente
     // propio — los hijos renderizan en el `<ui-view>` ancestro, como en Angular).
@@ -300,7 +381,7 @@ function walk(routes: Routes, ctx: WalkCtx): void {
       const comp = componentName(route);
       if (comp) {
         state.component = comp;
-        ctx.out.components.push({ name: comp, cls: route.component as Function });
+        ctx.out.components.push({ name: comp, cls: route.component as Function, stateName: name });
       }
       const resolve = translateResolve(route.resolve, data);
       if (resolve) state.resolve = resolve as never;
@@ -325,6 +406,22 @@ function walk(routes: Routes, ctx: WalkCtx): void {
     if (route.canActivateChild?.length) {
       ctx.out.guards.push({ stateName: name, canActivate: route.canActivateChild, data, forChildren: true });
     }
+    if (route.canDeactivate?.length) {
+      ctx.out.deactivateGuards.push({
+        stateName: name,
+        componentName: route.component ? componentName(route) : undefined,
+        data,
+        guards: route.canDeactivate,
+      });
+    }
+    if (route.canMatch?.length) {
+      ctx.out.matchGuards.push({
+        stateName: name,
+        criteria: route.loadChildren ? `${name}.**` : name,
+        route,
+        guards: route.canMatch,
+      });
+    }
 
     if (route.children?.length) {
       walk(route.children, { ...ctx, parentName: name, parentPath: fullPath, redirects: ctx.redirects });
@@ -337,6 +434,8 @@ function translate(routes: Routes, parentName: string | undefined, parentPath: s
   const out: TranslatedRoutes = {
     states: [],
     guards: [],
+    deactivateGuards: [],
+    matchGuards: [],
     titles: new Map(),
     resolveKeys: new Map(),
     pathToName: new Map(),
