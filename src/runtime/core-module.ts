@@ -16,6 +16,7 @@ import { decorateControllerHostBindings } from "@/runtime/bridges/host-binding-b
 import { decorateControllerHostListeners } from "@/runtime/bridges/host-listener-bridge.ts";
 import { decorateControllerLifecycle } from "@/runtime/bridges/lifecycle-bridge.ts";
 import { decorateNgDisabledDirective } from "@/runtime/bridges/ng-disabled-bridge.ts";
+import { decorateControllerOutputEmitters } from "@/runtime/bridges/output-emitter-bridge.ts";
 import { decorateControllerViewChildQueries, decorateNgRefDirective } from "@/runtime/bridges/ng-ref-bridge.ts";
 import { decorateControllerScopedInjector } from "@/runtime/bridges/scoped-injector-bridge.ts";
 import { decorateControllerViewContainerRef } from "@/runtime/bridges/view-container-ref-bridge.ts";
@@ -71,6 +72,7 @@ export function installCoreModule(): angular.IModule {
     .decorator("$controller", decorateControllerDestroyRef)
     .decorator("$controller", decorateControllerHostListeners)
     .decorator("$controller", decorateControllerHostBindings)
+    .decorator("$controller", decorateControllerOutputEmitters)
     .decorator("$controller", decorateControllerLifecycle)
     .decorator("ngDisabledDirective", decorateNgDisabledDirective)
     .decorator("ngRefDirective", decorateNgRefDirective)
