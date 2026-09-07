@@ -3,6 +3,7 @@ import type { StateProvider, StateService, Transition, TransitionService } from 
 import angular, { type ILocationProvider, type ILocationService, type IRootScopeService } from "angular";
 import { HashLocationStrategy, LocationStrategy, PathLocationStrategy } from "@/platform-browser/location/index.ts";
 import { Title } from "@/platform-browser/title.ts";
+import { ViewportScroller } from "@/platform-browser/viewport-scroller.ts";
 import { platformBrowserModule } from "@/runtime/platform-browser/index.ts";
 import { ActivatedRoute, ActivatedRouteImpl } from "@/router/activated-route.ts";
 import type { Data, ResolveFn, Routes } from "@/router/route.ts";
@@ -32,8 +33,21 @@ interface UrlRouterProvider {
 
 // --- Features (estilo `provideRouter(routes, ...features)` de Angular) -------
 
+/** Opciones de `withInMemoryScrolling()` — misma forma que `@angular/router`. */
+export interface InMemoryScrollingOptions {
+  /**
+   * `'disabled'` (default) · `'top'` (scroll a `[0,0]` en cada nav) ·
+   * `'enabled'` (restaurar en back/forward). **`'enabled'` no está soportado
+   * sobre UI-Router** — se degrada a `'top'`. Ver brecha.
+   */
+  scrollPositionRestoration?: "disabled" | "enabled" | "top";
+  /** `'enabled'` → tras navegar, scroll al elemento del `#fragment`. */
+  anchorScrolling?: "disabled" | "enabled";
+}
+
 interface RouterFeature {
-  readonly ɵkind: "hash-location";
+  readonly ɵkind: "hash-location" | "in-memory-scrolling";
+  readonly options?: InMemoryScrollingOptions;
 }
 
 /**
@@ -46,6 +60,17 @@ interface RouterFeature {
  */
 export function withHashLocation(): RouterFeature {
   return { ɵkind: "hash-location" };
+}
+
+/**
+ * Feature para `RouterModule.forRoot(routes, withInMemoryScrolling(opts))` —
+ * mismo nombre que `@angular/router`. Soporta `anchorScrolling: 'enabled'`
+ * (scroll al `#fragment`) y `scrollPositionRestoration: 'top'`. **Brecha:**
+ * `scrollPositionRestoration: 'enabled'` (restaurar la posición en back/forward)
+ * NO se implementa sobre UI-Router — se comporta como `'top'`.
+ */
+export function withInMemoryScrolling(options: InMemoryScrollingOptions = {}): RouterFeature {
+  return { ɵkind: "in-memory-scrolling", options };
 }
 
 // --- Wiring interno --------------------------------------------------------
@@ -124,6 +149,38 @@ function hashRequested(features: RouterFeature[]): boolean {
 }
 
 /**
+ * `withInMemoryScrolling()` → `.run` sobre `$transitions.onSuccess`. Difiere con
+ * `$timeout(0)` porque el `<ui-view>` nuevo se linkea recién después del hook.
+ * `anchorScrolling: 'enabled'` → `scrollToAnchor(#fragment)`; si no,
+ * `scrollPositionRestoration` `'top'`/`'enabled'` → `scrollToPosition([0,0])`.
+ * (`'enabled'` = restaurar en back/forward NO está — se comporta como `'top'`.)
+ */
+function wireRouterScroller(options: InMemoryScrollingOptions) {
+  const restoration = options.scrollPositionRestoration ?? "disabled";
+  const anchorScrolling = options.anchorScrolling ?? "disabled";
+
+  const run = (
+    viewportScroller: ViewportScroller,
+    $transitions: TransitionService,
+    $location: ILocationService,
+    $timeout: angular.ITimeoutService,
+  ) => {
+    if (restoration !== "disabled") viewportScroller.setHistoryScrollRestoration("manual");
+
+    $transitions.onSuccess({}, () => {
+      const anchor = anchorScrolling === "enabled" ? $location.hash() || null : null;
+      const toTop = restoration === "top" || restoration === "enabled";
+      $timeout(() => {
+        if (anchor) viewportScroller.scrollToAnchor(anchor);
+        else if (toTop) viewportScroller.scrollToPosition([0, 0]);
+      }, 0);
+    });
+  };
+  run.$inject = [ViewportScroller.$name, "$transitions", "$location", "$timeout"];
+  return run;
+}
+
+/**
  * `RouterModule.forRoot(routes, ...features)` / `forChild(routes)` — devuelven un
  * `angular.IModule` (que `@NgModule({ imports: [...] })` acepta como tal). Traduce
  * las `Routes` (path-based, API de Angular) al árbol de estados con nombre de UI-Router.
@@ -171,6 +228,10 @@ export const RouterModule = {
     if (matchGuards.length) mod.run(wireMatchGuards(matchGuards));
     // Siempre — `loadChildren` puede agregar títulos al `Map` después (lo lee en cada transición).
     mod.run(wireTitles(titles, resolveKeys));
+
+    const scrollFeature = features.find((f) => f.ɵkind === "in-memory-scrolling");
+    if (scrollFeature) mod.run(wireRouterScroller(scrollFeature.options ?? {}));
+
     mod.service(Router.$name, RouterImpl);
 
     const activatedRouteFactory = (

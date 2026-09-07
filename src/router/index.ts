@@ -27,5 +27,10 @@ export type {
   Routes,
 } from "@/router/route.ts";
 export { type NavigationExtras, Router } from "@/router/router.ts";
-export { RouterModule, withHashLocation } from "@/router/router-module.ts";
+export {
+  type InMemoryScrollingOptions,
+  RouterModule,
+  withHashLocation,
+  withInMemoryScrolling,
+} from "@/router/router-module.ts";
 export { DefaultTitleStrategy, TitleStrategy } from "@/router/title-strategy.ts";

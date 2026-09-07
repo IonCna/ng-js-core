@@ -552,7 +552,8 @@ Sustrato: `@uirouter/angularjs` (no `ngRoute`).
 | `TitleStrategy` / `Title` | `Title` = getter/setter sobre `DOCUMENT` (`platform-browser`); `TitleStrategy` básico en `router/` — el router resuelve el título en `$transitions.onSuccess`, el strategy lo aplica (`updateTitle(title)`). Custom vía `{ provide: TitleStrategy, useClass }` | shim | sin snapshot / `buildTitle` (ver brecha) |
 | `loadChildren: () => import(...)` | `lazyLoad` del estado + wrapper que adapta el `import()` nativo al contrato `{ states }` de UI-Router | shim | ver «UI-Router `lazyLoad` y ESM» |
 | `loadComponent: () => import(...)` | ídem + registro del componente vía providers capturados | shim | |
-| eventos del router (`NavigationStart`…) | hooks de transición | brecha | |
+| eventos del router (`NavigationStart`…) | hooks de transición | brecha | sin evento `Scroll` |
+| `withInMemoryScrolling({ anchorScrolling, scrollPositionRestoration })` | `.run($transitions.onSuccess)` + `$timeout(0)` → `ViewportScroller` | shim | `anchorScrolling` + `'top'` OK; `'enabled'` (restaurar en back/forward) es brecha — UI-Router no da el trigger de nav |
 
 ## Animaciones
 
