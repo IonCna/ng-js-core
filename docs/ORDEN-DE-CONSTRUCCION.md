@@ -303,9 +303,47 @@ reporte de brechas del fuente son del CLI `ng-js-cli` / `ng-js-vite`.)_
 
 ---
 
+## Etapa 20 — `Renderer2` ⬜
+
+**Cubre:** `Renderer2` / `RendererFactory2` — la abstracción de `@angular/core` sobre la manipulación del DOM. Desbloquea portar código Angular que **inyecta `Renderer2`** en vez de tocar el DOM directo (hoy figuraba como brecha "usar `angular.element` / DOM directo", que sirve para templates a mano pero rompe esos ports).
+**Criterio de cierre:** un componente que inyecta `Renderer2` y hace `createElement`/`appendChild`/`setAttribute`/`addClass`/`setStyle`/`listen` sobre su host corre igual que en Angular; `listen` devuelve el unlisten y su callback dispara el `$digest`.
+
+- [ ] `Renderer2` (abstract, `src/core/render/renderer.ts` o `platform-browser/`) + `RendererStyleFlags2` enum + `RendererFactory2` (abstract).
+- [ ] `DefaultDomRenderer2` — **port de `@angular/platform-browser`** (`dom_renderer.ts`, ~150 líneas), wrapper fino sobre `Node`/`document`:
+  - `createElement`/`createElementNS` · `createText` · `createComment`
+  - `appendChild` · `insertBefore` · `removeChild` · `parentNode` · `nextSibling`
+  - `setAttribute`/`removeAttribute` (+ namespace) · `addClass`/`removeClass` (`classList`)
+  - `setStyle`/`removeStyle` (`el.style.setProperty` + flag `!important` / `DashCase`)
+  - `setProperty` (`el[name] = value`) · `setValue` (`node.nodeValue`)
+  - `listen(target, ev, cb)` → `addEventListener` → devuelve `() => removeEventListener` (zone.js ya parchea `addEventListener` → el `$digest` sale por el bridge que ya existe; **confirmar con probe** o envolver en `NgZone.run`)
+  - `selectRootElement(sel, preserveContent?)` → `querySelector` (+ vaciar contenido si no `preserveContent`)
+  - `destroy` no-op · `data` = `{}`
+- [ ] `RendererFactory2.createRenderer(element, type)` → devuelve un `DefaultDomRenderer2` compartido. `.service` en `runtime` (o `runtime/platform-browser`).
+- [ ] Test: `createElement`/`appendChild`/`setAttribute`/`addClass`/`setStyle`/`setProperty` sobre un elemento; `listen` + unlisten; `selectRootElement`.
+
+**Brecha:** `ViewEncapsulation.Emulated` (el default de Angular) — Angular scopea los estilos del componente agregando atributos `_nghost-*`/`_ngcontent-*` y reescribiendo selectores. Eso es del CLI (procesa los `styles` del `@Component`), no de `Renderer2`. Acá el renderer se comporta siempre como `ViewEncapsulation.None` (sin scoping). `RendererType2` (`id`/`encapsulation`/`styles`) se acepta pero se ignora.
+
+**Esfuerzo:** bajo (~1-2 archivos, medio día con tests). Puede ir antes o después de Forms.
+
+### Impacto en lo que ya está
+
+**No obliga a cambiar nada.** `Renderer2` es puramente aditivo — un servicio nuevo + un abstract nuevo. Todo lo que hoy toca el DOM directo sigue funcionando **idéntico**:
+
+- `host-listener-bridge.ts` (`nativeElement.addEventListener`) y `host-binding-bridge.ts` (`$scope.$watch` + attr/class/style/prop directo) — Angular rutea los host bindings/listeners **a través** del renderer; acá pueden quedar como están. **Opcional**: migrarlos a `renderer.listen`/`renderer.setAttribute` para consistencia — cero diferencia de comportamiento, y sumaría la dependencia de `Renderer2` disponible en el bridge.
+- Directivas que manipulan DOM (`NgDisabled`, `ng-content`/`ng-container`, `cdkTrapFocus` & cía, animaciones) — igual: podrían usarlo, no lo necesitan.
+- `createComponent` / `ViewContainerRef` / `EmbeddedViewRef` — crean/insertan DOM vía `$compile`/`$transclude`; Angular lo hace vía renderer. Sin cambio forzado.
+- `ElementRef` — complementario: `Renderer2` opera sobre `elementRef.nativeElement`. Sin cambio.
+
+### Divergencias con el rol que tiene en Angular (a documentar)
+
+- **`RendererFactory2` no tiene un pipeline de render donde engancharse.** En Angular, la instanciación de cada componente llama `rendererFactory.createRenderer(host, rendererType)`. Acá los componentes los compila `$compile`, no hay pipeline propio de ngjs → `RendererFactory2` es un servicio suelto "dame un renderer" que siempre devuelve el `DefaultDomRenderer2` compartido. `RendererType2` (`encapsulation`/`styles`/`id`) se acepta y se ignora.
+- **Sin `AnimationRenderer`.** Angular envuelve el renderer con un decorator que intercepta `setProperty`/`listen` para `[@trigger]`/`(@trigger.done)`. Acá las animaciones van por `$animateCss` directo y `[@trigger]` es del CLI — `Renderer2` y animaciones no se integran.
+
+---
+
 ## Brechas — no se implementan, se documentan/reportan
 
-`hostDirectives` (parcial), `Renderer2`, `AfterViewChecked`/`AfterContentChecked`
+`hostDirectives` (parcial), `AfterViewChecked`/`AfterContentChecked`
 (watcher ad-hoc), `FocusMonitor`, ICU plurals (parcial), modelo estado-vs-path del
 router, re-uso de componente por param.
 

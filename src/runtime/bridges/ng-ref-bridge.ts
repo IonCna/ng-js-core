@@ -13,7 +13,7 @@ import { createDecoratedViewChildrenQueries, ViewChildrenQuery } from "@/core/qu
 import { ViewQueryRegistry } from "@/core/queries/view-query-registry.ts";
 import { ElementRefImpl } from "@/core/refs/element-ref.ts";
 import type { TemplateRef } from "@/core/refs/template-ref.ts";
-import { chainInstanceMethod, decorateControllerWith } from "@/runtime/bridges/shared.ts";
+import { decorateControllerWith, prependInstanceMethod } from "@/runtime/bridges/shared.ts";
 
 const controllerNodes = new WeakMap<object, Node>();
 
@@ -42,11 +42,25 @@ export function decorateControllerViewChildQueries($delegate: angular.IControlle
 
       if ($scope) {
         registerScopeQueryRegistry($scope, registry);
+        // Re-resolver (vía `$evalAsync`, coalescido dentro del digest) cuando el
+        // contenido proyectado cambia después del primer `resolve()` — así el
+        // `QueryList` de `@ContentChildren` emite en `.changes`.
+        let pending = false;
+        registry.onDynamicChange = () => {
+          if (pending) return;
+          pending = true;
+          $scope.$evalAsync(() => {
+            pending = false;
+            registry.resolve();
+          });
+        };
         publishToOwners(instance, $scope);
         $scope.$on("$destroy", () => registry.destroy());
       }
 
-      chainInstanceMethod(instance, "$postLink", () => registry.resolve());
+      // Antes del `$postLink` del autor: las queries leídas ahí (incluidas las
+      // `{ static: true }`) tienen que estar resueltas, como en Angular.
+      prependInstanceMethod(instance, "$postLink", () => registry.resolve());
     },
   });
 }
@@ -150,12 +164,22 @@ function publishToOwners(instance: object, $scope: angular.IScope): void {
   if (tokens.length === 0) return;
   const node = controllerNodes.get(instance);
 
+  const published: ViewQueryRegistry[] = [];
   for (const registry of getAncestorQueryRegistries($scope)) {
     registry.registerCandidate(tokens, instance, node);
+    published.push(registry);
   }
-
   for (const owner of getContentQueryOwners($scope)) {
     owner.registerContentCandidate(tokens, instance, node);
+    published.push(owner);
+  }
+
+  // Cuando este controller proyectado se destruye (`ng-if`/`ng-repeat` lo saca),
+  // hay que quitar su candidato de los registries donde lo publicó y re-resolver.
+  if (published.length > 0) {
+    $scope.$on("$destroy", () => {
+      for (const registry of published) registry.removeCandidate(instance);
+    });
   }
 }
 

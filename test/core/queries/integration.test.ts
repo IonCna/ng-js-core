@@ -135,7 +135,7 @@ describe("etapa 7 — integración: viewChild/viewChildren mezclados con todo lo
     expect(parentEl.classList.contains("ready")).toBe(true);
   });
 
-  it("orden de decorators invertido (lifecycle antes que queries): no explota, solo cambia si ngAfterViewInit ve la query ya resuelta", () => {
+  it("orden de decorators invertido (lifecycle antes que queries): la query igual está resuelta al entrar a ngAfterViewInit", () => {
     class Child {}
     class Parent {
       @ViewChild(Child) hijo?: Child;
@@ -164,12 +164,12 @@ describe("etapa 7 — integración: viewChild/viewChildren mezclados con todo lo
     const parentCtrl = angular.element(host.querySelector("parent") as Element).controller("parent") as Parent;
     const childCtrl = angular.element(host.querySelector("child") as Element).controller("child") as Child;
 
-    // la query SÍ terminó resolviendo (ambos $postLink corrieron, nomás que en
-    // el orden "al revés" del que arma la resolución del viewChild ANTES)
     expect(parentCtrl.hijo).toBe(childCtrl);
-    // pero ngAfterViewInit corrió ANTES de que la query se resolviera (queries
-    // quedó afuera/última en la cadena), así que en ese momento vio undefined
-    expect(parentCtrl.sawChildAtAfterViewInit).toBeUndefined();
+    // `registry.resolve()` se prepende al `$postLink`, así que corre antes del
+    // `$postLink` del autor Y antes del `ngAfterViewInit` del lifecycle-bridge,
+    // sin importar el orden en que se registraron los decorators (parity Angular:
+    // las queries están listas al entrar a ngAfterViewInit/ngAfterContentInit).
+    expect(parentCtrl.sawChildAtAfterViewInit).toBe(childCtrl);
   });
 
   it("dos padres hermanos con viewChildren no se cruzan entre sí", () => {

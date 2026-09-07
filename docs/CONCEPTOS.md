@@ -293,7 +293,7 @@ llega un `.js` a mano por la vía `static` / funcional.
 | `afterNextRender()` / `afterRender()` | `$scope.$$postDigest()` | shim | corre al final del digest, sin fase browser-only |
 | `hostDirectives: [...]` | aplicar varias directivas al host en el registro | brecha parcial | sin re-exponer `inputs`/`outputs` |
 | `ElementRef` | `$element[0]` | shim | |
-| `Renderer2` | DOM directo / `angular.element` | brecha | sin abstracción de render |
+| `Renderer2` / `RendererFactory2` | port de `DefaultDomRenderer2` (wrapper sobre `Node`/`document`) | shim | planificado (Etapa 20); `ViewEncapsulation.Emulated` es del CLI |
 
 **Bridge de ciclo de vida.** La clase implementa las interfaces de Angular
 (`OnInit`, `OnChanges`, `OnDestroy`, `DoCheck`, …) con métodos `ngX`. El decorador

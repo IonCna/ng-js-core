@@ -94,3 +94,20 @@ export function chainInstanceMethod(instance: object, methodName: string, additi
     return result;
   };
 }
+
+/**
+ * Como `chainInstanceMethod` pero `addition` corre **antes** de lo que ya
+ * hubiera. Lo usa el bridge de queries: `registry.resolve()` tiene que correr
+ * antes del `$postLink` del autor para que las `@ViewChild`/`@ContentChild`
+ * (sobre todo `{ static: true }`) leídas ahí ya tengan valor — como en Angular,
+ * donde las queries están listas al entrar a `ngAfterViewInit`/`ngAfterContentInit`.
+ */
+export function prependInstanceMethod(instance: object, methodName: string, addition: () => void): void {
+  const target = instance as Record<string, ((...args: unknown[]) => unknown) | undefined>;
+  const previous = target[methodName];
+
+  target[methodName] = function (this: unknown, ...args: unknown[]) {
+    addition();
+    return previous?.apply(this, args);
+  };
+}
