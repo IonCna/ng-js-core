@@ -188,17 +188,19 @@ hace el motor de `src/runtime/` — ver `docs/CAPAS.md`.)_
 - [x] `HttpErrorResponse` (`src/http/http-response.ts`) — se emite como error del Observable, no como valor
 - [x] Cancelación real: unsubscribe() aborta el XHR de verdad, vía el mecanismo de `timeout` como Promise que ya soporta `$httpBackend` nativo (confirmado leyendo su fuente real, no asumido) — un timeout numérico se implementa arriba con el mismo mecanismo
 
-## Etapa 14 — platform-browser ⬜
+## Etapa 14 — platform-browser 🚧
 
 **Cubre:** Servicios de plataforma.
 **Criterio de cierre:** `[innerHTML]` sanitizado; `Location.go()` cambia la URL; `BreakpointObserver` emite al cruzar un breakpoint.
+
+Subpaths: `ngjs-core/platform-browser` (clases con forma Angular) y `ngjs-core/runtime/platform-browser` (`PlatformBrowserModule` / `platformBrowserModule()` / `providePlatformBrowser()` — `angular.module` opt-in, dep `ng.js.core`). Se construye pieza por pieza.
 
 - [ ] `DomSanitizer` (`$sce` + `$sanitize`)
 - [ ] `bypassSecurityTrust*`
 - [ ] `SafeHtml` / `SafeUrl` / `SafeResourceUrl`
 - [ ] `Title`
 - [ ] `Meta`
-- [ ] `DOCUMENT`
+- [x] `DOCUMENT` — `InjectionToken<Document>` (`src/platform-browser/dom-tokens.ts`); `runtime/platform-browser` lo provee como `.factory(["$document", ($document) => $document[0]])`. Test: `test/platform-browser/document-token.test.ts`.
 - [ ] `Location` / `LocationStrategy` / `PlatformLocation` (`$location`)
 - [ ] `ViewportScroller` (`$anchorScroll`)
 - [ ] `BreakpointObserver` / `Breakpoints` / `MediaMatcher` (sobre `matchMedia`)

@@ -112,6 +112,16 @@
       "import": "./dist/core/platform/index.js",
       "default": "./dist/core/platform/index.js"
     },
+    "./platform-browser": {
+      "types": "./dist/platform-browser/index.d.ts",
+      "import": "./dist/platform-browser/index.js",
+      "default": "./dist/platform-browser/index.js"
+    },
+    "./runtime/platform-browser": {
+      "types": "./dist/runtime/platform-browser/index.d.ts",
+      "import": "./dist/runtime/platform-browser/index.js",
+      "default": "./dist/runtime/platform-browser/index.js"
+    },
     "./rxjs-interop": {
       "types": "./dist/rxjs-interop/index.d.ts",
       "import": "./dist/rxjs-interop/index.js",

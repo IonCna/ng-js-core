@@ -17,5 +17,6 @@ export type { HttpErrorResponseInit, HttpEvent, HttpResponseInit } from "./http/
 export { HttpErrorResponse, HttpEventType, HttpResponse } from "./http/http-response.ts";
 export * from "./i18n/index.ts";
 export type { PipeTransform } from "./pipes/pipe-transform.ts";
+export * from "./platform-browser/index.ts";
 export * from "./router/index.ts";
 export * from "./rxjs-interop/index.ts";
