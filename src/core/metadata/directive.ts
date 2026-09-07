@@ -1,6 +1,8 @@
 import { applyConstructorInject } from "@/core/di/ctor-inject.ts";
+import { getInjectableId, setInjectableId } from "@/core/di/injectable-registry.ts";
 import { collectBindings, collectHost } from "@/core/metadata/collect-bindings.ts";
 import type { DirectiveDef, InputDef, OutputDef } from "@/core/metadata/def.ts";
+import { selectorToRegistrationName } from "@/core/metadata/selector-name.ts";
 
 export type StampedDirectiveDef = DirectiveDef & { inputs: InputDef[]; outputs: OutputDef[] };
 
@@ -24,6 +26,12 @@ export function directive(Clase: Function): { define(def: DirectiveDef): Functio
       const { inputs, outputs } = collectBindings(Clase);
       const host = collectHost(Clase);
       applyConstructorInject(Clase);
+      // `id` inyectable = selector en camelCase (sin corchetes de `[attr]`), la
+      // misma clave con que se registra la directiva. Deja `inject(MiDir)` desde
+      // un descendiente. Un `static $name` propio manda y no se pisa.
+      if (!getInjectableId(Clase) && !Object.hasOwn(Clase, "$name")) {
+        setInjectableId(Clase, selectorToRegistrationName(def.selector));
+      }
       return stampDirectiveDef(Clase, { ...def, inputs, outputs, host });
     },
   };

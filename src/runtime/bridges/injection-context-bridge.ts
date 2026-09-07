@@ -1,4 +1,5 @@
 import type angular from "angular";
+import type { InjectFlags } from "@/core/di/inject-flags.ts";
 import { type InjectionResolver, runInInjectionContext } from "@/core/di/injection-context.ts";
 import { ReflectInjection } from "@/core/di/reflect.ts";
 import { decorateControllerWith } from "@/runtime/bridges/shared.ts";
@@ -6,8 +7,7 @@ import { decorateControllerWith } from "@/runtime/bridges/shared.ts";
 const NODE_DATA_KEY = "$ngjsInjector";
 
 interface ElementNodeLike {
-  get(name: string, flags?: Record<string, unknown>): unknown;
-  has?(name: string): boolean;
+  get(name: string, flags?: InjectFlags): unknown;
 }
 interface JqLite {
   inheritedData(name: string): unknown;
@@ -33,21 +33,36 @@ export function decorateControllerInjectionContext(
       const node = $element?.inheritedData?.(NODE_DATA_KEY) as ElementNodeLike | undefined;
 
       const resolver: InjectionResolver = {
-        get(token, notFoundValue) {
-          const name = ReflectInjection.translate(token as never);
+        get(token, options: InjectFlags = {}) {
+          // Un token que no se puede nombrar (p.ej. una clase `@Component` sin
+          // provider) con `{ optional: true }` → `null`, como en Angular.
+          let name: string;
+          try {
+            name = ReflectInjection.translate(token as never);
+          } catch (error) {
+            if (options.optional) return null;
+            throw error;
+          }
 
-          if (locals && Object.hasOwn(locals, name)) return locals[name];
+          // `skipSelf` salta los locals de ESTE elemento (`ElementRef`, `$attr:*`, …).
+          if (!options.skipSelf && locals && Object.hasOwn(locals, name)) return locals[name];
 
+          // El nodo jerárquico ya honra `self`/`skipSelf`/`host`/`optional` y cae al `$injector`.
           if (node) {
             try {
-              const fromNode = node.get(name);
-              if (fromNode !== undefined) return fromNode;
-            } catch {
-              /* el nodo no lo tiene / no lo puede armar — seguir al app injector */
+              return node.get(name, options);
+            } catch (error) {
+              if (options.optional) return null;
+              throw error;
             }
           }
 
-          if (notFoundValue !== undefined && !$injector.has(name)) return notFoundValue;
+          // Sin nodo jerárquico: `self` = solo este elemento (ya miramos locals).
+          if (options.self) {
+            if (options.optional) return null;
+            throw new Error(`inject(): no se resolvió "${name}" con { self: true }`);
+          }
+          if (options.optional && !$injector.has(name)) return null;
           return $injector.get(name);
         },
       };

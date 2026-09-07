@@ -22,6 +22,12 @@ export class ElementInjectorNode {
   private readonly singles = new Map<string, SingleProvider>();
   private readonly multis = new Map<string, SingleProvider[]>();
   private readonly cache = new Map<string, unknown>();
+  /**
+   * Instancias vivas publicadas por las directivas/componentes de ESTE elemento
+   * (clave = selector en camelCase). No entran al barrido de `destroy()`: su
+   * `ngOnDestroy` lo maneja el `lifecycle-bridge`, no el inyector.
+   */
+  private readonly instances = new Map<string, unknown>();
 
   constructor(
     providers: Provider[],
@@ -43,6 +49,11 @@ export class ElementInjectorNode {
 
   get<T>(token: unknown, flags: InjectFlags = {}): T {
     return this.resolve(ReflectInjection.translate(token as never), flags) as T;
+  }
+
+  /** Publica una directiva/componente de este elemento como token inyectable para los descendientes. */
+  registerInstance(name: string, value: unknown): void {
+    this.instances.set(name, value);
   }
 
   /** Llamar en `$scope.$on('$destroy', ...)` — `ngOnDestroy` de todo lo cacheado en este nodo. */
@@ -71,6 +82,7 @@ export class ElementInjectorNode {
   }
 
   private resolveOwn(name: string): unknown {
+    if (this.instances.has(name)) return this.instances.get(name);
     if (this.cache.has(name)) return this.cache.get(name);
 
     if (this.multis.has(name)) {

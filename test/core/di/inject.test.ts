@@ -46,16 +46,16 @@ describe("etapa 3 — inject()", () => {
     expect(inject(Logger)).toBeInstanceOf(Logger);
   });
 
-  it("devuelve notFoundValue si el token no está registrado", () => {
+  it("con { optional: true } devuelve null si el token no está registrado", () => {
     bootInjector("injectTestMissing");
-    expect(inject("noExiste", "fallback")).toBe("fallback");
+    expect(inject("noExiste", { optional: true })).toBeNull();
   });
 
-  it("si el token SÍ está registrado, ignora notFoundValue y devuelve el valor real", () => {
+  it("con { optional: true }, si el token SÍ está registrado devuelve el valor real", () => {
     bootInjector("injectTestFoundWithFallback", (module) => {
       module.constant("existente", "valor-real");
     });
-    expect(inject("existente", "fallback")).toBe("valor-real");
+    expect(inject("existente", { optional: true })).toBe("valor-real");
   });
 
   it("funciona como field initializer, con la app ya bootstrappeada", () => {

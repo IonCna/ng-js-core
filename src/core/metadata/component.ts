@@ -1,7 +1,9 @@
 import { applyConstructorInject } from "@/core/di/ctor-inject.ts";
+import { getInjectableId, setInjectableId } from "@/core/di/injectable-registry.ts";
 import { collectBindings, collectHost } from "@/core/metadata/collect-bindings.ts";
 import type { ComponentDef } from "@/core/metadata/def.ts";
 import { stampComponentDef } from "@/core/metadata/define-component.ts";
+import { selectorToRegistrationName } from "@/core/metadata/selector-name.ts";
 import { SelectorRegistry } from "@/core/metadata/selector-registry.ts";
 
 /**
@@ -16,6 +18,12 @@ export function component(Clase: Function): { define(def: ComponentDef): Functio
       const host = collectHost(Clase);
       applyConstructorInject(Clase);
       SelectorRegistry.register(def.selector, Clase);
+      // `id` inyectable = selector en camelCase — así un descendiente puede
+      // `inject(MiComponente)` y recibir la instancia ancestro (DI a nivel
+      // directiva, como Angular). Un `static $name` propio manda y no se pisa.
+      if (!getInjectableId(Clase) && !Object.hasOwn(Clase, "$name")) {
+        setInjectableId(Clase, selectorToRegistrationName(def.selector));
+      }
       return stampComponentDef(Clase, { ...def, inputs, outputs, host });
     },
   };

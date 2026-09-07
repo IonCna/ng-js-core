@@ -47,6 +47,39 @@ describe("ngjs-core/runtime — inject() en field initializer (estilo ng-bootstr
     appRef.destroy();
   });
 
+  it("respeta { optional: true } (null si no hay provider) y { skipSelf: true } (salta locals del elemento)", async () => {
+    let optionalWasNull = false;
+    let skipSelfElementRef: unknown = "no seteado";
+
+    @Component({ selector: "inj-child3", controllerAs: "$", template: "x" })
+    class Child {
+      private readonly missing = inject<Greeter>(Greeter, { optional: true });
+      private readonly ownElementRef = inject(ElementRef, { skipSelf: true, optional: true });
+
+      $onInit(): void {
+        optionalWasNull = this.missing === null;
+        skipSelfElementRef = this.ownElementRef;
+      }
+    }
+
+    @Component({ selector: "inj-root3", controllerAs: "$", template: "<inj-child3></inj-child3>" })
+    class Root {}
+
+    // Sin `providers: [Greeter]` — el inject opcional debe devolver null en vez de tirar.
+    @NgModule({ declarations: [Root, Child] })
+    class AppModule {}
+
+    const host = document.createElement("inj-root3");
+    document.body.appendChild(host);
+    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+
+    expect(optionalWasNull).toBe(true);
+    // `skipSelf` salta el ElementRef local de este elemento; no hay uno arriba → null (optional).
+    expect(skipSelfElementRef).toBeNull();
+
+    appRef.destroy();
+  });
+
   it("fuera de una construcción, inject() sigue usando el Injector global", async () => {
     @Component({ selector: "inj-root2", controllerAs: "$", template: "x" })
     class Root {}

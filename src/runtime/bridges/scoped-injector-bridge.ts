@@ -1,5 +1,6 @@
 import type angular from "angular";
 import { getInjectFlags } from "@/core/di/inject-flags.ts";
+import { getInjectableId } from "@/core/di/injectable-registry.ts";
 import { getComponentDef } from "@/core/metadata/define-component.ts";
 import { getDirectiveDef } from "@/core/metadata/directive.ts";
 import { SelectorRegistry } from "@/core/metadata/selector-registry.ts";
@@ -13,6 +14,15 @@ interface JqLiteData {
   data(name: string, value: unknown): void;
   inheritedData(name: string): unknown;
   parent(): JqLiteData;
+}
+
+/** Clave inyectable de una clase de controller: su `id` (selector camelCase) o un `static $name`. */
+function injectableKeyOf(Clase: unknown): string | undefined {
+  if (typeof Clase !== "function") return undefined;
+  const id = getInjectableId(Clase);
+  if (id) return id;
+  const named = (Clase as { $name?: unknown }).$name;
+  return typeof named === "string" ? named : undefined;
 }
 
 /**
@@ -67,6 +77,30 @@ export function decorateControllerScopedInjector(
       });
 
       return extra ? { ...locals, ...extra } : locals;
+    },
+
+    /**
+     * Publica la instancia recién construida como token inyectable en el
+     * `ElementInjectorNode` de SU elemento — así un descendiente puede
+     * `inject(MiComponente)` y recibir esta instancia (DI a nivel directiva,
+     * como Angular). Si el elemento no tenía nodo propio (no declaró
+     * `providers`) se crea uno vacío colgado del nodo heredado.
+     */
+    onInstance: (instance, locals) => {
+      const $element = locals?.$element as JqLiteData | undefined;
+      const key = injectableKeyOf((instance as { constructor?: unknown } | undefined)?.constructor);
+      if (!$element || !key) return;
+
+      let node = $element.data(NODE_DATA_KEY) as ElementInjectorNode | undefined;
+      if (!node) {
+        const parent = $element.inheritedData(NODE_DATA_KEY) as ElementInjectorNode | undefined;
+        node = new ElementInjectorNode([], parent, $injector);
+        $element.data(NODE_DATA_KEY, node);
+
+        const $scope = locals?.$scope as angular.IScope | undefined;
+        $scope?.$on("$destroy", () => node?.destroy());
+      }
+      node.registerInstance(key, instance);
     },
   });
 }
