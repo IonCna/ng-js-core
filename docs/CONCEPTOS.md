@@ -632,8 +632,9 @@ CLI reescribe `[disabled]="expr"` → `ng-disabled="expr"`.
 | `ViewportScroller` | `abstract` + `BrowserViewportScroller` — port de `@angular/common` sobre `$window` + `DOCUMENT` (no `$anchorScroll`) | shim | hecho (Etapa 14) |
 | `Title` | `abstract Title` + `TitleImpl` sobre `DOCUMENT` (`$document[0].title`) | directo | hecho (Etapa 14) |
 | `Meta` | `abstract Meta` + `MetaImpl` — port del `Meta` de Angular, `<meta>` en `DOCUMENT.head` a mano | shim | hecho (Etapa 14) |
-| `DomSanitizer.sanitize()` / `[innerHTML]` | `$sanitize` (`ngSanitize`) + `ng-bind-html` | shim | |
-| `bypassSecurityTrustHtml` / `…Url` / `…ResourceUrl` / `…Style` / `…Script` | `$sce.trustAsHtml` / `…Url` / `…ResourceUrl` / `…Css` / `…Js` | shim | nombres casi calcados |
+| `DomSanitizer.sanitize()` | port del sanitizador de `@angular/core` (`html_sanitizer.ts`) — output idéntico, sin `ngSanitize` | shim | hecho (Etapa 14) |
+| `[innerHTML]` en template | `ng-bind-html` nativo + `ngSanitize` | tpl | el binding auto es del CLI |
+| `bypassSecurityTrust*` / `SafeHtml`…`SafeResourceUrl` | wrappers propios (`SafeValueImpl`), como `@angular/core` — no `$sce` | shim | hecho (Etapa 14) |
 | `SafeHtml` / `SafeUrl` / `SafeResourceUrl` (tipos) | valores marcados por `$sce` | shim | |
 | `@angular/cdk/layout` `BreakpointObserver` / `Breakpoints` (`XSmall`…`XLarge`, `Handset`, `Tablet`, `Web`) | port en `src/cdk/layout/` — `observe()`/`isMatched()` sobre `MediaMatcher` → `Observable<BreakpointState>` (`combineLatest`; `NgZone.run` en el callback del MQL → digest) | shim | hecho (Etapa 14) |
 | `MediaMatcher` | `abstract` + `MediaMatcherImpl` sobre `window.matchMedia` (fallback MQL falso si no está) | shim | hecho (Etapa 14) |
