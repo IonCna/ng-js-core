@@ -549,7 +549,7 @@ Sustrato: `@uirouter/angularjs` (no `ngRoute`).
 | `CanActivate` / `CanDeactivate` / `CanMatch` | hooks `$transitions.onBefore` / `.onExit` | shim | `UrlTree` → `TargetState` |
 | `Resolve` / `resolve: {}` | `resolve: {}` en el estado | directo | |
 | `Route.data` / `Route.title` | `state.data` / `state.data.title` | shim | |
-| `TitleStrategy` / `Title` | `$transitions.onSuccess` → `document.title` | shim | |
+| `TitleStrategy` / `Title` | `Title` = getter/setter sobre `DOCUMENT` (`platform-browser`); `TitleStrategy` básico en `router/` — el router resuelve el título en `$transitions.onSuccess`, el strategy lo aplica (`updateTitle(title)`). Custom vía `{ provide: TitleStrategy, useClass }` | shim | sin snapshot / `buildTitle` (ver brecha) |
 | `loadChildren: () => import(...)` | `lazyLoad` del estado + wrapper que adapta el `import()` nativo al contrato `{ states }` de UI-Router | shim | ver «UI-Router `lazyLoad` y ESM» |
 | `loadComponent: () => import(...)` | ídem + registro del componente vía providers capturados | shim | |
 | eventos del router (`NavigationStart`…) | hooks de transición | brecha | |
@@ -628,7 +628,7 @@ CLI reescribe `[disabled]="expr"` → `ng-disabled="expr"`.
 | `PlatformLocation` | `$window.location` | shim | |
 | `DOCUMENT` token | `$document` | shim | |
 | `ViewportScroller` | `$anchorScroll` / scroll manual | shim | |
-| `Title` | `$document[0].title` | directo | |
+| `Title` | `abstract Title` + `TitleImpl` sobre `DOCUMENT` (`$document[0].title`) | directo | hecho (Etapa 14) |
 | `Meta` | `<meta>` en `$document` a mano | shim | |
 | `DomSanitizer.sanitize()` / `[innerHTML]` | `$sanitize` (`ngSanitize`) + `ng-bind-html` | shim | |
 | `bypassSecurityTrustHtml` / `…Url` / `…ResourceUrl` / `…Style` / `…Script` | `$sce.trustAsHtml` / `…Url` / `…ResourceUrl` / `…Css` / `…Js` | shim | nombres casi calcados |

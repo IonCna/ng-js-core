@@ -2,6 +2,7 @@ import type { StateService, Transition, TransitionService } from "@uirouter/angu
 import type { ILocationService, IRootScopeService } from "angular";
 import { BehaviorSubject, map, type Observable } from "rxjs";
 import { convertToParamMap, type ParamMap } from "@/router/param-map.ts";
+import { mergeResolvedData, pickRouteTitle } from "@/router/route-title.ts";
 import type { ActivatedRouteSnapshot, Data, ResolveFn } from "@/router/route.ts";
 
 type Params = Record<string, string>;
@@ -91,20 +92,8 @@ export class ActivatedRouteImpl extends ActivatedRoute {
     const current = this.$state.$current as unknown as { data?: Data } | undefined;
     const chain = this.currentChain();
 
-    const data: Data = { ...(current?.data ?? {}) };
-    // Mergear valores de `resolve` (Angular: `data` = estático + resueltos).
-    if (transition) {
-      const injector = transition.injector();
-      for (const node of chain) {
-        for (const key of this.resolveKeys.get(node.name) ?? []) {
-          try {
-            data[key] = injector.get(key);
-          } catch {
-            /* aún no resuelto */
-          }
-        }
-      }
-    }
+    // `data` = estático + valores de `resolve` disponibles (Angular).
+    const data = mergeResolvedData(chain, this.resolveKeys, (current?.data ?? {}) as Data, transition?.injector());
 
     this.params$.next(params);
     this.data$.next(data);
@@ -125,14 +114,10 @@ export class ActivatedRouteImpl extends ActivatedRoute {
   }
 
   private resolveTitle(chain: { name: string }[], params: Params, data: Data): string {
-    let title: string | ResolveFn<string> | undefined;
-    for (const node of chain) {
-      const candidate = this.titles.get(node.name);
-      if (candidate !== undefined) title = candidate;
-    }
-    if (title === undefined) return "";
-    if (typeof title === "string") return title;
-    const resolved = title({ params, data, queryParams: this.queryParams$.value, fragment: this.fragment$.value });
+    const picked = pickRouteTitle(chain, this.titles);
+    if (picked === undefined) return "";
+    if (typeof picked === "string") return picked;
+    const resolved = picked({ params, data, queryParams: this.queryParams$.value, fragment: this.fragment$.value });
     return typeof resolved === "string" ? resolved : "";
   }
 }

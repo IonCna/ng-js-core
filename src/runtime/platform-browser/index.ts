@@ -1,12 +1,13 @@
 /**
  * `ngjs-core/runtime/platform-browser` — el `angular.module` que registra los
  * servicios de plataforma (`@angular/common` / `@angular/platform-browser`).
- * Por ahora: `DOCUMENT`. Se irá completando pieza por pieza (DomSanitizer,
- * Title, Meta, Location, ViewportScroller, BreakpointObserver). **Opt-in** — no
- * se carga solo.
+ * Por ahora: `DOCUMENT`, `Title`. Se irá completando pieza por pieza
+ * (DomSanitizer, Meta, Location, ViewportScroller, BreakpointObserver).
+ * **Opt-in** — no se carga solo.
  */
 import angular from "angular";
 import { DOCUMENT } from "@/platform-browser/dom-tokens.ts";
+import { Title, TitleImpl } from "@/platform-browser/title.ts";
 import { installCoreModule } from "@/runtime/core-module.ts";
 
 export * from "@/platform-browser/index.ts";
@@ -20,7 +21,8 @@ export function platformBrowserModule(): angular.IModule {
 
   base = angular
     .module("ng.js.platform-browser", ["ng.js.core"])
-    .factory(DOCUMENT.toString(), ["$document", ($document: angular.IDocumentService) => $document[0]]);
+    .factory(DOCUMENT.toString(), ["$document", ($document: angular.IDocumentService) => $document[0]])
+    .service(Title.$name, TitleImpl);
 
   return base;
 }

@@ -1,9 +1,12 @@
 import "@uirouter/angularjs";
-import type { StateProvider, StateService, TransitionService } from "@uirouter/angularjs";
+import type { StateProvider, StateService, Transition, TransitionService } from "@uirouter/angularjs";
 import angular, { type ILocationProvider, type ILocationService, type IRootScopeService } from "angular";
+import { Title } from "@/platform-browser/title.ts";
 import { ActivatedRoute, ActivatedRouteImpl } from "@/router/activated-route.ts";
-import type { ResolveFn, Routes } from "@/router/route.ts";
+import type { Data, ResolveFn, Routes } from "@/router/route.ts";
+import { mergeResolvedData, pickRouteTitle } from "@/router/route-title.ts";
 import { Router, RouterImpl } from "@/router/router.ts";
+import { DefaultTitleStrategy, TitleStrategy } from "@/router/title-strategy.ts";
 import {
   type DeactivateBinding,
   type GuardBinding,
@@ -67,26 +70,48 @@ function wireMatchGuards(bindings: MatchBinding[]) {
   return run;
 }
 
-function wireTitles(titles: Map<string, string | ResolveFn<string>>) {
-  const run = ($transitions: TransitionService, $state: StateService) => {
-    $transitions.onSuccess({}, async () => {
+function wireTitles(
+  titles: Map<string, string | ResolveFn<string>>,
+  resolveKeys: Map<string, string[]>,
+) {
+  const run = (
+    $transitions: TransitionService,
+    $state: StateService,
+    $location: ILocationService,
+    $injector: angular.auto.IInjectorService,
+  ) => {
+    // `TitleStrategy` custom (`{ provide: TitleStrategy, useClass }` en un `@NgModule`) o el default.
+    const strategy: TitleStrategy = $injector.has(TitleStrategy.$name)
+      ? $injector.get<TitleStrategy>(TitleStrategy.$name)
+      : new DefaultTitleStrategy($injector.has(Title.$name) ? $injector.get<Title>(Title.$name) : undefined);
+
+    $transitions.onSuccess({}, async (transition: Transition) => {
       // Estado activo más profundo con `title` definido.
       const chain = ($state.$current as unknown as { path?: { name: string }[] }).path ?? [];
-      let title: string | ResolveFn<string> | undefined;
-      for (const node of chain) {
-        const candidate = titles.get(node.name);
-        if (candidate !== undefined) title = candidate;
-      }
-      if (title === undefined) return;
+      const picked = pickRouteTitle(chain, titles);
+      if (picked === undefined) return;
 
-      const resolved =
-        typeof title === "function"
-          ? await title({ params: { ...($state.params as Record<string, string>) }, data: {} })
-          : title;
-      if (typeof resolved === "string") document.title = resolved;
+      let resolved: string | undefined;
+      if (typeof picked === "function") {
+        // Mismo contexto que recibe `ActivatedRoute.title` (params + data mergeada + query + fragment).
+        const params = { ...($state.params as Record<string, string>) };
+        const staticData = (($state.$current as unknown as { data?: Data }).data ?? {}) as Data;
+        const data = mergeResolvedData(chain, resolveKeys, staticData, transition.injector());
+        const value = await picked({
+          params,
+          data,
+          queryParams: { ...($location.search() as Record<string, string>) },
+          fragment: $location.hash() || null,
+        });
+        if (typeof value === "string") resolved = value;
+      } else {
+        resolved = picked;
+      }
+
+      if (resolved !== undefined) strategy.updateTitle(resolved);
     });
   };
-  run.$inject = ["$transitions", "$state"];
+  run.$inject = ["$transitions", "$state", "$location", "$injector"];
   return run;
 }
 
@@ -133,7 +158,7 @@ export const RouterModule = {
     if (deactivateGuards.length) mod.run(wireDeactivateGuards(deactivateGuards));
     if (matchGuards.length) mod.run(wireMatchGuards(matchGuards));
     // Siempre — `loadChildren` puede agregar títulos al `Map` después (lo lee en cada transición).
-    mod.run(wireTitles(titles));
+    mod.run(wireTitles(titles, resolveKeys));
     mod.service(Router.$name, RouterImpl);
 
     const activatedRouteFactory = (

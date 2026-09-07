@@ -28,3 +28,4 @@ export type {
 } from "@/router/route.ts";
 export { type NavigationExtras, Router } from "@/router/router.ts";
 export { RouterModule, withHashLocation } from "@/router/router-module.ts";
+export { DefaultTitleStrategy, TitleStrategy } from "@/router/title-strategy.ts";
