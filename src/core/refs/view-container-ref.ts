@@ -1,5 +1,6 @@
 import type angular from "angular";
 import type { IPromise, IQService } from "angular";
+import { Injector, unwrapAngularInjector } from "@/core/di/injector.ts";
 import { createComponent } from "@/runtime/create-component.ts";
 import type { ComponentRef } from "@/core/refs/component-ref.ts";
 import type { ElementRefImpl } from "@/core/refs/element-ref.ts";
@@ -26,13 +27,22 @@ export abstract class ViewContainerRef {
     componentType: Function | string,
     options?: {
       index?: number;
-      injector?: angular.auto.IInjectorService;
-      environmentInjector?: angular.auto.IInjectorService;
+      /** `Injector` público (`inject(Injector)`) o, para código interno del runtime, el `$injector` nativo. */
+      injector?: Injector | angular.auto.IInjectorService;
+      environmentInjector?: Injector | angular.auto.IInjectorService;
       projectableNodes?: Node[][];
       directives?: string[];
       bindings?: Readonly<Record<string, unknown>> | readonly Readonly<Record<string, unknown>>[];
     },
   ): IPromise<ComponentRef<C>>;
+}
+
+/** `undefined` pasa tal cual; un `Injector` público se desenvuelve al `$injector` real; un `$injector` ya crudo se devuelve sin tocar. */
+function toNativeInjector(
+  value: Injector | angular.auto.IInjectorService | undefined,
+): angular.auto.IInjectorService | undefined {
+  if (!value) return undefined;
+  return value instanceof Injector ? unwrapAngularInjector(value) : value;
 }
 
 export class ViewContainerRefImpl extends ViewContainerRef implements ViewOwner {
@@ -59,8 +69,8 @@ export class ViewContainerRefImpl extends ViewContainerRef implements ViewOwner 
     componentType: Function | string,
     options?: {
       index?: number;
-      injector?: angular.auto.IInjectorService;
-      environmentInjector?: angular.auto.IInjectorService;
+      injector?: Injector | angular.auto.IInjectorService;
+      environmentInjector?: Injector | angular.auto.IInjectorService;
       projectableNodes?: Node[][];
       directives?: string[];
       bindings?: Readonly<Record<string, unknown>> | readonly Readonly<Record<string, unknown>>[];
@@ -69,8 +79,8 @@ export class ViewContainerRefImpl extends ViewContainerRef implements ViewOwner 
     const $q = this.injector.get<IQService>("$q");
 
     return createComponent<C>(componentType, {
-      injector: options?.injector ?? this.injector,
-      environmentInjector: options?.environmentInjector,
+      injector: toNativeInjector(options?.injector) ?? this.injector,
+      environmentInjector: toNativeInjector(options?.environmentInjector),
       projectableNodes: options?.projectableNodes,
       directives: options?.directives,
       bindings: options?.bindings,

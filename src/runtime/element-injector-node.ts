@@ -2,6 +2,8 @@ import type angular from "angular";
 import { getInjectFlags, type InjectFlags } from "@/core/di/inject-flags.ts";
 import type { Provider } from "@/core/di/provider.ts";
 import { ensureInject, ReflectInjection } from "@/core/di/reflect.ts";
+import { getFromAppInjector, hasInAppInjector } from "@/core/di/root-singleton-registry.ts";
+import { assertNotServiceProvider } from "@/core/di/service.ts";
 
 type SingleProvider = Exclude<Provider, Provider[]>;
 
@@ -101,7 +103,7 @@ export class ElementInjectorNode {
   }
 
   private fromAppInjector(name: string, flags: InjectFlags): unknown {
-    if (this.$injector.has(name)) return this.$injector.get(name);
+    if (hasInAppInjector(this.$injector, name)) return getFromAppInjector(this.$injector, name);
     return this.notFound(name, flags);
   }
 
@@ -127,6 +129,7 @@ export class ElementInjectorNode {
   }
 
   private construct(ctor: Function, deps?: readonly unknown[]): unknown {
+    assertNotServiceProvider(ctor);
     const names = deps ? deps.map((dep) => ReflectInjection.translate(dep as never)) : ensureInject(ctor);
     const args = names.map((name, index) => this.resolve(name, deps ? {} : getInjectFlags(ctor, index)));
     return Reflect.construct(ctor as new (...a: unknown[]) => unknown, args);

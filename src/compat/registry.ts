@@ -1,11 +1,17 @@
 import type angular from "angular";
 import type { Provider } from "@/core/di/provider.ts";
 import { ensureInject } from "@/core/di/reflect.ts";
-import { bindingsFromDefs } from "@/core/metadata/component-bindings.ts";
+import { assertNotServiceProvider } from "@/core/di/service.ts";
 import { getComponentDef } from "@/core/metadata/define-component.ts";
+import {
+  buildComponentAsDirective,
+  buildComponentOptions,
+  buildDirectiveDefinition,
+} from "@/core/metadata/directive-definition.ts";
 import { getDirectiveDef } from "@/core/metadata/directive.ts";
 import { ngModule } from "@/core/metadata/ng-module.ts";
 import { getPipeDef } from "@/core/metadata/pipe.ts";
+import { parseSelector } from "@/core/metadata/selector-name.ts";
 import type { ApplicationRef } from "@/core/platform/application-ref.ts";
 import type { BootstrapOptions } from "@/core/platform/bootstrap.ts";
 import { ConfigProviderFactory } from "@/core/platform/config-providers.ts";
@@ -76,14 +82,6 @@ class CompatRegistry {
 
 export const compatRegistry = new CompatRegistry();
 
-function toCamelCase(value: string): string {
-  return value.replace(/-([a-z0-9])/g, (_m, c: string) => c.toUpperCase());
-}
-
-function stripAttr(selector: string): string {
-  return selector.startsWith("[") && selector.endsWith("]") ? selector.slice(1, -1) : selector;
-}
-
 /** Registro post-bootstrap con los providers capturados en `.config()`. */
 function registerDeclarationLive(clase: Function): void {
   const registrar = ConfigProviderFactory.current;
@@ -92,15 +90,12 @@ function registerDeclarationLive(clase: Function): void {
   const cmp = getComponentDef(clase);
   if (cmp) {
     ensureInject(clase);
-    registrar.$compile.component(toCamelCase(cmp.selector), {
-      controller: clase as unknown as angular.Injectable<angular.IControllerConstructor>,
-      template: cmp.template,
-      templateUrl: cmp.templateUrl,
-      controllerAs: cmp.controllerAs,
-      require: cmp.require,
-      bindings: cmp.bindings ?? bindingsFromDefs(cmp.inputs, cmp.outputs),
-      transclude: cmp.transclude ?? (cmp.template?.includes("<ng-content") ? true : undefined),
-    });
+    const parsed = parseSelector(cmp.selector);
+    if (parsed.restrict === "A") {
+      registrar.$compile.directive(parsed.registrationName, () => buildComponentAsDirective(clase, cmp));
+      return;
+    }
+    registrar.$compile.component(parsed.registrationName, buildComponentOptions(clase, cmp));
     return;
   }
 
@@ -108,21 +103,8 @@ function registerDeclarationLive(clase: Function): void {
   if (dir) {
     ensureInject(clase);
     const factory = (clase as { $factory?: () => angular.IDirective }).$factory;
-    registrar.$compile.directive(
-      toCamelCase(stripAttr(dir.selector)),
-      factory ??
-        (() => ({
-          controller: clase as unknown as angular.Injectable<angular.IControllerConstructor>,
-          restrict: dir.restrict ?? (dir.selector.startsWith("[") ? "A" : "E"),
-          scope: dir.scope,
-          bindToController: dir.bindToController ?? true,
-          require: dir.require,
-          transclude: dir.transclude,
-          template: dir.template,
-          templateUrl: dir.templateUrl,
-          controllerAs: dir.controllerAs,
-        })),
-    );
+    const parsed = parseSelector(dir.selector);
+    registrar.$compile.directive(parsed.registrationName, factory ?? (() => buildDirectiveDefinition(clase, dir)));
     return;
   }
 
@@ -132,6 +114,7 @@ function registerDeclarationLive(clase: Function): void {
     return;
   }
 
+  assertNotServiceProvider(clase);
   ensureInject(clase);
   registrar.$provide.service((clase as unknown as { $name: string }).$name, clase as unknown as Function);
 }
@@ -140,6 +123,7 @@ function registerProviderLive(provider: Provider): void {
   const registrar = ConfigProviderFactory.current;
   if (!registrar) throw new Error("compat: no hay config-providers capturados todavía");
   if (typeof provider === "function") {
+    assertNotServiceProvider(provider);
     ensureInject(provider);
     registrar.$provide.service((provider as unknown as { $name: string }).$name, provider as unknown as Function);
     return;

@@ -18,7 +18,7 @@ export interface InjectableDefinition<T extends object> extends InjectableOption
  * explícito usa ese; sin `id`, la deriva de `Clase.name`. Un `static $name` propio
  * ya declarado se respeta y no se pisa (compat con clases estilo AngularJS puro).
  */
-function stampInjectableName(target: object, options?: InjectableOptions): void {
+export function stampInjectableName(target: object, options?: InjectableOptions): void {
   if (options?.id) {
     setRegisteredInjectableId(target, options.id);
     (target as { $name?: string }).$name = options.id;

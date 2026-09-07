@@ -185,6 +185,98 @@ describe("registerNgModule", () => {
     expect(host.querySelector("span")?.textContent).toBe("child:parent");
   });
 
+  it("@Input/@Output también generan bindings AngularJS para directivas, no solo para componentes", () => {
+    @Directive({ selector: "[navValue]" })
+    class NavValueDirective {
+      @Input("navValue") value = "";
+      @Output() changed?: (locals: { $event: string }) => void;
+
+      fire(): void {
+        this.changed?.({ $event: this.value });
+      }
+    }
+
+    @NgModule({ id: uniqueName("runtimeDirectiveBindings"), declarations: [NavValueDirective] })
+    class AppModule {}
+
+    const host = document.createElement("div");
+    host.innerHTML = '<div nav-value="source" changed="received = $event"></div>';
+    document.body.appendChild(host);
+    const injector = angular.bootstrap(host, [registerNgModule(AppModule).name], { strictDi: false });
+    const scope = angular.element(host).scope() as angular.IScope & { source: string; received?: string };
+    scope.source = "hola";
+    injector.get<angular.IRootScopeService>("$rootScope").$digest();
+
+    const ctrl = angular
+      .element(host.querySelector("[nav-value]") as Element)
+      .controller("navValue") as NavValueDirective;
+    expect(ctrl.value).toBe("hola");
+
+    ctrl.fire();
+    expect(scope.received).toBe("hola");
+  });
+
+  it("@Component con selector de atributo ([navOutlet]) se registra como directiva de atributo, no de elemento", () => {
+    @Component({ selector: "[navOutlet]", template: "<span>outlet</span>" })
+    class NavOutlet {}
+
+    @NgModule({ id: uniqueName("runtimeAttributeComponent"), declarations: [NavOutlet] })
+    class AppModule {}
+
+    const host = document.createElement("div");
+    host.innerHTML = "<div nav-outlet></div>";
+    document.body.appendChild(host);
+    angular.bootstrap(host, [registerNgModule(AppModule).name], { strictDi: false });
+
+    expect(host.querySelector("[nav-outlet] span")?.textContent).toBe("outlet");
+  });
+
+  it("selector compuesto (button[navLink]): el link custom solo corre en el tag que matchea", () => {
+    let linked = 0;
+
+    @Directive({
+      selector: "button[navLink]",
+      link: () => {
+        linked++;
+      },
+    })
+    class NavLink {}
+
+    @NgModule({ id: uniqueName("runtimeCompoundSelector"), declarations: [NavLink] })
+    class AppModule {}
+
+    const host = document.createElement("div");
+    host.innerHTML = "<button nav-link></button><div nav-link></div>";
+    document.body.appendChild(host);
+    angular.bootstrap(host, [registerNgModule(AppModule).name], { strictDi: false });
+
+    expect(linked).toBe(1);
+  });
+
+  it("selector compuesto: límite conocido de AngularJS — el controller igual se instancia en el tag que no matchea, solo el link se filtra", () => {
+    let constructed = 0;
+
+    @Directive({ selector: "button[navLink2]" })
+    class NavLink2 {
+      constructor() {
+        constructed++;
+      }
+    }
+
+    @NgModule({ id: uniqueName("runtimeCompoundSelectorLimit"), declarations: [NavLink2] })
+    class AppModule {}
+
+    const host = document.createElement("div");
+    host.innerHTML = "<button nav-link2></button><div nav-link2></div>";
+    document.body.appendChild(host);
+    angular.bootstrap(host, [registerNgModule(AppModule).name], { strictDi: false });
+
+    // AngularJS matchea directivas por nombre+restrict solamente, no por selector
+    // completo — instancia el controller en los dos elementos aunque el `div` no
+    // matchee `button[navLink2]`. Es un límite real de AngularJS, no de esta lib.
+    expect(constructed).toBe(2);
+  });
+
   it("@NgModule solo estampa: no crea el angular.module hasta registerNgModule", () => {
     const id = uniqueName("runtimePending");
 

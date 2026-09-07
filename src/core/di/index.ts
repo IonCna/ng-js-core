@@ -7,6 +7,8 @@ export type { InjectFlags } from "./inject-flags.ts";
 export { InjectionToken } from "./injection-token.ts";
 export type { InjectionTokenOptions } from "./injection-token.ts";
 export { Injector } from "./injector.ts";
+export { Service } from "./service.ts";
+export type { ServiceOptions } from "./service.ts";
 export type {
   ClassProvider,
   ClassSansProvider,

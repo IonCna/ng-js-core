@@ -71,6 +71,23 @@ describe("etapa 5 — @HostBinding wiring contra el $element real", () => {
     expect(widgetEl.hasAttribute("aria-label")).toBe(false);
   });
 
+  it("attr.aria-X con valor false escribe el string \"false\" — no borra el atributo", () => {
+    @Component({ selector: "widget", template: "ok" })
+    class Widget {
+      @HostBinding("attr.aria-expanded") expanded = true;
+    }
+
+    const { widgetEl, $rootScope } = bootWidget(Widget);
+    expect(widgetEl.getAttribute("aria-expanded")).toBe("true");
+
+    const ctrl = angular.element(widgetEl).controller("widget") as Widget;
+    ctrl.expanded = false;
+    $rootScope.$digest();
+
+    expect(widgetEl.getAttribute("aria-expanded")).toBe("false");
+    expect(widgetEl.hasAttribute("aria-expanded")).toBe(true);
+  });
+
   it("un hostProperty plano pone la propiedad DOM directo", () => {
     @Component({ selector: "widget", template: "ok" })
     class Widget {

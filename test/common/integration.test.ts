@@ -5,6 +5,7 @@ import { NgContainer } from "@/runtime/common/ng-container.ts";
 import { NgContent } from "@/runtime/common/ng-content.ts";
 import { NgTemplateOutlet } from "@/runtime/common/ng-template-outlet.ts";
 import { Injectable } from "@/core/di/injectable.ts";
+import { Injector, InjectorImpl } from "@/core/di/injector.ts";
 import { decorateControllerAttributes } from "@/runtime/bridges/attribute-bridge.ts";
 import { decorateControllerElementRef } from "@/runtime/bridges/element-ref-bridge.ts";
 import { decorateControllerHostBindings } from "@/runtime/bridges/host-binding-bridge.ts";
@@ -188,6 +189,44 @@ describe("etapa 8 — integración: proyección/queries/ng-ref mezclados con tod
     expect(spans.map((el) => el.textContent)).toEqual(["embebido"]);
     expect(hostEl.parentElement?.querySelector("dyn-card")?.textContent).toBe("componente");
     expect(hostCtrl.vcr.length).toBe(2);
+  });
+
+  it("ViewContainerRef.createComponent acepta el Injector público en { injector }, no solo el $injector crudo", async () => {
+    class Card {
+      @Input() label = "";
+    }
+    component(Card).define({ selector: "dyn-card-pub-injector" });
+
+    const name = uniqueName("commonIntegrationVcrPublicInjector");
+    const module = registerAllBridges(angular.module(name, []));
+    module.service(Injector.$name, InjectorImpl);
+    module.component("dynCardPubInjector", {
+      template: "{{ $ctrl.label }}",
+      bindings: { label: "<" },
+      controller: Card,
+    });
+    module.component("host", {
+      template: "ok",
+      controller: class {
+        static $inject = [ViewContainerRef.$name, Injector.$name];
+        constructor(
+          public vcr: ViewContainerRef,
+          public injector: Injector,
+        ) {}
+      },
+    });
+
+    const host = document.createElement("div");
+    host.innerHTML = "<host></host>";
+    document.body.appendChild(host);
+    angular.bootstrap(host, [name], { strictDi: false });
+
+    const hostCtrl = controllerOf<{ vcr: ViewContainerRefImpl; injector: Injector }>(host, "host");
+    const hostEl = host.querySelector("host") as Element;
+
+    await hostCtrl.vcr.createComponent(Card, { injector: hostCtrl.injector, bindings: { label: "publico" } });
+
+    expect(hostEl.parentElement?.querySelector("dyn-card-pub-injector")?.textContent).toBe("publico");
   });
 
   it("<ng-container> como ancla: insertar un componente dinámico vía su ViewContainerRef, y limpiarlo al destruir el scope", async () => {

@@ -1,11 +1,17 @@
 import angular from "angular";
 import type { Provider, TypeProvider } from "@/core/di/provider.ts";
 import { ensureInject, ReflectInjection } from "@/core/di/reflect.ts";
-import { bindingsFromDefs } from "@/core/metadata/component-bindings.ts";
+import { assertNotServiceProvider } from "@/core/di/service.ts";
 import { getComponentDef } from "@/core/metadata/define-component.ts";
+import {
+  buildComponentAsDirective,
+  buildComponentOptions,
+  buildDirectiveDefinition,
+} from "@/core/metadata/directive-definition.ts";
 import { getDirectiveDef } from "@/core/metadata/directive.ts";
 import { getNgModuleDef } from "@/core/metadata/ng-module.ts";
 import { getPipeDef } from "@/core/metadata/pipe.ts";
+import { parseSelector } from "@/core/metadata/selector-name.ts";
 import { createPipeFilter } from "@/pipes/pipe-transform.ts";
 
 const modules = new WeakMap<Function, angular.IModule>();
@@ -63,30 +69,22 @@ function isAngularModule(value: unknown): value is angular.IModule {
   return typeof value === "object" && value !== null && typeof (value as angular.IModule).name === "string";
 }
 
-/**
- * Prioridad: `controllerAs` del `@Component`/`@Directive` → del `@NgModule`
- * (propio o heredado). Para componentes cae a `"$ctrl"` (el default nativo de
- * `.component()`, así no cambia nada); para directivas queda `undefined` si nadie
- * lo puso (AngularJS no lo auto-defaultea — no forzarlo evita meter un `$ctrl`
- * en el scope compartido de una directiva sin `controllerAs`).
- */
-function resolveControllerAs(own: string | undefined, fromModule: string | undefined): string {
-  return own ?? fromModule ?? "$ctrl";
-}
-
 function registerDeclaration(module: angular.IModule, declaration: Function, moduleControllerAs?: string): void {
   const componentDef = getComponentDef(declaration);
   if (componentDef) {
     ensureInject(declaration);
-    module.component(toCamelCase(componentDef.selector), {
-      controller: declaration as unknown as angular.Injectable<angular.IControllerConstructor>,
-      template: componentDef.template,
-      templateUrl: componentDef.templateUrl,
-      controllerAs: resolveControllerAs(componentDef.controllerAs, moduleControllerAs),
-      require: componentDef.require,
-      bindings: computeComponentBindings(componentDef),
-      transclude: componentDef.transclude ?? (componentDef.template?.includes("<ng-content") ? true : undefined),
-    });
+    const parsed = parseSelector(componentDef.selector);
+    if (parsed.restrict === "A") {
+      // Selector de atributo/compuesto (`[ngbNavOutlet]`, `button[ngbNavLink]`):
+      // `.component()` SIEMPRE registra como elemento — no hay forma de pedirle
+      // otra cosa. Se arma a mano el `.directive()` equivalente (mismo desugar
+      // que `.component()` hace internamente) con el `restrict` correcto.
+      module.directive(parsed.registrationName, () =>
+        buildComponentAsDirective(declaration, componentDef, moduleControllerAs),
+      );
+      return;
+    }
+    module.component(parsed.registrationName, buildComponentOptions(declaration, componentDef, moduleControllerAs));
     return;
   }
 
@@ -94,9 +92,10 @@ function registerDeclaration(module: angular.IModule, declaration: Function, mod
   if (directiveDef) {
     ensureInject(declaration);
     const factory = (declaration as { $factory?: () => angular.IDirective }).$factory;
+    const parsed = parseSelector(directiveDef.selector);
     module.directive(
-      toCamelCase(stripAttributeSelector(directiveDef.selector)),
-      factory ?? (() => createDirectiveDefinition(declaration, directiveDef, moduleControllerAs)),
+      parsed.registrationName,
+      factory ?? (() => buildDirectiveDefinition(declaration, directiveDef, moduleControllerAs)),
     );
     return;
   }
@@ -110,36 +109,6 @@ function registerDeclaration(module: angular.IModule, declaration: Function, mod
   throw new Error(
     `NgModule.declarations: "${declaration.name}" no tiene @Component/@Directive/@Pipe (ni ngX().define()).`,
   );
-}
-
-type StampedDirectiveDef = NonNullable<ReturnType<typeof getDirectiveDef>>;
-
-function createDirectiveDefinition(
-  declaration: Function,
-  def: StampedDirectiveDef,
-  moduleControllerAs?: string,
-): angular.IDirective {
-  return {
-    controller: declaration as unknown as angular.Injectable<angular.IControllerConstructor>,
-    bindToController: def.bindToController ?? true,
-    restrict: def.restrict ?? inferRestrict(def.selector),
-    scope: def.scope,
-    require: def.require,
-    transclude: def.transclude,
-    template: def.template,
-    templateUrl: def.templateUrl,
-    controllerAs: def.controllerAs ?? moduleControllerAs,
-    priority: def.priority,
-    terminal: def.terminal,
-    compile: def.compile,
-    link: def.link,
-  };
-}
-
-type StampedComponentDef = NonNullable<ReturnType<typeof getComponentDef>>;
-
-function computeComponentBindings(def: StampedComponentDef): Record<string, string> {
-  return def.bindings ?? bindingsFromDefs(def.inputs, def.outputs);
 }
 
 type SingleProvider = Exclude<Provider, Provider[]>;
@@ -179,6 +148,7 @@ function registerProviders(module: angular.IModule, providers: Provider[]): void
 
 function registerSingle(module: angular.IModule, name: string, provider: SingleProvider): void {
   if (isTypeProvider(provider)) {
+    assertNotServiceProvider(provider);
     ensureInject(provider);
     module.service(name, provider as unknown as Function);
     return;
@@ -190,6 +160,7 @@ function registerSingle(module: angular.IModule, name: string, provider: SingleP
   }
 
   if ("useClass" in provider) {
+    assertNotServiceProvider(provider.useClass);
     ensureInject(provider.useClass);
     module.service(name, provider.useClass as unknown as Function);
     return;
@@ -207,19 +178,8 @@ function registerSingle(module: angular.IModule, name: string, provider: SingleP
     return;
   }
 
+  assertNotServiceProvider(provider.provide as unknown as Function);
   const ctor = provider.provide as unknown as { $inject: string[] };
   ctor.$inject = (provider.deps ?? []).map(ReflectInjection.translate);
   module.service(name, provider.provide as unknown as Function);
-}
-
-function stripAttributeSelector(selector: string): string {
-  return selector.startsWith("[") && selector.endsWith("]") ? selector.slice(1, -1) : selector;
-}
-
-function inferRestrict(selector: string): string {
-  return selector.startsWith("[") ? "A" : "E";
-}
-
-function toCamelCase(value: string): string {
-  return value.replace(/-([a-z0-9])/g, (_match, char: string) => char.toUpperCase());
 }

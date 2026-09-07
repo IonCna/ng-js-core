@@ -1,4 +1,6 @@
 import type angular from "angular";
+import type { SimpleChanges } from "@/core/lifecycle/interfaces.ts";
+import { withFirstChangeProperty } from "@/core/lifecycle/simple-changes.ts";
 import { chainInstanceMethod, decorateControllerWith } from "@/runtime/bridges/shared.ts";
 
 interface ControllerInstance {
@@ -23,7 +25,7 @@ function bridgeLifecycle(instance: unknown): void {
     inst.$onInit = () => inst.ngOnInit?.();
   }
   if (typeof inst.ngOnChanges === "function" && typeof inst.$onChanges !== "function") {
-    inst.$onChanges = (changes: unknown) => inst.ngOnChanges?.(changes);
+    inst.$onChanges = (changes: unknown) => inst.ngOnChanges?.(withFirstChangeProperty(changes as SimpleChanges));
   }
   if (typeof inst.ngOnDestroy === "function" && typeof inst.$onDestroy !== "function") {
     inst.$onDestroy = () => inst.ngOnDestroy?.();

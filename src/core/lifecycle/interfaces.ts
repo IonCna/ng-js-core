@@ -18,13 +18,17 @@ export interface DoCheck {
 }
 
 /**
- * El objeto de cambios que arma AngularJS para `$onChanges` ya tiene esta
- * forma (`currentValue`/`previousValue`/`isFirstChange()`) — no hace falta
- * traducir nada, se reenvía tal cual.
+ * El objeto de cambios que arma AngularJS para `$onChanges` ya tiene
+ * `currentValue`/`previousValue`/`isFirstChange()` — eso se reenvía tal cual.
+ * `firstChange` (la propiedad pública de Angular real, además del método) SÍ
+ * hay que agregarla nosotros: la agrega `withFirstChangeProperty`
+ * (`simple-changes.ts`), llamada desde `lifecycle-bridge.ts` antes de invocar
+ * `ngOnChanges`.
  */
 export interface SimpleChange<T = unknown> {
   readonly previousValue: T;
   readonly currentValue: T;
+  readonly firstChange: boolean;
   isFirstChange(): boolean;
 }
 

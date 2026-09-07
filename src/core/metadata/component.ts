@@ -3,7 +3,7 @@ import { getInjectableId, setInjectableId } from "@/core/di/injectable-registry.
 import { collectBindings, collectHost } from "@/core/metadata/collect-bindings.ts";
 import type { ComponentDef } from "@/core/metadata/def.ts";
 import { stampComponentDef } from "@/core/metadata/define-component.ts";
-import { selectorToRegistrationName } from "@/core/metadata/selector-name.ts";
+import { parseSelector, selectorToRegistrationName } from "@/core/metadata/selector-name.ts";
 import { SelectorRegistry } from "@/core/metadata/selector-registry.ts";
 
 /**
@@ -17,7 +17,16 @@ export function component(Clase: Function): { define(def: ComponentDef): Functio
       const { inputs, outputs } = collectBindings(Clase);
       const host = collectHost(Clase);
       applyConstructorInject(Clase);
-      SelectorRegistry.register(def.selector, Clase);
+      // Un componente de selector de atributo/compuesto (`[ngbNavOutlet]`,
+      // `button[ngbNavLink]`) registra vía `.directive()` con `controller` real
+      // (ver `directive-definition.ts`) — ahí `expression` YA es la clase, no
+      // hace falta este rodeo por tagName, y de hecho no podría: el tagName del
+      // host no identifica a un componente de atributo (cualquier tag lo puede
+      // llevar). El registro por tagName solo tiene sentido para selectores de
+      // elemento (`.component()`, único por elemento).
+      if (parseSelector(def.selector).restrict === "E") {
+        SelectorRegistry.register(def.selector, Clase);
+      }
       // `id` inyectable = selector en camelCase — así un descendiente puede
       // `inject(MiComponente)` y recibir la instancia ancestro (DI a nivel
       // directiva, como Angular). Un `static $name` propio manda y no se pisa.

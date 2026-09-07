@@ -45,13 +45,16 @@ export function decorateControllerScopedInjector(
   $injector: angular.auto.IInjectorService,
 ): angular.IControllerService {
   return decorateControllerWith($delegate, {
-    augmentLocals: (locals) => {
+    augmentLocals: (locals, expression) => {
       const $element = locals?.$element as JqLiteData | undefined;
       const nativeElement = ($element as unknown as { [i: number]: Element } | undefined)?.[0];
       const tagName = nativeElement?.tagName;
       if (!$element || !tagName) return locals;
 
-      const Clase = SelectorRegistry.getClass(tagName);
+      // `expression` ya es la clase real para `.directive()` (selectores de
+      // atributo incluidos); `.component()` sigue necesitando el rodeo por
+      // tagName — ver comentario en `attribute-bridge.ts`.
+      const Clase = typeof expression === "function" ? expression : SelectorRegistry.getClass(tagName);
       if (!Clase) return locals;
 
       const ownProviders = (getComponentDef(Clase) ?? getDirectiveDef(Clase))?.providers ?? [];

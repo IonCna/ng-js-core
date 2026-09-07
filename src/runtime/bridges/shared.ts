@@ -7,8 +7,22 @@ interface ControllerInitializer {
 }
 
 export interface ControllerHooks {
-  /** Corre antes de invocar al `$controller` real — para agregar/pisar claves de `locals` (ej. `ElementRef`, el nodo del inyector jerárquico). */
-  augmentLocals?: (locals: Record<string, unknown> | undefined) => Record<string, unknown> | undefined;
+  /**
+   * Corre antes de invocar al `$controller` real — para agregar/pisar claves de
+   * `locals` (ej. `ElementRef`, el nodo del inyector jerárquico). `expression` es
+   * el mismo primer argumento que recibiría `$controller` real: para una
+   * `.directive()` es la clase real (`controller: declaration` en
+   * `createDirectiveDefinition`) — a diferencia de `.component()`, que SIEMPRE
+   * invoca con un `expression` genérico interno (por eso ese caso sigue
+   * necesitando `SelectorRegistry` por tagName; acá, cuando `expression` ya es
+   * función, es la clase correcta sin ambigüedad — funciona también con varias
+   * directivas de atributo en el mismo elemento, cosa que un mapa por tagName
+   * nunca podría resolver).
+   */
+  augmentLocals?: (
+    locals: Record<string, unknown> | undefined,
+    expression?: unknown,
+  ) => Record<string, unknown> | undefined;
   /** Corre justo cuando de verdad se construye una instancia (ver nota de `later` abajo). */
   onInstance?: (instance: unknown, locals: Record<string, unknown> | undefined) => void;
   /**
@@ -47,7 +61,7 @@ export function decorateControllerWith(
   ) => unknown;
 
   const wrapped = (expression: unknown, locals?: Record<string, unknown>, later?: boolean, identifier?: string) => {
-    const augmentedLocals = hooks.augmentLocals ? hooks.augmentLocals(locals) : locals;
+    const augmentedLocals = hooks.augmentLocals ? hooks.augmentLocals(locals, expression) : locals;
 
     if (!later) {
       const runInvoke = () => invoke(expression, augmentedLocals, later, identifier);

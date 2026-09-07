@@ -1,5 +1,6 @@
-export { afterNextRender, afterRender } from "./after-render.ts";
-export type { AfterRenderRef } from "./after-render.ts";
+export { afterEveryRender, afterNextRender, afterRender } from "./after-render.ts";
+export type { AfterRenderOptions, AfterRenderRef, AfterRenderSpec } from "./after-render.ts";
+export type { AfterRenderPhase } from "./after-render-event-manager.ts";
 export type {
   AfterContentInit,
   AfterViewInit,

@@ -2,6 +2,7 @@ import type angular from "angular";
 import type { InjectFlags } from "@/core/di/inject-flags.ts";
 import { type InjectionResolver, runInInjectionContext } from "@/core/di/injection-context.ts";
 import { ReflectInjection } from "@/core/di/reflect.ts";
+import { getFromAppInjector, hasInAppInjector } from "@/core/di/root-singleton-registry.ts";
 import { decorateControllerWith } from "@/runtime/bridges/shared.ts";
 
 const NODE_DATA_KEY = "$ngjsInjector";
@@ -62,8 +63,8 @@ export function decorateControllerInjectionContext(
             if (options.optional) return null;
             throw new Error(`inject(): no se resolvió "${name}" con { self: true }`);
           }
-          if (options.optional && !$injector.has(name)) return null;
-          return $injector.get(name);
+          if (options.optional && !hasInAppInjector($injector, name)) return null;
+          return getFromAppInjector($injector, name);
         },
       };
 

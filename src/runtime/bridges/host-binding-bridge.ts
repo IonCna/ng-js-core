@@ -25,9 +25,12 @@ function applyHostBinding(el: Element, hostProperty: string, value: unknown, old
     return;
   }
   if (hostProperty.startsWith("attr.")) {
+    // Como Angular real: solo `null`/`undefined` borra el atributo. Todo lo
+    // demás se stringifica tal cual, incluido `false` → `"false"` — clave
+    // para ARIA (`aria-expanded="false"` no es lo mismo que sacar el atributo).
     const attr = hostProperty.slice("attr.".length);
-    if (value == null || value === false) el.removeAttribute(attr);
-    else el.setAttribute(attr, value === true ? "" : String(value));
+    if (value == null) el.removeAttribute(attr);
+    else el.setAttribute(attr, String(value));
     return;
   }
   // propiedad DOM plana (id, title, hidden, ...)

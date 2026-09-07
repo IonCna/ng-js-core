@@ -146,4 +146,5 @@ describe("etapa 5 — @HostListener wiring contra el $element real", () => {
 
     expect(calls).toEqual(["click"]);
   });
+
 });

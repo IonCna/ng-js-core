@@ -401,14 +401,26 @@ desenvolver, deja `$inject` como getter lazy en vez de resolver en el momento �
 real ocurre recién cuando algo lee `$inject` de verdad (que en AngularJS es al instanciar,
 momento en el que la clase referida ya existe).
 
-**Decisión abierta — `InjectionToken` con `factory` (tree-shakable).** `InjectionToken<T>`
-acepta `{ factory: () => T }` (sin `providedIn`: acá siempre es a nivel app, no hay otro
-nivel todavía). La `factory` no corre al crear el token, solo se guarda. Falta implementar
-el "momento de hacer registry": cuando `Injector.get(token)` no lo encuentra en el
-`$injector` real, correr `factory()` (puede usar `inject()` para sus propias deps) y
-registrar el resultado vía `ConfigProviderFactory.current.$provide.constant(...)` (mismo
-mecanismo que componentes lazy), para que quede cacheado y visible también por `$inject`
-nativo, no solo por `Injector.get()`. Pendiente para cuando se retome `injector.ts`.
+**`InjectionToken` con `factory` (root singleton lazy) y `@Service`.** Resuelto vía
+`RootSingletonRegistry` (`core/di/root-singleton-registry.ts`): un mapa nombre→factory
++ cache de instancias, aparte del `$injector` real (que no deja registrar nada nuevo
+después del bootstrap). `InjectionToken<T>({ factory })` registra su factory ahí al
+construirse; `@Service()` hace lo mismo con `() => new Clase()`. Los tres caminos de
+resolución (`InjectorImpl.get`, `ElementInjectorNode.fromAppInjector`, el resolver sin
+nodo de `injection-context-bridge.ts`) consultan `$injector` primero y caen a este
+registro si no lo encuentran — la instancia se construye una sola vez, la primera vez
+que alguien la pide.
+
+`@Service` vs `@Injectable`: un `@Service()` es siempre singleton de toda la app, sin
+listarlo en ningún `providers` ni `providedIn: 'root'` — a cambio, sin DI por
+constructor (se instancia con `new Clase()` a secas; sus dependencias las pide con
+`inject()` en field initializers) y sin recetas de provider (`useClass`/`useFactory`/…).
+`@Injectable` sigue siendo lo que hay que usar para lo que un `@Service` no cubre:
+DI por constructor, recetas de provider, y scope por componente/módulo (`providers: [X]`
+en `@Component`/`@NgModule`). Listar un `@Service` en un `providers[]` es un error
+(`assertNotServiceProvider`, en los tres lugares que procesan `providers`): ya se
+autoregistra, y ponerlo ahí sugiere una expectativa de scope por instancia que
+`@Service` no tiene.
 
 ### Inyector jerárquico (`providers` a nivel de componente)
 
