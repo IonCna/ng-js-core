@@ -624,17 +624,18 @@ CLI reescribe `[disabled]="expr"` → `ng-disabled="expr"`.
 
 | Angular | ngjs | Migra | Nota |
 |---|---|---|---|
-| `Location` / `LocationStrategy` (`PathLocationStrategy` / `HashLocationStrategy`) | `$location` / `$locationProvider.html5Mode()` | shim | |
-| `PlatformLocation` | `$window.location` | shim | |
+| `LocationStrategy` (`PathLocationStrategy` / `HashLocationStrategy`) + `APP_BASE_HREF` | port de `@angular/common` sobre `PlatformLocation`; lo provee `RouterModule.forRoot` (`withHashLocation()` → `Hash` + `$locationProvider.html5Mode(false)`) | shim | hecho (Etapa 14) |
+| `Location` (servicio) | `abstract` + `LocationImpl` — port de `@angular/common`, `path()`/`go()`/`replaceState()`/`back()`/`getState()`/`subscribe()`/`onUrlChange()` sobre `LocationStrategy` | shim | hecho (Etapa 14) |
+| `PlatformLocation` | `abstract` + `BrowserPlatformLocation` sobre `$window.location`/`$window.history` | shim | hecho (Etapa 14) |
 | `DOCUMENT` token | `$document` | shim | |
 | `ViewportScroller` | `$anchorScroll` / scroll manual | shim | |
 | `Title` | `abstract Title` + `TitleImpl` sobre `DOCUMENT` (`$document[0].title`) | directo | hecho (Etapa 14) |
-| `Meta` | `<meta>` en `$document` a mano | shim | |
+| `Meta` | `abstract Meta` + `MetaImpl` — port del `Meta` de Angular, `<meta>` en `DOCUMENT.head` a mano | shim | hecho (Etapa 14) |
 | `DomSanitizer.sanitize()` / `[innerHTML]` | `$sanitize` (`ngSanitize`) + `ng-bind-html` | shim | |
 | `bypassSecurityTrustHtml` / `…Url` / `…ResourceUrl` / `…Style` / `…Script` | `$sce.trustAsHtml` / `…Url` / `…ResourceUrl` / `…Css` / `…Js` | shim | nombres casi calcados |
 | `SafeHtml` / `SafeUrl` / `SafeResourceUrl` (tipos) | valores marcados por `$sce` | shim | |
-| `@angular/cdk/layout` `BreakpointObserver` / `Breakpoints` (`XSmall`…`XLarge`, `Handset`, `Tablet`, `Web`) | servicio sobre `window.matchMedia` → `Observable<BreakpointState>` (RxJS; Zone lo corre bajo el digest) | shim | |
-| `MediaMatcher` | `window.matchMedia` directo | shim | |
+| `@angular/cdk/layout` `BreakpointObserver` / `Breakpoints` (`XSmall`…`XLarge`, `Handset`, `Tablet`, `Web`) | port en `src/cdk/layout/` — `observe()`/`isMatched()` sobre `MediaMatcher` → `Observable<BreakpointState>` (`combineLatest`; `NgZone.run` en el callback del MQL → digest) | shim | hecho (Etapa 14) |
+| `MediaMatcher` | `abstract` + `MediaMatcherImpl` sobre `window.matchMedia` (fallback MQL falso si no está) | shim | hecho (Etapa 14) |
 
 ## Build y entornos
 

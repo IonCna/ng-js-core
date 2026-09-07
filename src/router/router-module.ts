@@ -1,7 +1,9 @@
 import "@uirouter/angularjs";
 import type { StateProvider, StateService, Transition, TransitionService } from "@uirouter/angularjs";
 import angular, { type ILocationProvider, type ILocationService, type IRootScopeService } from "angular";
+import { HashLocationStrategy, LocationStrategy, PathLocationStrategy } from "@/platform-browser/location/index.ts";
 import { Title } from "@/platform-browser/title.ts";
+import { platformBrowserModule } from "@/runtime/platform-browser/index.ts";
 import { ActivatedRoute, ActivatedRouteImpl } from "@/router/activated-route.ts";
 import type { Data, ResolveFn, Routes } from "@/router/route.ts";
 import { mergeResolvedData, pickRouteTitle } from "@/router/route-title.ts";
@@ -36,9 +38,11 @@ interface RouterFeature {
 
 /**
  * Feature para `RouterModule.forRoot(routes, withHashLocation())` — mismo nombre y
- * semántica que `@angular/router`: activa el `HashLocationStrategy` (URLs `#/about`).
- * Sin este feature el router usa el equivalente a `PathLocationStrategy`
- * (`$locationProvider.html5Mode`, URLs `/about`), que es el default de Angular.
+ * semántica que `@angular/router`. Hace dos cosas:
+ *  1. registra `{ provide: LocationStrategy, useClass: HashLocationStrategy }`
+ *     (URLs `#/about`; sin el feature → `PathLocationStrategy`, `/about`);
+ *  2. pone `$locationProvider.html5Mode(false)` — UI-Router (el sustrato) lee la
+ *     URL de `$location`, así que necesita el modo hashbang para coincidir.
  */
 export function withHashLocation(): RouterFeature {
   return { ɵkind: "hash-location" };
@@ -134,7 +138,15 @@ export const RouterModule = {
     if (root && (root.url === "" || root.url === undefined)) root.url = "/";
     const fallbackUrl = (typeof root?.url === "string" && root.url) || "/";
 
-    const mod = angular.module(nextModuleName("ngjs.router"), ["ui.router"]);
+    const useHash = hashRequested(features);
+    // El router depende de `platform-browser` (como `@angular/router` de `@angular/common`):
+    // trae `PlatformLocation` + `APP_BASE_HREF` + `DOCUMENT`.
+    platformBrowserModule();
+    const mod = angular.module(nextModuleName("ngjs.router"), ["ui.router", "ng.js.platform-browser"]);
+
+    // `@angular/common` no da un `LocationStrategy` por default — lo elige el router
+    // según `withHashLocation()`.
+    mod.service(LocationStrategy.$name, useHash ? HashLocationStrategy : PathLocationStrategy);
 
     const config = (
       $stateProvider: StateProvider,
@@ -142,7 +154,7 @@ export const RouterModule = {
       $locationProvider: ILocationProvider,
     ) => {
       // Default = PathLocationStrategy (html5), como Angular. `withHashLocation()` → hashbang.
-      if (!hashRequested(features)) {
+      if (!useHash) {
         $locationProvider.html5Mode({ enabled: true, requireBase: false });
       }
       for (const state of states) $stateProvider.state({ ...state }); // clon: UI-Router muta la decl (quita lazyLoad); no compartir entre bootstraps

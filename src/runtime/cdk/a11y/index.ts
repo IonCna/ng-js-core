@@ -6,23 +6,23 @@
  * — todo DOM. **Opt-in**.
  */
 import angular from "angular";
-import { FocusMonitor } from "@/a11y/focus-monitor.ts";
-import { FocusTrapFactory } from "@/a11y/focus-trap.ts";
-import { InteractivityChecker } from "@/a11y/interactivity-checker.ts";
+import { FocusMonitor } from "@/cdk/a11y/focus-monitor.ts";
+import { FocusTrapFactory } from "@/cdk/a11y/focus-trap.ts";
+import { InteractivityChecker } from "@/cdk/a11y/interactivity-checker.ts";
 import {
   LIVE_ANNOUNCER_DEFAULT_OPTIONS,
   LiveAnnouncer,
   type LiveAnnouncerDefaultOptions,
-} from "@/a11y/live-announcer.ts";
-import { CdkAriaLive } from "@/runtime/a11y/cdk-aria-live.ts";
-import { CdkMonitorFocus } from "@/runtime/a11y/cdk-monitor-focus.ts";
-import { CdkTrapFocus } from "@/runtime/a11y/cdk-trap-focus.ts";
+} from "@/cdk/a11y/live-announcer.ts";
+import { CdkAriaLive } from "@/runtime/cdk/a11y/cdk-aria-live.ts";
+import { CdkMonitorFocus } from "@/runtime/cdk/a11y/cdk-monitor-focus.ts";
+import { CdkTrapFocus } from "@/runtime/cdk/a11y/cdk-trap-focus.ts";
 import { installCoreModule } from "@/runtime/core-module.ts";
 
-export * from "@/a11y/index.ts";
-export { CdkAriaLive } from "@/runtime/a11y/cdk-aria-live.ts";
-export { CdkMonitorFocus } from "@/runtime/a11y/cdk-monitor-focus.ts";
-export { CdkTrapFocus } from "@/runtime/a11y/cdk-trap-focus.ts";
+export * from "@/cdk/a11y/index.ts";
+export { CdkAriaLive } from "@/runtime/cdk/a11y/cdk-aria-live.ts";
+export { CdkMonitorFocus } from "@/runtime/cdk/a11y/cdk-monitor-focus.ts";
+export { CdkTrapFocus } from "@/runtime/cdk/a11y/cdk-trap-focus.ts";
 
 export interface A11yConfig {
   /** Defaults de `LiveAnnouncer` (`politeness`, `duration`). */

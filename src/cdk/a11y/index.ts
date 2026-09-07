@@ -7,15 +7,15 @@
  * `A11yModule` viven en `ngjs-core/runtime/a11y`.
  */
 
-export { FocusMonitor, type FocusOrigin } from "@/a11y/focus-monitor.ts";
-export { FocusTrap, FocusTrapFactory } from "@/a11y/focus-trap.ts";
+export { FocusMonitor, type FocusOrigin } from "@/cdk/a11y/focus-monitor.ts";
+export { FocusTrap, FocusTrapFactory } from "@/cdk/a11y/focus-trap.ts";
 export {
   FOCUSABLE_SELECTOR,
   InteractivityChecker,
-} from "@/a11y/interactivity-checker.ts";
+} from "@/cdk/a11y/interactivity-checker.ts";
 export {
   type AriaLivePoliteness,
   LIVE_ANNOUNCER_DEFAULT_OPTIONS,
   LiveAnnouncer,
   type LiveAnnouncerDefaultOptions,
-} from "@/a11y/live-announcer.ts";
+} from "@/cdk/a11y/live-announcer.ts";

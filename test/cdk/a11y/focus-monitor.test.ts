@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FocusMonitor, type FocusOrigin } from "@/a11y/index.ts";
+import { FocusMonitor, type FocusOrigin } from "@/cdk/a11y/index.ts";
 import { ElementRefImpl } from "@/core/refs/element-ref.ts";
 
 describe("etapa 18 (a11y) — FocusMonitor", () => {

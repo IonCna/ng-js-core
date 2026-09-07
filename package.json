@@ -77,15 +77,25 @@
       "import": "./dist/animations/index.js",
       "default": "./dist/animations/index.js"
     },
-    "./a11y": {
-      "types": "./dist/a11y/index.d.ts",
-      "import": "./dist/a11y/index.js",
-      "default": "./dist/a11y/index.js"
+    "./cdk/a11y": {
+      "types": "./dist/cdk/a11y/index.d.ts",
+      "import": "./dist/cdk/a11y/index.js",
+      "default": "./dist/cdk/a11y/index.js"
     },
-    "./runtime/a11y": {
-      "types": "./dist/runtime/a11y/index.d.ts",
-      "import": "./dist/runtime/a11y/index.js",
-      "default": "./dist/runtime/a11y/index.js"
+    "./cdk/layout": {
+      "types": "./dist/cdk/layout/index.d.ts",
+      "import": "./dist/cdk/layout/index.js",
+      "default": "./dist/cdk/layout/index.js"
+    },
+    "./runtime/cdk/a11y": {
+      "types": "./dist/runtime/cdk/a11y/index.d.ts",
+      "import": "./dist/runtime/cdk/a11y/index.js",
+      "default": "./dist/runtime/cdk/a11y/index.js"
+    },
+    "./runtime/cdk/layout": {
+      "types": "./dist/runtime/cdk/layout/index.d.ts",
+      "import": "./dist/runtime/cdk/layout/index.js",
+      "default": "./dist/runtime/cdk/layout/index.js"
     },
     "./i18n": {
       "types": "./dist/i18n/index.d.ts",

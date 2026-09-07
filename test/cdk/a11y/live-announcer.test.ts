@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { LiveAnnouncer } from "@/a11y/index.ts";
+import { LiveAnnouncer } from "@/cdk/a11y/index.ts";
 
 const liveEl = () => document.querySelector(".cdk-live-announcer-element");
 

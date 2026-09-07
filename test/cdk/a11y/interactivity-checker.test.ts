@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { InteractivityChecker } from "@/a11y/index.ts";
+import { InteractivityChecker } from "@/cdk/a11y/index.ts";
 
 const checker = new InteractivityChecker();
 const mounted: HTMLElement[] = [];

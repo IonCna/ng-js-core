@@ -1,5 +1,5 @@
 import type { IAttributes, IDirective } from "angular";
-import { type FocusTrap, FocusTrapFactory } from "@/a11y/focus-trap.ts";
+import { type FocusTrap, FocusTrapFactory } from "@/cdk/a11y/focus-trap.ts";
 import { ElementRef } from "@/core/refs/element-ref.ts";
 
 /**

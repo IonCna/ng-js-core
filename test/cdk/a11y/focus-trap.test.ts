@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { FocusTrap, FocusTrapFactory, InteractivityChecker } from "@/a11y/index.ts";
+import { FocusTrap, FocusTrapFactory, InteractivityChecker } from "@/cdk/a11y/index.ts";
 import { ElementRefImpl } from "@/core/refs/element-ref.ts";
 
 const factory = new FocusTrapFactory(new InteractivityChecker());

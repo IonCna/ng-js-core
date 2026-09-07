@@ -1,5 +1,5 @@
 import type { IAttributes, IDirective } from "angular";
-import { type AriaLivePoliteness, LiveAnnouncer } from "@/a11y/live-announcer.ts";
+import { type AriaLivePoliteness, LiveAnnouncer } from "@/cdk/a11y/live-announcer.ts";
 import { ElementRef } from "@/core/refs/element-ref.ts";
 
 /**

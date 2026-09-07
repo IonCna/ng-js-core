@@ -1,4 +1,4 @@
-import { FOCUSABLE_SELECTOR, InteractivityChecker } from "@/a11y/interactivity-checker.ts";
+import { FOCUSABLE_SELECTOR, InteractivityChecker } from "@/cdk/a11y/interactivity-checker.ts";
 import { ElementRef } from "@/core/refs/element-ref.ts";
 
 /**

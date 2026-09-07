@@ -8,7 +8,7 @@ import {
   InteractivityChecker,
   LiveAnnouncer,
   provideA11y,
-} from "@/runtime/a11y/index.ts";
+} from "@/runtime/cdk/a11y/index.ts";
 
 function boot(mod: angular.IModule, html: string) {
   const host = document.createElement("div");

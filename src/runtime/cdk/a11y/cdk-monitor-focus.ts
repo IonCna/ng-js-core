@@ -1,6 +1,6 @@
 import type { IAttributes, IAugmentedJQuery, IDirective, IScope } from "angular";
 import type { Subscription } from "rxjs";
-import { FocusMonitor } from "@/a11y/focus-monitor.ts";
+import { FocusMonitor } from "@/cdk/a11y/focus-monitor.ts";
 import { ElementRef } from "@/core/refs/element-ref.ts";
 
 /**
