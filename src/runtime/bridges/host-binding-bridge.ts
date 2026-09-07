@@ -3,7 +3,19 @@ import { getComponentDef } from "@/core/metadata/define-component.ts";
 import { getDirectiveDef } from "@/core/metadata/directive.ts";
 import { decorateControllerWith } from "@/runtime/bridges/shared.ts";
 
-function applyHostBinding(el: Element, hostProperty: string, value: unknown): void {
+function classTokens(value: unknown): string[] {
+  return typeof value === "string" ? value.split(/\s+/).filter(Boolean) : [];
+}
+
+function applyHostBinding(el: Element, hostProperty: string, value: unknown, oldValue?: unknown): void {
+  if (hostProperty === "class") {
+    // `@HostBinding('class')` — string entera. Saca los tokens viejos que ya no
+    // están y agrega los nuevos; no toca las clases estáticas del template.
+    const next = classTokens(value);
+    for (const token of classTokens(oldValue)) if (!next.includes(token)) el.classList.remove(token);
+    for (const token of next) el.classList.add(token);
+    return;
+  }
   if (hostProperty.startsWith("class.")) {
     el.classList.toggle(hostProperty.slice("class.".length), !!value);
     return;
@@ -48,7 +60,7 @@ export function decorateControllerHostBindings($delegate: angular.IControllerSer
       const deregisterFns = bindings.map((binding) =>
         $scope.$watch(
           () => (instance as Record<string, unknown>)[binding.propName],
-          (value) => applyHostBinding(nativeElement, binding.hostProperty, value),
+          (value, oldValue) => applyHostBinding(nativeElement, binding.hostProperty, value, oldValue),
         ),
       );
 

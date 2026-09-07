@@ -20,19 +20,22 @@ const modules = new WeakMap<Function, angular.IModule>();
  * módulo necesite (`.decorator()`, `.config()`, `.run()`) se hace por fuera, sobre
  * el `angular.IModule` que devuelve esta función (ver `core-module.ts`).
  */
-export function registerNgModule(moduleType: Function): angular.IModule {
+export function registerNgModule(moduleType: Function, inheritedControllerAs?: string): angular.IModule {
   const existing = modules.get(moduleType);
   if (existing) return existing;
 
   const def = getNgModuleDef(moduleType);
   if (!def) throw new Error("registerNgModule: la clase no tiene @NgModule/ngModule().define()");
 
-  const deps = def.imports.map(resolveNgModuleImport);
+  // `controllerAs` del módulo, o el heredado del `@NgModule` que lo importa (gana el más cercano).
+  const controllerAs = def.controllerAs ?? inheritedControllerAs;
+
+  const deps = def.imports.map((imported) => resolveNgModuleImport(imported, controllerAs));
   const module = angular.module(def.id, deps);
   modules.set(moduleType, module);
 
   registerProviders(module, def.providers);
-  for (const declaration of def.declarations) registerDeclaration(module, declaration);
+  for (const declaration of def.declarations) registerDeclaration(module, declaration, controllerAs);
 
   return module;
 }
@@ -41,11 +44,14 @@ export function getNgModuleName(moduleType: Function): string {
   return registerNgModule(moduleType).name;
 }
 
-function resolveNgModuleImport(imported: Function | angular.IModule | string): string {
+function resolveNgModuleImport(
+  imported: Function | angular.IModule | string,
+  inheritedControllerAs?: string,
+): string {
   if (typeof imported === "string") return imported;
 
   if (typeof imported === "function" && getNgModuleDef(imported)) {
-    return registerNgModule(imported).name;
+    return registerNgModule(imported, inheritedControllerAs).name;
   }
 
   if (isAngularModule(imported)) return imported.name;
@@ -57,7 +63,18 @@ function isAngularModule(value: unknown): value is angular.IModule {
   return typeof value === "object" && value !== null && typeof (value as angular.IModule).name === "string";
 }
 
-function registerDeclaration(module: angular.IModule, declaration: Function): void {
+/**
+ * Prioridad: `controllerAs` del `@Component`/`@Directive` → del `@NgModule`
+ * (propio o heredado). Para componentes cae a `"$ctrl"` (el default nativo de
+ * `.component()`, así no cambia nada); para directivas queda `undefined` si nadie
+ * lo puso (AngularJS no lo auto-defaultea — no forzarlo evita meter un `$ctrl`
+ * en el scope compartido de una directiva sin `controllerAs`).
+ */
+function resolveControllerAs(own: string | undefined, fromModule: string | undefined): string {
+  return own ?? fromModule ?? "$ctrl";
+}
+
+function registerDeclaration(module: angular.IModule, declaration: Function, moduleControllerAs?: string): void {
   const componentDef = getComponentDef(declaration);
   if (componentDef) {
     ensureInject(declaration);
@@ -65,7 +82,7 @@ function registerDeclaration(module: angular.IModule, declaration: Function): vo
       controller: declaration as unknown as angular.Injectable<angular.IControllerConstructor>,
       template: componentDef.template,
       templateUrl: componentDef.templateUrl,
-      controllerAs: componentDef.controllerAs,
+      controllerAs: resolveControllerAs(componentDef.controllerAs, moduleControllerAs),
       require: componentDef.require,
       bindings: computeComponentBindings(componentDef),
       transclude: componentDef.transclude ?? (componentDef.template?.includes("<ng-content") ? true : undefined),
@@ -79,7 +96,7 @@ function registerDeclaration(module: angular.IModule, declaration: Function): vo
     const factory = (declaration as { $factory?: () => angular.IDirective }).$factory;
     module.directive(
       toCamelCase(stripAttributeSelector(directiveDef.selector)),
-      factory ?? (() => createDirectiveDefinition(declaration, directiveDef)),
+      factory ?? (() => createDirectiveDefinition(declaration, directiveDef, moduleControllerAs)),
     );
     return;
   }
@@ -97,7 +114,11 @@ function registerDeclaration(module: angular.IModule, declaration: Function): vo
 
 type StampedDirectiveDef = NonNullable<ReturnType<typeof getDirectiveDef>>;
 
-function createDirectiveDefinition(declaration: Function, def: StampedDirectiveDef): angular.IDirective {
+function createDirectiveDefinition(
+  declaration: Function,
+  def: StampedDirectiveDef,
+  moduleControllerAs?: string,
+): angular.IDirective {
   return {
     controller: declaration as unknown as angular.Injectable<angular.IControllerConstructor>,
     bindToController: def.bindToController ?? true,
@@ -107,7 +128,7 @@ function createDirectiveDefinition(declaration: Function, def: StampedDirectiveD
     transclude: def.transclude,
     template: def.template,
     templateUrl: def.templateUrl,
-    controllerAs: def.controllerAs,
+    controllerAs: def.controllerAs ?? moduleControllerAs,
     priority: def.priority,
     terminal: def.terminal,
     compile: def.compile,

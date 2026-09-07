@@ -94,4 +94,11 @@ export interface NgModuleDef {
   declarations?: Function[];
   imports?: (Function | angular.IModule | string)[];
   providers?: Provider[];
+  /**
+   * `controllerAs` por default para las `declarations` de este módulo que no lo
+   * declaren en su `@Component`/`@Directive`. Se hereda hacia los `@NgModule`
+   * importados que tampoco lo pongan (gana el más cercano). Sin nada en ningún
+   * nivel: `"$ctrl"` (el default nativo de AngularJS).
+   */
+  controllerAs?: string;
 }

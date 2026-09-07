@@ -11,6 +11,14 @@ export interface ControllerHooks {
   augmentLocals?: (locals: Record<string, unknown> | undefined) => Record<string, unknown> | undefined;
   /** Corre justo cuando de verdad se construye una instancia (ver nota de `later` abajo). */
   onInstance?: (instance: unknown, locals: Record<string, unknown> | undefined) => void;
+  /**
+   * Envuelve la construcción real (field initializers incluidos): recibe una
+   * función que la ejecuta y devuelve la instancia; debe llamarla y devolver su
+   * resultado. Lo usa el bridge de contexto de inyección para que `inject()`
+   * ande en los initializers. Solo el bridge más interno (registrado primero)
+   * debería usarlo.
+   */
+  aroundInit?: (construct: () => unknown, locals: Record<string, unknown> | undefined) => unknown;
 }
 
 /**
@@ -40,16 +48,18 @@ export function decorateControllerWith(
 
   const wrapped = (expression: unknown, locals?: Record<string, unknown>, later?: boolean, identifier?: string) => {
     const augmentedLocals = hooks.augmentLocals ? hooks.augmentLocals(locals) : locals;
-    const result = invoke(expression, augmentedLocals, later, identifier);
 
     if (!later) {
+      const runInvoke = () => invoke(expression, augmentedLocals, later, identifier);
+      const result = hooks.aroundInit ? hooks.aroundInit(runInvoke, augmentedLocals) : runInvoke();
       hooks.onInstance?.(result, augmentedLocals);
       return result;
     }
 
-    const initializer = result as ControllerInitializer;
+    const initializer = invoke(expression, augmentedLocals, later, identifier) as ControllerInitializer;
     const wrappedInitializer: ControllerInitializer = function (this: unknown) {
-      const instance = initializer.call(this);
+      const construct = () => initializer.call(this);
+      const instance = hooks.aroundInit ? hooks.aroundInit(construct, augmentedLocals) : construct();
       hooks.onInstance?.(instance, augmentedLocals);
       return instance;
     };

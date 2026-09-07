@@ -14,6 +14,7 @@ import { decorateControllerDestroyRef } from "@/runtime/bridges/destroy-ref-brid
 import { decorateControllerElementRef } from "@/runtime/bridges/element-ref-bridge.ts";
 import { decorateControllerHostBindings } from "@/runtime/bridges/host-binding-bridge.ts";
 import { decorateControllerHostListeners } from "@/runtime/bridges/host-listener-bridge.ts";
+import { decorateControllerInjectionContext } from "@/runtime/bridges/injection-context-bridge.ts";
 import { decorateControllerLifecycle } from "@/runtime/bridges/lifecycle-bridge.ts";
 import { decorateNgDisabledDirective } from "@/runtime/bridges/ng-disabled-bridge.ts";
 import { decorateControllerOutputEmitters } from "@/runtime/bridges/output-emitter-bridge.ts";
@@ -61,7 +62,9 @@ export function installCoreModule(): angular.IModule {
 
   coreModule
     // Bridges de ciclo de vida / refs / queries — decoran `$controller` al instanciar
-    // cada controller. Orden significativo: `scopedInjector` primero, `lifecycle` último.
+    // cada controller. Orden significativo: `injectionContext` primero (bridge más
+    // interno, envuelve la construcción real para `inject()`), `lifecycle` último.
+    .decorator("$controller", decorateControllerInjectionContext)
     .decorator("$controller", decorateControllerScopedInjector)
     .decorator("$controller", decorateControllerElementRef)
     .decorator("$controller", decorateControllerAttributes)
