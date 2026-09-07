@@ -553,7 +553,7 @@ Sustrato: `@uirouter/angularjs` (no `ngRoute`).
 | `loadChildren: () => import(...)` | `lazyLoad` del estado + wrapper que adapta el `import()` nativo al contrato `{ states }` de UI-Router | shim | ver «UI-Router `lazyLoad` y ESM» |
 | `loadComponent: () => import(...)` | ídem + registro del componente vía providers capturados | shim | |
 | eventos del router (`NavigationStart`…) | hooks de transición | brecha | sin evento `Scroll` |
-| `withInMemoryScrolling({ anchorScrolling, scrollPositionRestoration })` | `.run($transitions.onSuccess)` + `$timeout(0)` → `ViewportScroller` | shim | `anchorScrolling` + `'top'` OK; `'enabled'` (restaurar en back/forward) es brecha — UI-Router no da el trigger de nav |
+| `withInMemoryScrolling({ anchorScrolling, scrollPositionRestoration })` | `.run($transitions.onBefore/onSuccess)` + `$timeout(0)` → `ViewportScroller`; `'enabled'` = store de scroll **por URL** + `popstate` de `window` para detectar back/forward | shim | store por URL, no por `navigationId`; sin evento `Scroll` |
 
 ## Animaciones
 

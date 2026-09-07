@@ -1,7 +1,12 @@
 import "@uirouter/angularjs";
 import type { StateProvider, StateService, Transition, TransitionService } from "@uirouter/angularjs";
 import angular, { type ILocationProvider, type ILocationService, type IRootScopeService } from "angular";
-import { HashLocationStrategy, LocationStrategy, PathLocationStrategy } from "@/platform-browser/location/index.ts";
+import {
+  HashLocationStrategy,
+  LocationStrategy,
+  PathLocationStrategy,
+  PlatformLocation,
+} from "@/platform-browser/location/index.ts";
 import { Title } from "@/platform-browser/title.ts";
 import { ViewportScroller } from "@/platform-browser/viewport-scroller.ts";
 import { platformBrowserModule } from "@/runtime/platform-browser/index.ts";
@@ -65,9 +70,12 @@ export function withHashLocation(): RouterFeature {
 /**
  * Feature para `RouterModule.forRoot(routes, withInMemoryScrolling(opts))` —
  * mismo nombre que `@angular/router`. Soporta `anchorScrolling: 'enabled'`
- * (scroll al `#fragment`) y `scrollPositionRestoration: 'top'`. **Brecha:**
- * `scrollPositionRestoration: 'enabled'` (restaurar la posición en back/forward)
- * NO se implementa sobre UI-Router — se comporta como `'top'`.
+ * (scroll al `#fragment`), `scrollPositionRestoration: 'top'` y `'enabled'`
+ * (guarda la posición por URL y la restaura en back/forward — el trigger de
+ * back/forward se infiere escuchando `popstate` en `window`, porque UI-Router no
+ * lo expone). **Matiz vs Angular:** el store es por URL, así que también restaura
+ * al volver a una URL ya visitada por un link (no solo con el botón atrás). No
+ * se emite el evento `Scroll` en `Router.events`.
  */
 export function withInMemoryScrolling(options: InMemoryScrollingOptions = {}): RouterFeature {
   return { ɵkind: "in-memory-scrolling", options };
@@ -149,34 +157,72 @@ function hashRequested(features: RouterFeature[]): boolean {
 }
 
 /**
- * `withInMemoryScrolling()` → `.run` sobre `$transitions.onSuccess`. Difiere con
- * `$timeout(0)` porque el `<ui-view>` nuevo se linkea recién después del hook.
- * `anchorScrolling: 'enabled'` → `scrollToAnchor(#fragment)`; si no,
- * `scrollPositionRestoration` `'top'`/`'enabled'` → `scrollToPosition([0,0])`.
- * (`'enabled'` = restaurar en back/forward NO está — se comporta como `'top'`.)
+ * `withInMemoryScrolling()` → `.run`. El scroll se difiere con `$timeout(0)`
+ * porque el `<ui-view>` nuevo se linkea recién después de `onSuccess`.
+ * Prioridad: posición restaurada (back/forward con `'enabled'`) → `#fragment`
+ * (`anchorScrolling`) → `[0,0]` (`'top'`/`'enabled'` yendo adelante).
+ *
+ * `'enabled'`: se guarda `getScrollPosition()` por URL en `onBefore` (la página
+ * que se deja) y se restaura en `onSuccess` si la nav fue un `popstate`
+ * (`window` popstate → `pendingPop`, consumido en el próximo `onSuccess`).
  */
 function wireRouterScroller(options: InMemoryScrollingOptions) {
   const restoration = options.scrollPositionRestoration ?? "disabled";
   const anchorScrolling = options.anchorScrolling ?? "disabled";
+  const restoreEnabled = restoration === "enabled";
 
   const run = (
     viewportScroller: ViewportScroller,
+    platformLocation: PlatformLocation,
     $transitions: TransitionService,
     $location: ILocationService,
     $timeout: angular.ITimeoutService,
+    $rootScope: IRootScopeService,
   ) => {
     if (restoration !== "disabled") viewportScroller.setHistoryScrollRestoration("manual");
 
+    const store = new Map<string, [number, number]>();
+    let lastUrl: string | undefined;
+    let pendingPop = false;
+
+    if (restoreEnabled) {
+      const offPop = platformLocation.onPopState(() => {
+        pendingPop = true;
+      });
+      $rootScope.$on("$destroy", offPop);
+      $transitions.onError({}, () => {
+        pendingPop = false;
+      });
+    }
+
+    $transitions.onBefore({}, () => {
+      if (restoreEnabled && lastUrl !== undefined) {
+        store.set(lastUrl, viewportScroller.getScrollPosition());
+      }
+    });
+
     $transitions.onSuccess({}, () => {
+      const url = $location.url();
       const anchor = anchorScrolling === "enabled" ? $location.hash() || null : null;
-      const toTop = restoration === "top" || restoration === "enabled";
+      const restored = restoreEnabled && pendingPop ? store.get(url) : undefined;
+      pendingPop = false;
+      lastUrl = url;
+
       $timeout(() => {
-        if (anchor) viewportScroller.scrollToAnchor(anchor);
-        else if (toTop) viewportScroller.scrollToPosition([0, 0]);
+        if (restored) viewportScroller.scrollToPosition(restored);
+        else if (anchor) viewportScroller.scrollToAnchor(anchor);
+        else if (restoration === "top" || restoration === "enabled") viewportScroller.scrollToPosition([0, 0]);
       }, 0);
     });
   };
-  run.$inject = [ViewportScroller.$name, "$transitions", "$location", "$timeout"];
+  run.$inject = [
+    ViewportScroller.$name,
+    PlatformLocation.$name,
+    "$transitions",
+    "$location",
+    "$timeout",
+    "$rootScope",
+  ];
   return run;
 }
 

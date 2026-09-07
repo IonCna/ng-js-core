@@ -6,6 +6,7 @@ import { Component } from "@/core/metadata/component.ts";
 import { NgModule } from "@/core/metadata/ng-module.ts";
 import type { Routes } from "@/router/index.ts";
 import { Router, RouterModule, withInMemoryScrolling } from "@/router/index.ts";
+import type { ViewportScroller } from "@/platform-browser/index.ts";
 import { CommonModule } from "@/runtime/common/index.ts";
 import { bootstrapModuleRuntime } from "@/runtime/index.ts";
 
@@ -38,6 +39,7 @@ async function boot(feature?: ReturnType<typeof withInMemoryScrolling>) {
   currentAppRef = appRef;
   const injector = appRef.injector as angular.auto.IInjectorService;
   return {
+    injector,
     router: injector.get<Router>(Router.$name),
     $rootScope: injector.get<angular.IRootScopeService>("$rootScope"),
   };
@@ -89,7 +91,7 @@ describe("ngjs-core/router — withInMemoryScrolling", () => {
     expect(scrollToSpy).toHaveBeenCalledWith(0, 120);
   });
 
-  it("scrollPositionRestoration: 'enabled' se degrada a 'top' (brecha)", async () => {
+  it("scrollPositionRestoration: 'enabled' yendo adelante → scroll a [0,0]", async () => {
     const { router, $rootScope } = await boot(withInMemoryScrolling({ scrollPositionRestoration: "enabled" }));
     scrollToSpy.mockClear();
 
@@ -99,6 +101,32 @@ describe("ngjs-core/router — withInMemoryScrolling", () => {
     $rootScope.$digest();
 
     expect(scrollToSpy).toHaveBeenCalledWith(0, 0);
+  });
+
+  it("scrollPositionRestoration: 'enabled' → restaura la posición guardada en un back/forward", async () => {
+    const { router, $rootScope, injector } = await boot(
+      withInMemoryScrolling({ scrollPositionRestoration: "enabled" }),
+    );
+    const vs = injector.get<ViewportScroller>("ViewportScroller");
+    const nav = async (url: string) => {
+      await router.navigateByUrl(url);
+      $rootScope.$digest();
+      await tick();
+      $rootScope.$digest();
+    };
+
+    // en /page el usuario "scrollea" a y=300; después va a /
+    await nav("/page");
+    vi.spyOn(vs, "getScrollPosition").mockReturnValue([0, 300]);
+    await nav("/"); // el onBefore guarda /page → [0,300]
+    scrollToSpy.mockClear();
+
+    // botón atrás → /page
+    window.dispatchEvent(new PopStateEvent("popstate", { state: null }));
+    await nav("/page");
+
+    expect(scrollToSpy).toHaveBeenCalledWith(0, 300);
+    expect(scrollToSpy).not.toHaveBeenCalledWith(0, 0);
   });
 
   it("sin el feature → no toca el scroll", async () => {
