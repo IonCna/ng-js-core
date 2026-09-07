@@ -628,7 +628,7 @@ CLI reescribe `[disabled]="expr"` → `ng-disabled="expr"`.
 | `Location` (servicio) | `abstract` + `LocationImpl` — port de `@angular/common`, `path()`/`go()`/`replaceState()`/`back()`/`getState()`/`subscribe()`/`onUrlChange()` sobre `LocationStrategy` | shim | hecho (Etapa 14) |
 | `PlatformLocation` | `abstract` + `BrowserPlatformLocation` sobre `$window.location`/`$window.history` | shim | hecho (Etapa 14) |
 | `DOCUMENT` token | `$document` | shim | |
-| `ViewportScroller` | `$anchorScroll` / scroll manual | shim | |
+| `ViewportScroller` | `abstract` + `BrowserViewportScroller` — port de `@angular/common` sobre `$window` + `DOCUMENT` (no `$anchorScroll`) | shim | hecho (Etapa 14) |
 | `Title` | `abstract Title` + `TitleImpl` sobre `DOCUMENT` (`$document[0].title`) | directo | hecho (Etapa 14) |
 | `Meta` | `abstract Meta` + `MetaImpl` — port del `Meta` de Angular, `<meta>` en `DOCUMENT.head` a mano | shim | hecho (Etapa 14) |
 | `DomSanitizer.sanitize()` / `[innerHTML]` | `$sanitize` (`ngSanitize`) + `ng-bind-html` | shim | |

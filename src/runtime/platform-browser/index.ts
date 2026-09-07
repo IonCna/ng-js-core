@@ -2,11 +2,10 @@
  * `ngjs-core/runtime/platform-browser` — el `angular.module` que registra los
  * servicios de plataforma (`@angular/common` / `@angular/platform-browser`).
  * Por ahora: `DOCUMENT`, `Title`, `Meta`, `PlatformLocation` + `APP_BASE_HREF`,
- * `Location`. `LocationStrategy` NO se registra acá (como en Angular: sin default
- * en `common`) — lo provee `RouterModule.forRoot` (`Path` por default,
- * `withHashLocation()` → `Hash`), por eso `Location` solo resuelve con el router
- * presente. Se irá completando (DomSanitizer, ViewportScroller,
- * BreakpointObserver). **Opt-in** — no se carga solo.
+ * `Location`, `ViewportScroller`. `LocationStrategy` NO se registra acá (como en
+ * Angular: sin default en `common`) — lo provee `RouterModule.forRoot` (`Path`
+ * por default, `withHashLocation()` → `Hash`), por eso `Location` solo resuelve
+ * con el router presente. Falta `DomSanitizer`. **Opt-in** — no se carga solo.
  */
 import angular from "angular";
 import { DOCUMENT } from "@/platform-browser/dom-tokens.ts";
@@ -19,6 +18,7 @@ import {
 } from "@/platform-browser/location/index.ts";
 import { Meta, MetaImpl } from "@/platform-browser/meta.ts";
 import { Title, TitleImpl } from "@/platform-browser/title.ts";
+import { BrowserViewportScroller, ViewportScroller } from "@/platform-browser/viewport-scroller.ts";
 import { installCoreModule } from "@/runtime/core-module.ts";
 
 export * from "@/platform-browser/index.ts";
@@ -37,7 +37,8 @@ export function platformBrowserModule(): angular.IModule {
     .service(Meta.$name, MetaImpl)
     .value(APP_BASE_HREF.toString(), "/")
     .service(PlatformLocation.$name, BrowserPlatformLocation)
-    .service(Location.$name, LocationImpl);
+    .service(Location.$name, LocationImpl)
+    .service(ViewportScroller.$name, BrowserViewportScroller);
 
   return base;
 }
