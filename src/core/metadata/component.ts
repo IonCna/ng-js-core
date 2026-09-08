@@ -3,6 +3,7 @@ import { getInjectableId, setInjectableId } from "@/core/di/injectable-registry.
 import { collectBindings, collectHost } from "@/core/metadata/collect-bindings.ts";
 import type { ComponentDef } from "@/core/metadata/def.ts";
 import { stampComponentDef } from "@/core/metadata/define-component.ts";
+import { exportAsRegistry } from "@/core/metadata/export-as-registry.ts";
 import { parseSelector, selectorToRegistrationName } from "@/core/metadata/selector-name.ts";
 import { SelectorRegistry } from "@/core/metadata/selector-registry.ts";
 
@@ -33,6 +34,7 @@ export function component(Clase: Function): { define(def: ComponentDef): Functio
       if (!getInjectableId(Clase) && !Object.hasOwn(Clase, "$name")) {
         setInjectableId(Clase, selectorToRegistrationName(def.selector));
       }
+      exportAsRegistry.register(def.exportAs, def.selector);
       return stampComponentDef(Clase, { ...def, inputs, outputs, host });
     },
   };

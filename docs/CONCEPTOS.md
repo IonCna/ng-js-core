@@ -99,7 +99,8 @@ ng-js-vite (lee el AST TS en build)         ┘    DirectiveDef /        ├─�
   `inputs[]` (`{ propName, bindingName, required?, transform? }`), `outputs[]`,
   `host` (`bindings` / `listeners`), `queries[]`, `lifecycle` (set de hooks
   presentes), `providers[]`, `ctorDeps[]`, `template`/`templateUrl`,
-  `styles`/`styleUrl`, `exportAs`. Sin lógica.
+  `styles`/`styleUrl`, `exportAs` (registrado en `exportAsRegistry` para resolver
+  `ng-ref-read="<exportAs>"`). Sin lógica en la clase.
 - **Los frentes convergen** en el mismo objeto. Un decorador TS y `component()`
   en JS dejan el mismo registro; `ng-js-vite` arma ese shape desde el AST en
   build-time.
@@ -319,7 +320,8 @@ que valen la pena tener presentes:
 | Angular | ngjs | Migra | Nota |
 |---|---|---|---|
 | `@Directive({ selector: '[x]' })` | `ng-js-vite` → `.directive('x')` `restrict: 'A'` | directo | |
-| `@Directive({ exportAs: 'x' })` + `#r="x"` | controller de directiva + `require: 'x'` / `ng-ref` read | shim | |
+| `@Directive({ exportAs: 'x' })` + `#r="x"` | `ng-ref="r" ng-ref-read="x"` → la instancia de esa directiva (`exportAsRegistry`) | shim | `x` puede diferir del selector |
+| `@ViewChild(r, { read: ElementRef \| TemplateRef \| ViewContainerRef })` | `ng-ref-read="ElementRef"` / `"TemplateRef"` / `"ViewContainerRef"` (o el `read` de clase en la query) | shim | `$element`/`ngTemplate` deprecados |
 | `*ngIf` / `*ngFor` / `[ngSwitch]` | `ng-if` / `ng-repeat` / `ng-switch` | tpl | |
 | `[ngClass]` / `[ngStyle]` | `ng-class` / `ng-style` | tpl | |
 | `[prop]="x"` / `(event)="f()"` | interpolación / `ng-*` | tpl | |

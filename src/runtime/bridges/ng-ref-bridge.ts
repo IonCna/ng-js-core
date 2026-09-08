@@ -3,6 +3,9 @@ import { ContentChildQuery, createDecoratedContentChildQueries } from "@/core/qu
 import { ContentChildrenQuery, createDecoratedContentChildrenQueries } from "@/core/queries/content-children.ts";
 import { getComponentDef } from "@/core/metadata/define-component.ts";
 import { getDirectiveDef } from "@/core/metadata/directive.ts";
+import { exportAsRegistry } from "@/core/metadata/export-as-registry.ts";
+import { SelectorRegistry } from "@/core/metadata/selector-registry.ts";
+import { getInjectableId } from "@/core/di/injectable-registry.ts";
 import { getControllerTokens } from "@/core/queries/controller-tokens.ts";
 import {
   getAncestorQueryRegistries,
@@ -265,14 +268,29 @@ function compileNgRef($parse: angular.IParseService): angular.IDirectiveCompileF
   };
 }
 
+/** Nombres string aceptados por `ng-ref-read` para los tokens sintéticos de Angular. */
+const SYNTHETIC_READ = new Map<string, "ElementRef" | "TemplateRef" | "ViewContainerRef">([
+  ["ElementRef", "ElementRef"],
+  ["elementRef", "ElementRef"],
+  ["TemplateRef", "TemplateRef"],
+  ["templateRef", "TemplateRef"],
+  ["ViewContainerRef", "ViewContainerRef"],
+  ["viewContainerRef", "ViewContainerRef"],
+]);
+
+let warnedLegacyRead = false;
+
 /**
- * Sin `ng-ref-read`: el default es `TemplateRef` si el elemento es
- * `<ng-template>` (vía `require`), si no `ElementRef`. Con `read`:
- * `"$element"`/`"ngTemplate"` son casos fijos; cualquier otro string es "el
- * controller de otra directiva con ese nombre en el mismo elemento" —
- * incluye `"viewContainerRef"`, que ya es descubrible así gracias a
- * `view-container-ref-bridge.ts` (sin necesitar un directive `<ng-container>`
- * aparte, a diferencia de `reference/`).
+ * `ng-ref-read` = el `read` de un `@ViewChild`/`@ContentChild` de Angular unido
+ * con el `exportAs` de `#ref="exportAsName"`, resuelto en el orden de Angular:
+ *
+ * 1. **sin `read`** → instancia del componente del elemento · si es `<ng-template>`
+ *    el `TemplateRef` · si no el `ElementRef`.
+ * 2. token sintético por nombre: `ElementRef` / `TemplateRef` / `ViewContainerRef`
+ *    (acepta también camelCase). `$element` / `ngTemplate` son alias deprecados.
+ * 3. un `exportAs` conocido → la **instancia** de esa directiva.
+ * 4. (fallback) `$<read>Controller` — el controller de una directiva registrada
+ *    con ese nombre en el elemento.
  */
 function resolveNgRefValue(
   read: string | undefined,
@@ -280,10 +298,36 @@ function resolveNgRefValue(
   elementRef: ElementRefImpl,
   templateRef: TemplateRef | undefined,
 ): unknown {
-  if (!read) return templateRef ?? elementRef;
-  if (read === "$element") return elementRef;
-  if (read === "ngTemplate") return templateRef;
-  return linkedElement.data(`$${read}Controller`);
+  if (!read) return componentInstanceOn(linkedElement) ?? templateRef ?? elementRef;
+
+  if (read === "$element" || read === "ngTemplate") {
+    if (!warnedLegacyRead) {
+      warnedLegacyRead = true;
+      console.warn(
+        `ng-ref-read="${read}" está deprecado; usá "${read === "$element" ? "ElementRef" : "TemplateRef"}".`,
+      );
+    }
+    return read === "$element" ? elementRef : (templateRef ?? null);
+  }
+
+  const synthetic = SYNTHETIC_READ.get(read);
+  if (synthetic === "ElementRef") return elementRef;
+  if (synthetic === "TemplateRef") return templateRef ?? null;
+  if (synthetic === "ViewContainerRef") return linkedElement.data("$viewContainerRefController") ?? null;
+
+  const byExportAs = exportAsRegistry.registrationNameFor(read);
+  if (byExportAs) return linkedElement.data(`$${byExportAs}Controller`) ?? null;
+
+  return linkedElement.data(`$${read}Controller`) ?? null;
+}
+
+/** Instancia del componente de selector de elemento sobre `linkedElement`, si hay. */
+function componentInstanceOn(linkedElement: angular.IAugmentedJQuery): unknown {
+  const tagName = (Array.from(linkedElement)[0] as Element | undefined)?.tagName;
+  if (!tagName) return undefined;
+  const Clase = SelectorRegistry.getClass(tagName);
+  const registrationName = Clase && getInjectableId(Clase);
+  return registrationName ? linkedElement.data(`$${registrationName}Controller`) : undefined;
 }
 
 function publishNgRefCandidate(scope: angular.IScope, locator: string, value: unknown): void {

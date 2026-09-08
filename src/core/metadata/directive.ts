@@ -2,6 +2,7 @@ import { applyConstructorInject } from "@/core/di/ctor-inject.ts";
 import { getInjectableId, setInjectableId } from "@/core/di/injectable-registry.ts";
 import { collectBindings, collectHost } from "@/core/metadata/collect-bindings.ts";
 import type { DirectiveDef, InputDef, OutputDef } from "@/core/metadata/def.ts";
+import { exportAsRegistry } from "@/core/metadata/export-as-registry.ts";
 import { selectorToRegistrationName } from "@/core/metadata/selector-name.ts";
 
 export type StampedDirectiveDef = DirectiveDef & { inputs: InputDef[]; outputs: OutputDef[] };
@@ -32,6 +33,7 @@ export function directive(Clase: Function): { define(def: DirectiveDef): Functio
       if (!getInjectableId(Clase) && !Object.hasOwn(Clase, "$name")) {
         setInjectableId(Clase, selectorToRegistrationName(def.selector));
       }
+      exportAsRegistry.register(def.exportAs, def.selector);
       return stampDirectiveDef(Clase, { ...def, inputs, outputs, host });
     },
   };
