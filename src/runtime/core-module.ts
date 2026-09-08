@@ -13,6 +13,7 @@ import { decorateControllerChangeDetectorRef } from "@/runtime/bridges/change-de
 import { decorateControllerDestroyRef } from "@/runtime/bridges/destroy-ref-bridge.ts";
 import { decorateControllerElementRef } from "@/runtime/bridges/element-ref-bridge.ts";
 import { decorateControllerHostBindings } from "@/runtime/bridges/host-binding-bridge.ts";
+import { decorateControllerHostDirectives } from "@/runtime/bridges/host-directives-bridge.ts";
 import { decorateControllerHostListeners } from "@/runtime/bridges/host-listener-bridge.ts";
 import { decorateControllerInjectionContext } from "@/runtime/bridges/injection-context-bridge.ts";
 import { decorateControllerLifecycle } from "@/runtime/bridges/lifecycle-bridge.ts";
@@ -77,6 +78,9 @@ export function installCoreModule(): angular.IModule {
     .decorator("$controller", decorateControllerHostBindings)
     .decorator("$controller", decorateControllerOutputEmitters)
     .decorator("$controller", decorateControllerLifecycle)
+    // El más externo: su `$delegate` es TODA la cadena de arriba, así una
+    // directiva compuesta por `hostDirectives` pasa por todos los bridges.
+    .decorator("$controller", decorateControllerHostDirectives)
     .decorator("ngDisabledDirective", decorateNgDisabledDirective)
     .decorator("ngRefDirective", decorateNgRefDirective)
     .decorator("$exceptionHandler", decorateExceptionHandler())

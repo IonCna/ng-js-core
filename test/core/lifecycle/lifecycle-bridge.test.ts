@@ -224,6 +224,40 @@ describe("etapa 5 — controller-bridge: ngOnChanges/ngOnDestroy/ngDoCheck", () 
     expect(calls.length).toBeGreaterThan(afterFirst);
   });
 
+  it("ngAfterContentChecked y ngAfterViewChecked se reenvían a $doCheck, en orden tras ngDoCheck", () => {
+    const name = uniqueName("lifecycleTestChecked");
+    const calls: string[] = [];
+
+    angular
+      .module(name, [])
+      .decorator("$controller", decorateControllerLifecycle)
+      .component("widget", {
+        template: "ok",
+        controller: class {
+          ngDoCheck() {
+            calls.push("doCheck");
+          }
+          ngAfterContentChecked() {
+            calls.push("contentChecked");
+          }
+          ngAfterViewChecked() {
+            calls.push("viewChecked");
+          }
+        },
+      });
+
+    const host = document.createElement("div");
+    host.innerHTML = "<widget></widget>";
+    document.body.appendChild(host);
+
+    const injector = angular.bootstrap(host, [name], { strictDi: false });
+    injector.get<angular.IRootScopeService>("$rootScope").$digest();
+
+    expect(calls.length).toBeGreaterThanOrEqual(3);
+    // el primer trío respeta el orden de Angular
+    expect(calls.slice(0, 3)).toEqual(["doCheck", "contentChecked", "viewChecked"]);
+  });
+
   it("ngAfterContentInit y ngAfterViewInit se reenvían al mismo $postLink, content antes que view", () => {
     const name = uniqueName("lifecycleTestPostLink");
     const calls: string[] = [];

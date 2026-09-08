@@ -44,6 +44,24 @@ export interface HostDef {
   listeners?: HostListenerDef[];
 }
 
+/**
+ * `hostDirectives` de Angular 15+: componer otra directiva sobre el mismo host
+ * (sus `@HostBinding`/`@HostListener`/ciclo de vida corren en este elemento, y
+ * queda `inject()`-able desde el host). Forma corta `[MiDir]` o larga
+ * `{ directive: MiDir, inputs: [...], outputs: [...] }`.
+ *
+ * Lo cablea `host-directives-bridge.ts` (decorador de `$controller`): instancia
+ * cada directiva compuesta sobre el `$element` del host antes de construirlo.
+ * Todavía NO reenvía `inputs`/`outputs` de la forma larga.
+ */
+export type HostDirectiveDef =
+  | Function
+  | {
+      directive: Function;
+      inputs?: string[];
+      outputs?: string[];
+    };
+
 export interface ComponentDef {
   selector: string;
   host?: HostDef;
@@ -57,6 +75,8 @@ export interface ComponentDef {
   styles?: string | string[];
   styleUrl?: string;
   exportAs?: string;
+  /** Ver `HostDirectiveDef` — lo cablea `host-directives-bridge.ts`. */
+  hostDirectives?: HostDirectiveDef[];
   // queries[] / lifecycle quedan afuera hasta etapas 5/7
 }
 
@@ -77,6 +97,8 @@ export interface DirectiveDef {
   terminal?: boolean;
   compile?: angular.IDirectiveCompileFn;
   link?: angular.IDirectiveLinkFn | angular.IDirectivePrePost;
+  /** Ver `HostDirectiveDef` — lo cablea `host-directives-bridge.ts`. */
+  hostDirectives?: HostDirectiveDef[];
 }
 
 export interface PipeDef {

@@ -11,6 +11,8 @@ interface ControllerInstance {
   ngOnDestroy?(): void;
   $onDestroy?(): void;
   ngDoCheck?(): void;
+  ngAfterContentChecked?(): void;
+  ngAfterViewChecked?(): void;
   $doCheck?(): void;
   ngAfterContentInit?(): void;
   ngAfterViewInit?(): void;
@@ -39,8 +41,15 @@ function bridgeLifecycle(instance: unknown): void {
   if (typeof inst.ngOnDestroy === "function" && typeof inst.$onDestroy !== "function") {
     inst.$onDestroy = () => inst.ngOnDestroy?.();
   }
-  if (typeof inst.ngDoCheck === "function" && typeof inst.$doCheck !== "function") {
-    inst.$doCheck = () => inst.ngDoCheck?.();
+  // `ngDoCheck` → `ngAfterContentChecked` → `ngAfterViewChecked` corren, en ese
+  // orden, en cada ciclo de detección de cambios de Angular. AngularJS solo tiene
+  // `$doCheck` (una vez por digest): los tres se encadenan ahí. Encadenado (no
+  // "si no existe") para no pisar un `$doCheck` que ya haya puesto el autor.
+  const perDigestHooks = [inst.ngDoCheck, inst.ngAfterContentChecked, inst.ngAfterViewChecked].filter(
+    (hook): hook is () => void => typeof hook === "function",
+  );
+  for (const hook of perDigestHooks) {
+    chainInstanceMethod(inst as object, "$doCheck", () => hook.call(inst));
   }
   if (typeof inst.ngAfterContentInit === "function" || typeof inst.ngAfterViewInit === "function") {
     // brecha: AngularJS no distingue vista propia de contenido transcluido,
