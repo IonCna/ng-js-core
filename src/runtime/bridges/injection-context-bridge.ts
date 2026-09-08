@@ -12,6 +12,20 @@ interface ElementNodeLike {
 }
 interface JqLite {
   inheritedData(name: string): unknown;
+  controller?(name: string): unknown;
+}
+
+/**
+ * Fallback estilo `require` de AngularJS: una directiva/componente publicada como
+ * controller en ESTE elemento o un ancestro. Cubre `inject(TemplateRef)` desde
+ * una directiva sobre `<ng-template>`, `inject(NgbNav)` desde una directiva
+ * anidada, etc. — cómo Angular resuelve inyectar una directiva del host o de un
+ * ancestro. Solo cuando no hay flags posicionales (`self`/`skipSelf`/`host`):
+ * `jqLite.controller()` no los distingue.
+ */
+function fromElementController($element: JqLite | undefined, name: string, flags: InjectFlags): unknown {
+  if (!$element?.controller || flags.self || flags.skipSelf || flags.host) return undefined;
+  return $element.controller(name) ?? undefined;
 }
 
 /**
@@ -53,10 +67,15 @@ export function decorateControllerInjectionContext(
             try {
               return node.get(name, options);
             } catch (error) {
+              const fromDom = fromElementController($element as JqLite | undefined, name, options);
+              if (fromDom !== undefined) return fromDom;
               if (options.optional) return null;
               throw error;
             }
           }
+
+          const fromDom = fromElementController($element as JqLite | undefined, name, options);
+          if (fromDom !== undefined) return fromDom;
 
           // Sin nodo jerárquico: `self` = solo este elemento (ya miramos locals).
           if (options.self) {
