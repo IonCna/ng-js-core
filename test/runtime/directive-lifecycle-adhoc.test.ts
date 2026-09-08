@@ -1,9 +1,11 @@
 import angular from "angular";
 import "angular-mocks";
 import { describe, expect, it } from "vitest";
+import { EventEmitter } from "@/event-emitter.ts";
 import { Directive } from "@/core/metadata/directive.ts";
 import { Input } from "@/core/metadata/input.ts";
 import { NgModule } from "@/core/metadata/ng-module.ts";
+import { Output } from "@/core/metadata/output.ts";
 import { configureTestingModule } from "@/runtime/testing/index.ts";
 
 /**
@@ -71,5 +73,35 @@ describe("@Directive ad-hoc: ngOnInit + @Input via $compile", () => {
 
     expect(calls).toEqual(["ngOnInit:BOUND"]);
     expect((element.controller("probeB") as ProbeB).probeValue).toBe("BOUND");
+  });
+
+  it("dispara ngOnInit aunque la directiva tenga un @Output (regresión)", () => {
+    // `output-emitter-bridge` deja un `$onInit` puesto antes de `lifecycle-bridge`;
+    // el forwarding de `ngOnInit` no debe perderse por eso. Casi toda directiva de
+    // ng-bootstrap combina `@Output` + `ngOnInit`.
+    const calls: string[] = [];
+
+    @Directive({ selector: "[probeC]" })
+    class ProbeC {
+      @Input() probeValue = "DEFAULT";
+      @Output() probeChange = new EventEmitter<string>();
+      ngOnInit(): void {
+        calls.push(`ngOnInit:${this.probeValue}`);
+        this.probeChange.emit(this.probeValue);
+      }
+    }
+
+    @NgModule({ id: "probe.adhoc.c", declarations: [ProbeC] })
+    class ProbeModuleC {}
+
+    const emitted: string[] = [];
+    const { $compile, $rootScope } = compileInModule(configureTestingModule({ imports: [ProbeModuleC] }));
+    const scope = $rootScope.$new() as angular.IRootScopeService & { onChange: (v: string) => void };
+    scope.onChange = (v) => emitted.push(v);
+    $compile(`<div probe-c probe-value="'BOUND'" probe-change="onChange($event)"></div>`)(scope);
+    scope.$digest();
+
+    expect(calls).toEqual(["ngOnInit:BOUND"]);
+    expect(emitted).toEqual(["BOUND"]);
   });
 });

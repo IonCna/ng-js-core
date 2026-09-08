@@ -21,8 +21,17 @@ function bridgeLifecycle(instance: unknown): void {
   const inst = instance as ControllerInstance | null | undefined;
   if (!inst) return;
 
-  if (typeof inst.ngOnInit === "function" && typeof inst.$onInit !== "function") {
-    inst.$onInit = () => inst.ngOnInit?.();
+  if (typeof inst.ngOnInit === "function") {
+    // Un `$onInit` escrito por el autor (método en el prototipo) gana y anula
+    // `ngOnInit` — si declaraste `$onInit` optaste por la semántica AngularJS.
+    // Pero un `$onInit` que puso OTRO bridge como propiedad de instancia
+    // (`output-emitter-bridge` corre antes y rescata los emitters `@Output`) NO
+    // debe tapar `ngOnInit`: se encadena, y `ngOnInit` corre después del rescate.
+    const authoredOnInit =
+      typeof inst.$onInit === "function" && !Object.prototype.hasOwnProperty.call(inst, "$onInit");
+    if (!authoredOnInit) {
+      chainInstanceMethod(inst as object, "$onInit", () => inst.ngOnInit?.());
+    }
   }
   if (typeof inst.ngOnChanges === "function" && typeof inst.$onChanges !== "function") {
     inst.$onChanges = (changes: unknown) => inst.ngOnChanges?.(withFirstChangeProperty(changes as SimpleChanges));
