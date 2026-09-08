@@ -13,14 +13,9 @@ import "angular-animate";
 import { AnimationBuilder, BrowserAnimationBuilder, NoopAnimationBuilder } from "@/animations/animation-builder.ts";
 import { installCoreModule } from "@/runtime/core-module.ts";
 
-export type { AnimationPlayer } from "@/animations/animation-builder.ts";
-export {
-  AnimationBuilder,
-  AnimationFactory,
-  BrowserAnimationBuilder,
-  NoopAnimationBuilder,
-  NoopAnimationPlayer,
-} from "@/animations/animation-builder.ts";
+// Superficie de clase (`@angular/animations`): la DSL `trigger`/`state`/`animate`/…,
+// `AnimationBuilder`/`AnimationPlayer` y los tipos de metadata. Sin side-effects.
+export * from "@/animations/index.ts";
 
 /** Nombre del módulo AngularJS de `angular-animate`. */
 const NG_ANIMATE = "ngAnimate";

@@ -15,13 +15,9 @@ import { ɵgetRegisteredLocale } from "@/i18n/locale-data.ts";
 import { LOCALE_ID, TranslateService, TranslateServiceImpl } from "@/i18n/translate.ts";
 import { installCoreModule } from "@/runtime/core-module.ts";
 
-export {
-  type LocaleData,
-  registerLocaleData,
-  ɵclearRegisteredLocales,
-  ɵgetRegisteredLocale,
-} from "@/i18n/locale-data.ts";
-export { LOCALE_ID, TranslateService, TranslateServiceImpl } from "@/i18n/translate.ts";
+// Superficie de clase de i18n (`TranslateService`, `LOCALE_ID`, `registerLocaleData`,
+// `PLURAL_CATEGORY`, …). Sin side-effects; el `angular.module` lo arma `i18nModule()`.
+export * from "@/i18n/index.ts";
 
 const TRANSLATE = "pascalprecht.translate";
 const ARIA = "ngAria";
