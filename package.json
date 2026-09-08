@@ -42,31 +42,6 @@
       "import": "./dist/runtime/common/index.js",
       "default": "./dist/runtime/common/index.js"
     },
-    "./runtime": {
-      "types": "./dist/runtime/index.d.ts",
-      "import": "./dist/runtime/index.js",
-      "default": "./dist/runtime/index.js"
-    },
-    "./runtime/core": {
-      "types": "./dist/runtime/core/index.d.ts",
-      "import": "./dist/runtime/core/index.js",
-      "default": "./dist/runtime/core/index.js"
-    },
-    "./runtime/common": {
-      "types": "./dist/runtime/common/index.d.ts",
-      "import": "./dist/runtime/common/index.js",
-      "default": "./dist/runtime/common/index.js"
-    },
-    "./runtime/animations": {
-      "types": "./dist/runtime/animations/index.d.ts",
-      "import": "./dist/runtime/animations/index.js",
-      "default": "./dist/runtime/animations/index.js"
-    },
-    "./runtime/testing": {
-      "types": "./dist/runtime/testing/index.d.ts",
-      "import": "./dist/runtime/testing/index.js",
-      "default": "./dist/runtime/testing/index.js"
-    },
     "./testing": {
       "types": "./dist/runtime/testing/index.d.ts",
       "import": "./dist/runtime/testing/index.js",
@@ -92,16 +67,6 @@
       "import": "./dist/runtime/cdk/layout/index.js",
       "default": "./dist/runtime/cdk/layout/index.js"
     },
-    "./runtime/cdk/a11y": {
-      "types": "./dist/runtime/cdk/a11y/index.d.ts",
-      "import": "./dist/runtime/cdk/a11y/index.js",
-      "default": "./dist/runtime/cdk/a11y/index.js"
-    },
-    "./runtime/cdk/layout": {
-      "types": "./dist/runtime/cdk/layout/index.d.ts",
-      "import": "./dist/runtime/cdk/layout/index.js",
-      "default": "./dist/runtime/cdk/layout/index.js"
-    },
     "./i18n": {
       "types": "./dist/runtime/i18n/index.d.ts",
       "import": "./dist/runtime/i18n/index.js",
@@ -111,11 +76,6 @@
       "types": "./dist/i18n/locales/*.d.ts",
       "import": "./dist/i18n/locales/*.js",
       "default": "./dist/i18n/locales/*.js"
-    },
-    "./runtime/i18n": {
-      "types": "./dist/runtime/i18n/index.d.ts",
-      "import": "./dist/runtime/i18n/index.js",
-      "default": "./dist/runtime/i18n/index.js"
     },
     "./router": {
       "types": "./dist/router/index.d.ts",
@@ -128,11 +88,6 @@
       "default": "./dist/core/platform/index.js"
     },
     "./platform-browser": {
-      "types": "./dist/runtime/platform-browser/index.d.ts",
-      "import": "./dist/runtime/platform-browser/index.js",
-      "default": "./dist/runtime/platform-browser/index.js"
-    },
-    "./runtime/platform-browser": {
       "types": "./dist/runtime/platform-browser/index.d.ts",
       "import": "./dist/runtime/platform-browser/index.js",
       "default": "./dist/runtime/platform-browser/index.js"

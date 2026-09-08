@@ -7,7 +7,7 @@ import { NgModule } from "@/core/metadata/ng-module.ts";
 import type { Routes } from "@/router/index.ts";
 import { ActivatedRoute, Router, RouterModule } from "@/router/index.ts";
 import { CommonModule } from "@/runtime/common/index.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 @Component({ selector: "t2-dash", template: "<h1>dashboard</h1>" })
 class DashPage {}
@@ -51,7 +51,7 @@ describe("ngjs-core/router — Tier 2", () => {
     const host = document.createElement("t2-root");
     document.body.appendChild(host);
 
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
     const injector = appRef.injector as angular.auto.IInjectorService;
     const $rootScope = injector.get<angular.IRootScopeService>("$rootScope");
     const router = injector.get<Router>(Router.$name);

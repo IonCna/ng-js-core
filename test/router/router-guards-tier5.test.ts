@@ -7,7 +7,7 @@ import { NgModule } from "@/core/metadata/ng-module.ts";
 import type { Routes } from "@/router/index.ts";
 import { Router, RouterModule } from "@/router/index.ts";
 import { CommonModule } from "@/runtime/common/index.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 @Component({ selector: "t5-root", controllerAs: "$", template: "<ui-view></ui-view>" })
 class T5Root {}
@@ -57,7 +57,7 @@ let currentAppRef: { destroy(): void } | undefined;
 async function boot() {
   const host = document.createElement("t5-root");
   document.body.appendChild(host);
-  const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+  const appRef = await bootstrapApplication(AppModule, { hostElement: host });
   currentAppRef = appRef;
   const injector = appRef.injector as angular.auto.IInjectorService;
   return {

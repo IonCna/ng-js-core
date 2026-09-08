@@ -28,9 +28,3 @@ export function bootstrapApplication(appModule: Function, options?: BootstrapOpt
   const name = registerNgModule(appModule).name;
   return platformBrowser().bootstrapModule(name, options);
 }
-
-/**
- * @deprecated Nombre anterior de `bootstrapApplication`. Se mantiene como alias
- * mientras se migran los consumidores; se elimina en una próxima versión.
- */
-export const bootstrapModuleRuntime = bootstrapApplication;

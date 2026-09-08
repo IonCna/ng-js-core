@@ -7,7 +7,7 @@ import { NgModule } from "@/core/metadata/ng-module.ts";
 import type { Routes } from "@/router/index.ts";
 import { Router, RouterModule } from "@/router/index.ts";
 import { CommonModule } from "@/runtime/common/index.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 @Component({ selector: "lc-root", controllerAs: "$", template: "<ui-view></ui-view>" })
 class LcRoot {}
@@ -37,7 +37,7 @@ class AppModule {}
 async function boot() {
   const host = document.createElement("lc-root");
   document.body.appendChild(host);
-  const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+  const appRef = await bootstrapApplication(AppModule, { hostElement: host });
   const injector = appRef.injector as angular.auto.IInjectorService;
   return {
     host,

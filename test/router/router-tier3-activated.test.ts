@@ -7,7 +7,7 @@ import { NgModule } from "@/core/metadata/ng-module.ts";
 import type { RouterEvent, Routes } from "@/router/index.ts";
 import { ActivatedRoute, NavigationEnd, NavigationStart, Router, RouterModule } from "@/router/index.ts";
 import { CommonModule } from "@/runtime/common/index.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 @Component({ selector: "t3a-home", template: "<h1>home</h1>" })
 class HomeT3 {}
@@ -34,7 +34,7 @@ describe("ngjs-core/router — Tier 3: ActivatedRoute + Router.events", () => {
     const host = document.createElement("t3a-root");
     document.body.appendChild(host);
 
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
     const injector = appRef.injector as angular.auto.IInjectorService;
     const $rootScope = injector.get<angular.IRootScopeService>("$rootScope");
     const router = injector.get<Router>(Router.$name);

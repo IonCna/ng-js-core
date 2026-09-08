@@ -7,7 +7,7 @@ import { Directive } from "@/core/metadata/directive.ts";
 import { NgModule } from "@/core/metadata/ng-module.ts";
 import { Pipe } from "@/core/metadata/pipe.ts";
 import type { PipeTransform } from "@/pipes/pipe-transform.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 describe("ngjs-core/runtime — @Directive y @Pipe declarados en @NgModule", () => {
   it("una @Directive de atributo con controller + un @Pipe corren en el template", async () => {
@@ -40,7 +40,7 @@ describe("ngjs-core/runtime — @Directive y @Pipe declarados en @NgModule", () 
 
     const host = document.createElement("decl-root");
     document.body.appendChild(host);
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
 
     const b = host.querySelector("b") as HTMLElement;
     expect(b.textContent).toBe("hola!");
@@ -63,7 +63,7 @@ describe("ngjs-core/runtime — @Directive y @Pipe declarados en @NgModule", () 
 
     const host = document.createElement("nest-root");
     document.body.appendChild(host);
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
 
     expect(host.querySelector("em")?.textContent).toBe("badge");
     appRef.destroy();

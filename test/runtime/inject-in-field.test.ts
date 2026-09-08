@@ -6,7 +6,7 @@ import { inject } from "@/core/di/inject.ts";
 import { Component } from "@/core/metadata/component.ts";
 import { NgModule } from "@/core/metadata/ng-module.ts";
 import { ElementRef } from "@/core/refs/element-ref.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 @Injectable()
 class Greeter {
@@ -39,7 +39,7 @@ describe("ngjs-core/runtime — inject() en field initializer (estilo ng-bootstr
 
     const host = document.createElement("inj-root");
     document.body.appendChild(host);
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
 
     expect(seen).toBe("hola:inj-child");
     expect(host.querySelector("inj-child span")?.textContent).toBe("hola:inj-child");
@@ -71,7 +71,7 @@ describe("ngjs-core/runtime — inject() en field initializer (estilo ng-bootstr
 
     const host = document.createElement("inj-root3");
     document.body.appendChild(host);
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
 
     expect(optionalWasNull).toBe(true);
     // `skipSelf` salta el ElementRef local de este elemento; no hay uno arriba → null (optional).
@@ -88,7 +88,7 @@ describe("ngjs-core/runtime — inject() en field initializer (estilo ng-bootstr
 
     const host = document.createElement("inj-root2");
     document.body.appendChild(host);
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
 
     expect(inject(Greeter).hi()).toBe("hola");
     appRef.destroy();

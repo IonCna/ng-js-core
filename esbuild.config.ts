@@ -14,8 +14,6 @@ await esbuild.build({
     "src/i18n/locales/es-MX.ts",
     "src/rxjs-interop/index.ts",
     "src/platform-browser/index.ts",
-    "src/runtime/index.ts",
-    "src/runtime/core/index.ts",
     "src/runtime/common/index.ts",
     "src/runtime/animations/index.ts",
     "src/runtime/i18n/index.ts",

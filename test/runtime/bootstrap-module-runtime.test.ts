@@ -6,11 +6,11 @@ import { Injectable } from "@/core/di/injectable.ts";
 import { Component } from "@/core/metadata/component.ts";
 import { NgModule } from "@/core/metadata/ng-module.ts";
 import { CommonModule } from "@/runtime/common/index.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 import { configureTestingModule } from "@/runtime/testing/index.ts";
 
 describe("ngjs-core/runtime", () => {
-  it("bootstrapModuleRuntime registra el grafo del @NgModule y arranca", async () => {
+  it("bootstrapApplication registra el grafo del @NgModule y arranca", async () => {
     @Injectable()
     class Greeter {
       greet() {
@@ -32,7 +32,7 @@ describe("ngjs-core/runtime", () => {
     const host = document.createElement("runtime-root");
     document.body.appendChild(host);
 
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
 
     expect(host.querySelector("span")?.textContent).toBe("hola");
     appRef.destroy();

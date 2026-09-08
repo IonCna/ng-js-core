@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { inject } from "@/core/di/inject.ts";
 import { Component } from "@/core/metadata/component.ts";
 import { NgModule } from "@/core/metadata/ng-module.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 describe("ngjs-core/runtime — inject() de una directiva/componente ancestro por token de clase", () => {
   it("un hijo recibe la instancia del componente padre vía inject(ParentClass)", async () => {
@@ -29,7 +29,7 @@ describe("ngjs-core/runtime — inject() de una directiva/componente ancestro po
 
     const host = document.createElement("di-parent");
     document.body.appendChild(host);
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
 
     expect(seenParent).toBeInstanceOf(Parent);
     expect((seenParent as Parent).tag).toBe("soy-el-parent");
@@ -60,7 +60,7 @@ describe("ngjs-core/runtime — inject() de una directiva/componente ancestro po
 
     const host = document.createElement("di-lonely-parent");
     document.body.appendChild(host);
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
 
     expect(seen).toBeNull();
 

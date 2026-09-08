@@ -8,7 +8,7 @@ import { Input } from "@/core/metadata/input.ts";
 import { NgModule } from "@/core/metadata/ng-module.ts";
 // biome-ignore lint/style/useImportType: valor en runtime — lo lee `design:paramtypes` (emitDecoratorMetadata)
 import { ElementRef } from "@/core/refs/element-ref.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 describe("ngjs-core/runtime — bridge de lifecycle + ElementRef por ctor", () => {
   it("ngOnInit/ngOnChanges/ngOnDestroy se reenvían y ElementRef se inyecta", async () => {
@@ -49,7 +49,7 @@ describe("ngjs-core/runtime — bridge de lifecycle + ElementRef por ctor", () =
 
     const host = document.createElement("life-root");
     document.body.appendChild(host);
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
     const $rootScope = (appRef.injector as angular.auto.IInjectorService).get<angular.IRootScopeService>("$rootScope");
     const root = angular.element(host).controller("lifeRoot") as Root;
 

@@ -9,12 +9,12 @@ import { NgModule } from "@/core/metadata/ng-module.ts";
 import type { Routes } from "@/router/index.ts";
 import { Router, RouterModule } from "@/router/index.ts";
 import { CommonModule } from "@/runtime/common/index.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 async function boot(AppModule: Function, tag: string) {
   const host = document.createElement(tag);
   document.body.appendChild(host);
-  const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+  const appRef = await bootstrapApplication(AppModule, { hostElement: host });
   const injector = appRef.injector as angular.auto.IInjectorService;
   return { host, appRef, injector, $rootScope: injector.get<angular.IRootScopeService>("$rootScope") };
 }

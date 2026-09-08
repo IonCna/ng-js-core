@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { InjectionToken } from "@/core/di/injection-token.ts";
 import { Component } from "@/core/metadata/component.ts";
 import { NgModule } from "@/core/metadata/ng-module.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 const API_URL = new InjectionToken<string>("API_URL");
 const MULTI = new InjectionToken<string[]>("MULTI");
@@ -16,7 +16,7 @@ class Base {
 }
 
 describe("ngjs-core/runtime — recetas de provider", () => {
-  it("useValue / useFactory / useExisting / multi resuelven tras bootstrapModuleRuntime", async () => {
+  it("useValue / useFactory / useExisting / multi resuelven tras bootstrapApplication", async () => {
     class Consumer {
       static readonly $inject = [API_URL.toString(), "provFromFactory", "provAlias", MULTI.toString()];
       constructor(
@@ -52,7 +52,7 @@ describe("ngjs-core/runtime — recetas de provider", () => {
 
     const host = document.createElement("prov-root");
     document.body.appendChild(host);
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
 
     expect(host.querySelector("span")?.textContent).toBe("https://x.test|f(https://x.test)|base|a+b");
     appRef.destroy();
@@ -87,7 +87,7 @@ describe("ngjs-core/runtime — recetas de provider", () => {
     Counter.instances = 0;
     const host = document.createElement("sing-root");
     document.body.appendChild(host);
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
 
     (appRef.injector as angular.auto.IInjectorService).get(Counter.$name);
     expect(Counter.instances).toBe(1);

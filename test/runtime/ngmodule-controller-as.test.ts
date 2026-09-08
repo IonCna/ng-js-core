@@ -3,7 +3,7 @@ import "zone.js";
 import { describe, expect, it } from "vitest";
 import { Component } from "@/core/metadata/component.ts";
 import { NgModule } from "@/core/metadata/ng-module.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 function textOf(host: Element, selector: string): string {
   return (host.querySelector(selector)?.textContent ?? "").trim();
@@ -47,7 +47,7 @@ describe("ngjs-core/runtime — controllerAs por @NgModule (3 capas)", () => {
 
     const host = document.createElement("ca-root");
     document.body.appendChild(host);
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
 
     expect(textOf(host, "ca-child span")).toBe("c"); // "$" del módulo
     expect(textOf(host, "ca-own span")).toBe("own"); // "vm" propio del componente
@@ -68,7 +68,7 @@ describe("ngjs-core/runtime — controllerAs por @NgModule (3 capas)", () => {
 
     const host = document.createElement("ca2-root");
     document.body.appendChild(host);
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
 
     expect(textOf(host, "ca2-child span")).toBe("d");
     appRef.destroy();

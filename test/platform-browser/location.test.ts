@@ -7,7 +7,7 @@ import { NgModule } from "@/core/metadata/ng-module.ts";
 import { Location } from "@/platform-browser/index.ts";
 import type { Routes } from "@/router/index.ts";
 import { RouterModule, withHashLocation } from "@/router/index.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 @Component({ selector: "loc-root", template: "<ui-view></ui-view>" })
 class LocRoot {}
@@ -25,7 +25,7 @@ async function bootLocation(feature?: ReturnType<typeof withHashLocation>): Prom
 
   const host = document.createElement("loc-root");
   document.body.appendChild(host);
-  const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+  const appRef = await bootstrapApplication(AppModule, { hostElement: host });
   return (appRef.injector as angular.auto.IInjectorService).get<Location>(Location.$name);
 }
 

@@ -7,7 +7,7 @@ import { NgModule } from "@/core/metadata/ng-module.ts";
 import type { Routes } from "@/router/index.ts";
 import { Router, RouterModule, TitleStrategy } from "@/router/index.ts";
 import { CommonModule } from "@/runtime/common/index.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 @Component({ selector: "tts-root", template: "<ui-view></ui-view>" })
 class TtsRoot {}
@@ -46,7 +46,7 @@ let appRef: { destroy(): void; injector: unknown } | undefined;
 async function boot() {
   const host = document.createElement("tts-root");
   document.body.appendChild(host);
-  appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+  appRef = await bootstrapApplication(AppModule, { hostElement: host });
   const injector = appRef.injector as angular.auto.IInjectorService;
   return {
     router: injector.get<Router>(Router.$name),

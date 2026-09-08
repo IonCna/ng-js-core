@@ -9,7 +9,7 @@ import { NgModule } from "@/core/metadata/ng-module.ts";
 import type { Routes } from "@/router/index.ts";
 import { Router, RouterModule } from "@/router/index.ts";
 import { CommonModule } from "@/runtime/common/index.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 @Injectable()
 class AuthService {
@@ -47,7 +47,7 @@ describe("ngjs-core/router — guard funcional con inject()", () => {
     const host = document.createElement("gi-root");
     document.body.appendChild(host);
 
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
     const injector = appRef.injector as angular.auto.IInjectorService;
     const $rootScope = injector.get<angular.IRootScopeService>("$rootScope");
     const router = injector.get<Router>(Router.$name);

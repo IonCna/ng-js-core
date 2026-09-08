@@ -7,7 +7,7 @@ import { NgModule } from "@/core/metadata/ng-module.ts";
 import type { Routes } from "@/router/index.ts";
 import { ActivatedRoute, Router, RouterModule } from "@/router/index.ts";
 import { CommonModule } from "@/runtime/common/index.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 const guardCalls: string[] = [];
 const resolveCalls: string[] = [];
@@ -60,7 +60,7 @@ describe("ngjs-core/router — etapa 16", () => {
     const host = document.createElement("app-root");
     document.body.appendChild(host);
 
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
     const injector = appRef.injector as angular.auto.IInjectorService;
     const $rootScope = injector.get<angular.IRootScopeService>("$rootScope");
 

@@ -17,7 +17,7 @@ import type { BootstrapOptions } from "@/core/platform/bootstrap.ts";
 import { ConfigProviderFactory } from "@/core/platform/config-providers.ts";
 import { createPipeFilter } from "@/pipes/pipe-transform.ts";
 import { commonModule } from "@/runtime/common/index.ts";
-import { bootstrapModuleRuntime, installCoreModule } from "@/runtime/index.ts";
+import { bootstrapApplication, installCoreModule } from "@/runtime/index.ts";
 
 /**
  * El motor de auto-registro de `ngjs-core/compat`. Cada `component()/directive()/
@@ -76,7 +76,7 @@ class CompatRegistry {
     this.pendingDeclarations.clear();
     this.pendingProviders.length = 0;
 
-    return bootstrapModuleRuntime(CompatAppModule, { hostElement: root, ...bootstrapOptions });
+    return bootstrapApplication(CompatAppModule, { hostElement: root, ...bootstrapOptions });
   }
 }
 

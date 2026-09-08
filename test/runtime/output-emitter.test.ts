@@ -6,7 +6,7 @@ import { Component } from "@/core/metadata/component.ts";
 import { NgModule } from "@/core/metadata/ng-module.ts";
 import { Output } from "@/core/metadata/output.ts";
 import { EventEmitter } from "@/event-emitter.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 describe("ngjs-core/runtime — bridge de @Output(EventEmitter)", () => {
   it("`x.emit(v)` dispara la expresión `(x)` del padre con `$event = v`; `this.x` sigue siendo el emitter", async () => {
@@ -36,7 +36,7 @@ describe("ngjs-core/runtime — bridge de @Output(EventEmitter)", () => {
 
     const host = document.createElement("emit-root");
     document.body.appendChild(host);
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
 
     const childEl = host.querySelector("emit-child") as Element;
     const ctrl = angular.element(childEl).controller("emitChild") as Child;
@@ -61,7 +61,7 @@ describe("ngjs-core/runtime — bridge de @Output(EventEmitter)", () => {
 
     const host = document.createElement("emit-root2");
     document.body.appendChild(host);
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
     const childEl = host.querySelector("emit-child2") as Element;
     const ctrl = angular.element(childEl).controller("emitChild2") as Child;
 

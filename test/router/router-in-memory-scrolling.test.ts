@@ -8,7 +8,7 @@ import type { Routes } from "@/router/index.ts";
 import { Router, RouterModule, withInMemoryScrolling } from "@/router/index.ts";
 import type { ViewportScroller } from "@/platform-browser/index.ts";
 import { CommonModule } from "@/runtime/common/index.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 @Component({ selector: "ims-root", template: "<ui-view></ui-view>" })
 class ImsRoot {}
@@ -35,7 +35,7 @@ async function boot(feature?: ReturnType<typeof withInMemoryScrolling>) {
 
   const host = document.createElement("ims-root");
   document.body.appendChild(host);
-  const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+  const appRef = await bootstrapApplication(AppModule, { hostElement: host });
   currentAppRef = appRef;
   const injector = appRef.injector as angular.auto.IInjectorService;
   return {

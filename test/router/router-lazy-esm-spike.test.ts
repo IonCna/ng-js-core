@@ -9,7 +9,7 @@ import { getComponentDef } from "@/core/metadata/define-component.ts";
 import { NgModule } from "@/core/metadata/ng-module.ts";
 import { ConfigProviderFactory } from "@/core/platform/config-providers.ts";
 import { CommonModule } from "@/runtime/common/index.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 /**
  * Spike: probar que `lazyLoad` de UI-Router + `import()` nativo de un archivo ESM
@@ -100,7 +100,7 @@ describe("spike — UI-Router lazyLoad + ESM import()", () => {
     const host = document.createElement("spike-root");
     document.body.appendChild(host);
 
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
     const injector = appRef.injector as angular.auto.IInjectorService;
 
     await navigate("/lazy/users", injector);
@@ -113,7 +113,7 @@ describe("spike — UI-Router lazyLoad + ESM import()", () => {
     const host = document.createElement("spike-root");
     document.body.appendChild(host);
 
-    const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+    const appRef = await bootstrapApplication(AppModule, { hostElement: host });
     const injector = appRef.injector as angular.auto.IInjectorService;
 
     await navigate("/lazy/users/42", injector);

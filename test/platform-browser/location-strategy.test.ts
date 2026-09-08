@@ -14,7 +14,7 @@ import {
 import type { Routes } from "@/router/index.ts";
 import { RouterModule, withHashLocation } from "@/router/index.ts";
 import { PlatformBrowserModule } from "@/runtime/platform-browser/index.ts";
-import { bootstrapModuleRuntime } from "@/runtime/index.ts";
+import { bootstrapApplication } from "@/runtime/index.ts";
 
 @Component({ selector: "ls-root", template: "<ui-view></ui-view>" })
 class LsRoot {}
@@ -32,7 +32,7 @@ async function bootRouter(feature?: ReturnType<typeof withHashLocation>) {
 
   const host = document.createElement("ls-root");
   document.body.appendChild(host);
-  const appRef = await bootstrapModuleRuntime(AppModule, { hostElement: host });
+  const appRef = await bootstrapApplication(AppModule, { hostElement: host });
   return (appRef.injector as angular.auto.IInjectorService).get.bind(appRef.injector) as <T>(name: string) => T;
 }
 
