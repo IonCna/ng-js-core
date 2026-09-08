@@ -1,6 +1,7 @@
 import type angular from "angular";
 import { getComponentDef } from "@/core/metadata/define-component.ts";
 import { getDirectiveDef } from "@/core/metadata/directive.ts";
+import { HostListenerKeySpec } from "@/core/metadata/host-listener-key.ts";
 import { decorateControllerWith } from "@/runtime/bridges/shared.ts";
 
 /**
@@ -23,7 +24,11 @@ export function decorateControllerHostListeners($delegate: angular.IControllerSe
       const def = getComponentDef(Clase) ?? getDirectiveDef(Clase);
 
       for (const listener of def?.host?.listeners ?? []) {
-        nativeElement.addEventListener(listener.eventName, (event) => {
+        // `keydown.shift.tab` → escucha `keydown` y filtra por tecla/modificadores
+        // (mismo álgebra que el `KeyEventsPlugin` de Angular). `click` → sin filtro.
+        const keySpec = new HostListenerKeySpec(listener.eventName);
+        nativeElement.addEventListener(keySpec.domEventName, (event) => {
+          if (!keySpec.matches(event)) return;
           (instance as Record<string, (...args: unknown[]) => void>)[listener.methodName]?.(event);
         });
       }

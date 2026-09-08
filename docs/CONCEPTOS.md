@@ -179,9 +179,10 @@ export class Counter {
 | `template:` en el `.define()` | `template:` en el decorador |
 | `count: input(0)` (dentro de `bindings({...})`) | `@Input() count = 0` |
 | `name: input.required()` | `@Input({ required: true }) name!: T` |
+| — | `@Input({ binding: '@' }) placement` → binding `@?` (string literal / interpolación de atributo, `attr="texto"` / `attr="{{x}}"`); default es `<?` (expresión). Para inputs que siempre reciben strings; sin heurística, lo declara el autor |
 | `countChange: output()` | `@Output() countChange = new EventEmitter()` |
 | `total: model(0)` (dentro de `bindings({...})`) | `@Model() total: number` — un solo binding `'='` nativo de AngularJS, sin `@Output`/`EventEmitter` aparte (`[(total)]`) |
-| `static hostListeners = { onClick: hostListener('click') }` | `@HostListener('click') onClick() {…}` — wiring real: `nativeElement.addEventListener`, sin `$element.on()` de jqLite |
+| `static hostListeners = { onClick: hostListener('click') }` | `@HostListener('click') onClick() {…}` — wiring real: `nativeElement.addEventListener`, sin `$element.on()` de jqLite. Soporta pseudo-eventos de tecla estilo Angular: `@HostListener('keydown.arrowdown')`, `@HostListener('keydown.shift.tab')` — escucha el evento base y filtra por `KeyboardEvent.key` + modificadores (`alt`/`control`/`meta`/`shift`, en cualquier orden), ver `host-listener-key.ts` |
 | `static hostBindings = { isActive: hostBinding('class.active') }` | `@HostBinding('class.active') isActive = false` — wiring real: `$scope.$watch` (reacciona a cambios, no solo una vez), desregistrado en `$destroy`; soporta `class.x`/`style.x`/`attr.x`/propiedad DOM plana |
 | `static $inject = ['api']` + ctor | `constructor(private api: Api)` |
 | `ngOnInit() {…}` | `ngOnInit() {…}` (idéntico) |

@@ -19,6 +19,8 @@ export interface InputDef {
   transform?: (value: unknown) => unknown;
   /** `true` → binding `'='` de AngularJS (two-way nativo) en vez de `'<'`. Viene de `model()`/`@Model`. */
   twoWay?: boolean;
+  /** Modo de binding explícito: `'@'` = string literal/interpolación; `'<'` = expresión (default). */
+  binding?: "<" | "@";
 }
 
 export interface OutputDef {

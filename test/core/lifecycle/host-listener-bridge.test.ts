@@ -118,6 +118,41 @@ describe("etapa 5 — @HostListener wiring contra el $element real", () => {
     expect(calls).toEqual(["click", "keydown"]);
   });
 
+  it("@HostListener con modificador de tecla (keydown.arrowdown / keydown.shift.tab) filtra por tecla", () => {
+    const calls: string[] = [];
+
+    @Component({ selector: "widget", template: "ok" })
+    class Widget {
+      @HostListener("keydown.arrowdown")
+      onArrowDown() {
+        calls.push("arrowdown");
+      }
+      @HostListener("keydown.shift.tab")
+      onShiftTab() {
+        calls.push("shift.tab");
+      }
+    }
+
+    const name = uniqueName("hostListenerTestKeys");
+    angular.module(name, []).decorator("$controller", decorateControllerHostListeners).component("widget", {
+      template: "ok",
+      controller: Widget,
+    });
+
+    const host = document.createElement("div");
+    host.innerHTML = "<widget></widget>";
+    document.body.appendChild(host);
+    angular.bootstrap(host, [name], { strictDi: false });
+
+    const widgetEl = host.querySelector("widget") as HTMLElement;
+    widgetEl.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp" }));
+    widgetEl.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+    widgetEl.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab" }));
+    widgetEl.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true }));
+
+    expect(calls).toEqual(["arrowdown", "shift.tab"]);
+  });
+
   it("JS puro (hostListener(), sin decoradores) también se cablea contra el $element real", () => {
     const calls: string[] = [];
 

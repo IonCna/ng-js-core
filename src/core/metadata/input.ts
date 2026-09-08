@@ -4,6 +4,18 @@ export interface InputOptions {
   required?: boolean;
   alias?: string;
   transform?: (value: unknown) => unknown;
+  /**
+   * Modo de binding de AngularJS bajo el que se registra este input. Default
+   * `"<"` (expresión one-way, = `@Input()` de Angular con `[attr]="expr"`).
+   *
+   * `"@"` → el atributo se toma como **string literal / interpolación**
+   * (`attr="texto"`, `attr="{{ x }}"`), como `@Input()` de Angular con
+   * `attr="valor"`. Útil para inputs que SIEMPRE reciben strings (`placement`,
+   * `type`, `tooltipClass`, …) — así no hace falta escribir `attr="'texto'"`.
+   * Un input `string | TemplateRef` (que necesita las dos formas) se deja en
+   * `"<"` y el string se pasa entrecomillado.
+   */
+  binding?: "<" | "@";
 }
 
 /**
@@ -20,6 +32,7 @@ export function Input(aliasOrOptions?: string | InputOptions): PropertyDecorator
       bindingName: options?.alias ?? String(propertyKey),
       required: options?.required,
       transform: options?.transform,
+      binding: options?.binding,
     });
   };
 }
