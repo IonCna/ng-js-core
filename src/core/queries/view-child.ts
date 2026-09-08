@@ -1,4 +1,4 @@
-import type { QueryOptions, QueryToken } from "@/core/queries/query-types.ts";
+import { type QueryOptions, type QueryToken, resolveQueryLocator, resolveQueryOptions } from "@/core/queries/query-types.ts";
 
 /**
  * Caja de una query — la resuelve de verdad `ng-ref-bridge.ts` en `$postLink`
@@ -73,7 +73,7 @@ export function createDecoratedViewChildQueries(controller: object): DecoratedVi
     const byProperty = decoratedQueries.get(proto);
     if (!byProperty) continue;
     for (const [propertyKey, definition] of byProperty) {
-      results.push({ propertyKey, query: new ViewChildQuery(definition.locator, definition.options) });
+      results.push({ propertyKey, query: new ViewChildQuery(resolveQueryLocator(definition.locator), resolveQueryOptions(definition.options)) });
     }
   }
   return results;

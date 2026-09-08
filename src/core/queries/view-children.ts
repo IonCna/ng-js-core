@@ -1,5 +1,5 @@
 import { QueryList } from "@/core/queries/query-list.ts";
-import type { QueryOptions, QueryToken } from "@/core/queries/query-types.ts";
+import { type QueryOptions, type QueryToken, resolveQueryLocator, resolveQueryOptions } from "@/core/queries/query-types.ts";
 
 /**
  * Como `ViewChildQuery` pero junta TODOS los hijos que matcheen, no el
@@ -75,7 +75,7 @@ export function createDecoratedViewChildrenQueries(controller: object): Decorate
     const byProperty = decoratedQueries.get(proto);
     if (!byProperty) continue;
     for (const [propertyKey, definition] of byProperty) {
-      results.push({ propertyKey, query: new ViewChildrenQuery(definition.locator, true, definition.options) });
+      results.push({ propertyKey, query: new ViewChildrenQuery(resolveQueryLocator(definition.locator), true, resolveQueryOptions(definition.options)) });
     }
   }
   return results;

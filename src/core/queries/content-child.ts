@@ -1,4 +1,4 @@
-import type { QueryOptions, QueryToken } from "@/core/queries/query-types.ts";
+import { type QueryOptions, type QueryToken, resolveQueryLocator, resolveQueryOptions } from "@/core/queries/query-types.ts";
 
 /** Como `ViewChildQuery`, pero para contenido proyectado (`@ContentChild`) — misma resolución en `$postLink`, ver `ng-ref-bridge.ts`. */
 export class ContentChildQuery<T> {
@@ -57,7 +57,7 @@ export function createDecoratedContentChildQueries(controller: object): Decorate
     const byProperty = decoratedQueries.get(proto);
     if (!byProperty) continue;
     for (const [propertyKey, definition] of byProperty) {
-      results.push({ propertyKey, query: new ContentChildQuery(definition.locator, definition.options) });
+      results.push({ propertyKey, query: new ContentChildQuery(resolveQueryLocator(definition.locator), resolveQueryOptions(definition.options)) });
     }
   }
   return results;

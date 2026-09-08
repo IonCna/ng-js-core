@@ -1,5 +1,5 @@
 import { QueryList } from "@/core/queries/query-list.ts";
-import type { QueryOptions, QueryToken } from "@/core/queries/query-types.ts";
+import { type QueryOptions, type QueryToken, resolveQueryLocator, resolveQueryOptions } from "@/core/queries/query-types.ts";
 
 /** Como `ViewChildrenQuery`, pero para contenido proyectado (`@ContentChildren`). */
 export class ContentChildrenQuery<T> {
@@ -70,7 +70,14 @@ export function createDecoratedContentChildrenQueries(controller: object): Decor
     const byProperty = decoratedQueries.get(proto);
     if (!byProperty) continue;
     for (const [propertyKey, definition] of byProperty) {
-      results.push({ propertyKey, query: new ContentChildrenQuery(definition.locator, true, definition.options) });
+      results.push({
+        propertyKey,
+        query: new ContentChildrenQuery(
+          resolveQueryLocator(definition.locator),
+          true,
+          resolveQueryOptions(definition.options),
+        ),
+      });
     }
   }
   return results;

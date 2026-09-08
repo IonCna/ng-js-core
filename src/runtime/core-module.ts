@@ -16,6 +16,7 @@ import { decorateControllerHostBindings } from "@/runtime/bridges/host-binding-b
 import { decorateControllerHostDirectives } from "@/runtime/bridges/host-directives-bridge.ts";
 import { decorateControllerHostListeners } from "@/runtime/bridges/host-listener-bridge.ts";
 import { decorateControllerInjectionContext } from "@/runtime/bridges/injection-context-bridge.ts";
+import { decorateControllerInputDefer } from "@/runtime/bridges/input-defer-bridge.ts";
 import { decorateControllerLifecycle } from "@/runtime/bridges/lifecycle-bridge.ts";
 import { decorateNgDisabledDirective } from "@/runtime/bridges/ng-disabled-bridge.ts";
 import { decorateControllerOutputEmitters } from "@/runtime/bridges/output-emitter-bridge.ts";
@@ -71,6 +72,9 @@ export function installCoreModule(): angular.IModule {
     .decorator("$controller", decorateControllerAttributes)
     .decorator("$controller", decorateControllerChangeDetectorRef)
     .decorator("$controller", decorateControllerViewContainerRef)
+    // Interno a `viewChildQueries`: así el `resolve()` de las queries (que ese
+    // bridge mete en `$postLink`) envuelve por fuera al replay de este y corre antes.
+    .decorator("$controller", decorateControllerInputDefer)
     .decorator("$controller", decorateControllerViewChildQueries)
     .decorator("$controller", decorateControllerAsyncPipe)
     .decorator("$controller", decorateControllerDestroyRef)

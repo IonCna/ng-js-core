@@ -344,9 +344,10 @@ que valen la pena tener presentes:
 | `NgComponentOutlet` (+ lazy `import()`) | `ViewContainerRef.createComponent` (directiva envoltorio) | tpl | |
 | `ViewContainerRef` (`createEmbeddedView` / `createComponent`) | `ViewContainerRef` de `ngjs-core` (`$compile` + DOM) | shim | |
 | lazy component: `await import('./x')` + `createComponent(X)` | `import()` (chunk del bundler) + registro diferido + `createComponent` | shim | ver abajo |
-| `@ViewChild` / `@ViewChildren` | decorador de `ngjs-core` (`ng-ref` + registro de query) | shim | resuelto en `$postLink` |
+| `@ViewChild` / `@ViewChildren` | decorador de `ngjs-core` (`ng-ref` + registro de query) | shim | resuelto en `$postLink`; el locator (y `read`) aceptan `forwardRef(() => X)`, desenvuelto al construir la query |
 | `@ContentChild` / `@ContentChildren` | ídem sobre el contenido transcluido | shim | |
 | `QueryList` (`.changes`) | `QueryList` de `ngjs-core` (RxJS `Subject`) | directo | |
+| `hostDirectives: [Dir]` | `host-directives-bridge.ts` — instancia `Dir` sobre el mismo `$element` antes de construir el host (host bindings/listeners/ciclo de vida propios, `inject()`-able desde el host) | shim | sin reenvío de `inputs`/`outputs` largos; solo `@Directive` y `@Component` de atributo |
 
 **Componentes lazy.** AngularJS **no registra componentes/directivas/servicios
 después del `bootstrap`** (`$compileProvider.component()` solo existe en la fase
