@@ -3,7 +3,7 @@ import angular from "angular";
 import { describe, expect, it } from "vitest";
 import { provideAppInitializer } from "@/core/platform/app-initializer";
 import { ApplicationRef } from "@/core/platform/application-ref";
-import { bootstrapApplication, PlatformRefImpl, platformBrowser } from "@/core/platform/bootstrap";
+import { ɵbootstrapModules, PlatformRefImpl, platformBrowser } from "@/core/platform/bootstrap";
 import { ConfigProviderFactory } from "@/core/platform/config-providers";
 import { ErrorHandler } from "@/core/platform/error-handler";
 import { NgZone } from "@/core/platform/ng-zone";
@@ -171,13 +171,13 @@ describe("etapa 2 — bootstrap y aplicación", () => {
     await expect(platform.bootstrapModule(name, { hostElement: host })).rejects.toThrow("PlatformRef ya fue destruido");
   });
 
-  it("bootstrapApplication monta el componente raíz creando el host si falta", async () => {
+  it("ɵbootstrapModules monta el componente raíz creando el host si falta", async () => {
     const name = uniqueModuleName("bootstrapAppRoot");
     angular.module(name, []).component("appRoot", {
       template: "app lista",
     });
 
-    const appRef = await bootstrapApplication("appRoot", { modules: [name] });
+    const appRef = await ɵbootstrapModules("appRoot", { modules: [name] });
 
     const host = document.querySelector("app-root");
     expect(host?.textContent?.trim()).toBe("app lista");

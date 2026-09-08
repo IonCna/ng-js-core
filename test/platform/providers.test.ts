@@ -3,7 +3,7 @@ import angular from "angular";
 import { describe, expect, it } from "vitest";
 import { InjectionToken } from "@/core/di/injection-token.ts";
 import type { Provider } from "@/core/di/provider.ts";
-import { bootstrapApplication } from "@/core/platform/bootstrap.ts";
+import { ɵbootstrapModules } from "@/core/platform/bootstrap.ts";
 
 let counter = 0;
 function uniqueComponentName(prefix: string): string {
@@ -15,7 +15,7 @@ async function boot(providers: Provider[]) {
   const componentName = uniqueComponentName("providerRoot");
   angular.module(`m-${componentName}`, []).component(componentName, { template: "ok" });
 
-  const appRef = await bootstrapApplication(componentName, {
+  const appRef = await ɵbootstrapModules(componentName, {
     modules: [`m-${componentName}`],
     providers,
   });
@@ -25,7 +25,7 @@ async function boot(providers: Provider[]) {
   return { appRef, $injector };
 }
 
-describe("etapa 3 — registro de providers en bootstrapApplication", () => {
+describe("etapa 3 — registro de providers en ɵbootstrapModules", () => {
   it("useValue registra un valor directo", async () => {
     const API_URL = new InjectionToken<string>("API_URL");
     const { appRef, $injector } = await boot([{ provide: API_URL, useValue: "https://example.test" }]);

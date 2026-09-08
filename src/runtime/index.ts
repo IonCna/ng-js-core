@@ -18,12 +18,19 @@ export { createComponent } from "@/runtime/create-component.ts";
 export { getNgModuleName, registerNgModule } from "@/runtime/ng-module-runtime.ts";
 
 /**
- * Bootstrap sin CLI. Registra el grafo del `@NgModule` (imports/declarations/
- * providers) leyendo su `ɵmod`, y arranca la app dentro de la zona. Equivalente
- * a `platformBrowserDynamic().bootstrapModule(AppModule)` de Angular.
+ * Bootstrap del modo runtime (el modo por defecto de `ngjs-core`). Registra el
+ * grafo del `@NgModule` (imports/declarations/providers) leyendo su `ɵmod`, y
+ * arranca la app dentro de la zona. Equivalente a
+ * `platformBrowserDynamic().bootstrapModule(AppModule)` de Angular.
  */
-export function bootstrapModuleRuntime(appModule: Function, options?: BootstrapOptions): Promise<ApplicationRef> {
+export function bootstrapApplication(appModule: Function, options?: BootstrapOptions): Promise<ApplicationRef> {
   installCoreModule();
   const name = registerNgModule(appModule).name;
   return platformBrowser().bootstrapModule(name, options);
 }
+
+/**
+ * @deprecated Nombre anterior de `bootstrapApplication`. Se mantiene como alias
+ * mientras se migran los consumidores; se elimina en una próxima versión.
+ */
+export const bootstrapModuleRuntime = bootstrapApplication;

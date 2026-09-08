@@ -7,6 +7,7 @@
 export * from "@/core/index.ts";
 export type { BootstrapOptions, CreateComponentOptions } from "@/runtime/index.ts";
 export {
+  bootstrapApplication,
   bootstrapModuleRuntime,
   CoreModule,
   createComponent,

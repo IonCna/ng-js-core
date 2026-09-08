@@ -5,7 +5,7 @@ import { inject } from "@/core/di/inject.ts";
 import { InjectionToken } from "@/core/di/injection-token.ts";
 import { Injector } from "@/core/di/injector.ts";
 import type { Provider } from "@/core/di/provider.ts";
-import { bootstrapApplication } from "@/core/platform/bootstrap.ts";
+import { ɵbootstrapModules } from "@/core/platform/bootstrap.ts";
 
 let counter = 0;
 function uniqueComponentName(prefix: string): string {
@@ -17,7 +17,7 @@ async function boot(providers: Provider[] = []) {
   const componentName = uniqueComponentName("wiringRoot");
   angular.module(`m-${componentName}`, []).component(componentName, { template: "ok" });
 
-  const appRef = await bootstrapApplication(componentName, {
+  const appRef = await ɵbootstrapModules(componentName, {
     modules: [`m-${componentName}`],
     providers,
   });

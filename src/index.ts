@@ -4,6 +4,22 @@ export * from "./animations/index.ts";
 export * from "./common/index.ts";
 export * from "./core/index.ts";
 export * from "./core/platform/index.ts";
+
+// Motor del modo runtime — el modo por defecto de `ngjs-core`. Camina el `ɵmod`
+// de las clases `@NgModule` y hace el registro de AngularJS al arrancar, sin
+// build step. `bootstrapApplication(AppModule)` es el entrypoint (equivalente a
+// `platformBrowserDynamic().bootstrapModule(AppModule)` de Angular).
+export {
+  bootstrapApplication,
+  configureCore,
+  CoreModule,
+  createComponent,
+  getNgModuleName,
+  installCoreModule,
+  registerNgModule,
+} from "./runtime/index.ts";
+export type { CreateComponentOptions } from "./runtime/index.ts";
+
 export { EventEmitter } from "./event-emitter.ts";
 export { HttpBackend } from "./http/http-backend.ts";
 export type { HttpOptions } from "./http/http-client.ts";

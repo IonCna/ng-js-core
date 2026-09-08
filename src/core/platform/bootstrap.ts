@@ -106,8 +106,13 @@ export interface ApplicationConfig {
  * `config.modules`). Crea `<root-component>` como host si no existe, carga
  * `ng.js.core` + esos módulos, y resuelve con el `ApplicationRef` cuando
  * terminan los `APP_INITIALIZER`.
+ *
+ * Forma de bajo nivel: recibe un selector + nombres de `angular.module` ya
+ * registrados (salida del CLI, o módulos armados a mano). El entrypoint público
+ * es `bootstrapApplication(AppModule)` (raíz del paquete), que camina el `ɵmod`
+ * de la clase `@NgModule` y delega acá.
  */
-export function bootstrapApplication(
+export function ɵbootstrapModules(
     rootComponent: string,
     config: ApplicationConfig = {},
 ): Promise<ApplicationRef> {
