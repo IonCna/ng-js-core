@@ -19,9 +19,14 @@ interface ControllerInstance {
   $postLink?(): void;
 }
 
-function bridgeLifecycle(instance: unknown): void {
+interface PostDigestScope extends angular.IScope {
+  $$postDigest?(fn: () => void): void;
+}
+
+function bridgeLifecycle(instance: unknown, locals?: Record<string, unknown>): void {
   const inst = instance as ControllerInstance | null | undefined;
   if (!inst) return;
+  const $scope = locals?.$scope as PostDigestScope | undefined;
 
   if (typeof inst.ngOnInit === "function") {
     // Un `$onInit` escrito por el autor (método en el prototipo) gana y anula
@@ -52,14 +57,22 @@ function bridgeLifecycle(instance: unknown): void {
     chainInstanceMethod(inst as object, "$doCheck", () => hook.call(inst));
   }
   if (typeof inst.ngAfterContentInit === "function" || typeof inst.ngAfterViewInit === "function") {
-    // brecha: AngularJS no distingue vista propia de contenido transcluido,
-    // los dos colapsan en el mismo $postLink — se pierde el orden entre
-    // ambos, pero respetamos el orden real de Angular (content antes que view).
-    // Encadenado (no "si no existe"): así no pisa un $postLink ya puesto por
-    // otro bridge (ej. ng-ref-bridge.ts) ni por el autor.
+    // `ngAfterContentInit` en `$postLink`: el contenido proyectado ya está
+    // linkeado ahí. `ngAfterViewInit`, en cambio, se difiere a `$$postDigest`
+    // (Gap D): en Angular corre DESPUÉS de que la vista propia (incl.
+    // `ng-repeat`/estructurales del template) renderizó — y en AngularJS eso
+    // pasa recién al terminar el primer `$digest`, no en `$postLink`. Se
+    // mantiene el orden de Angular (content antes que view).
+    // Encadenado (no "si no existe"): así no pisa un `$postLink` ya puesto por
+    // otro bridge (ej. `ng-ref-bridge.ts`) ni por el autor.
     chainInstanceMethod(inst as object, "$postLink", () => {
       inst.ngAfterContentInit?.();
-      inst.ngAfterViewInit?.();
+      if (typeof inst.ngAfterViewInit !== "function") return;
+      if (typeof $scope?.$$postDigest === "function") {
+        $scope.$$postDigest(() => inst.ngAfterViewInit?.());
+      } else {
+        inst.ngAfterViewInit();
+      }
     });
   }
 }
@@ -72,6 +85,6 @@ function bridgeLifecycle(instance: unknown): void {
  * sobre el mismo servicio.
  */
 export function decorateControllerLifecycle($delegate: angular.IControllerService): angular.IControllerService {
-  return decorateControllerWith($delegate, { onInstance: (instance) => bridgeLifecycle(instance) });
+  return decorateControllerWith($delegate, { onInstance: (instance, locals) => bridgeLifecycle(instance, locals) });
 }
 decorateControllerLifecycle.$inject = ["$delegate"];

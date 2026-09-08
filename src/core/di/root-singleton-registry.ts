@@ -29,6 +29,18 @@ export class RootSingletonRegistry {
     }
     return RootSingletonRegistry.instances.get(name);
   }
+
+  /**
+   * Descarta las instancias cacheadas (deja las factories). Cada `@Service`
+   * `providedIn: 'root'` se reconstruye la próxima vez que se lo pide. Lo llama
+   * el harness de testing entre tests: como el registry es global al proceso,
+   * un `@Service` que en su ctor/field capturó `inject(ApplicationRef)` (u otra
+   * dep de nivel app) quedaría con una referencia muerta al bootstrappear una
+   * app nueva. Solo para tests — en runtime no se llama.
+   */
+  static reset(): void {
+    RootSingletonRegistry.instances.clear();
+  }
 }
 
 /**

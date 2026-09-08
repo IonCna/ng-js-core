@@ -13,6 +13,7 @@ import { NgContent } from "@/runtime/common/ng-content.ts";
 import { NgTemplateOutlet } from "@/runtime/common/ng-template-outlet.ts";
 import { installCoreModule } from "@/runtime/core-module.ts";
 
+export { isPlatformBrowser, isPlatformServer } from "@/common/platform.ts";
 export { NgContainer } from "@/runtime/common/ng-container.ts";
 export { NgContent } from "@/runtime/common/ng-content.ts";
 export { NgTemplateOutlet } from "@/runtime/common/ng-template-outlet.ts";

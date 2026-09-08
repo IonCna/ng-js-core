@@ -1,26 +1,11 @@
+export * from "./animations/index.ts";
 export * from "./cdk/a11y/index.ts";
 export * from "./cdk/layout/index.ts";
-export * from "./animations/index.ts";
 export * from "./common/index.ts";
 export * from "./core/index.ts";
 export * from "./core/platform/index.ts";
-
-// Motor del modo runtime — el modo por defecto de `ngjs-core`. Camina el `ɵmod`
-// de las clases `@NgModule` y hace el registro de AngularJS al arrancar, sin
-// build step. `bootstrapApplication(AppModule)` es el entrypoint (equivalente a
-// `platformBrowserDynamic().bootstrapModule(AppModule)` de Angular).
-export {
-  bootstrapApplication,
-  configureCore,
-  CoreModule,
-  createComponent,
-  getNgModuleName,
-  installCoreModule,
-  registerNgModule,
-} from "./runtime/index.ts";
-export type { CreateComponentOptions } from "./runtime/index.ts";
-
 export { EventEmitter } from "./event-emitter.ts";
+export * from "./forms/index.ts";
 export { HttpBackend } from "./http/http-backend.ts";
 export type { HttpOptions } from "./http/http-client.ts";
 export { HttpClient } from "./http/http-client.ts";
@@ -36,4 +21,18 @@ export * from "./i18n/index.ts";
 export type { PipeTransform } from "./pipes/pipe-transform.ts";
 export * from "./platform-browser/index.ts";
 export * from "./router/index.ts";
+export type { CreateComponentOptions } from "./runtime/index.ts";
+// Motor del modo runtime — el modo por defecto de `ngjs-core`. Camina el `ɵmod`
+// de las clases `@NgModule` y hace el registro de AngularJS al arrancar, sin
+// build step. `bootstrapApplication(AppModule)` es el entrypoint (equivalente a
+// `platformBrowserDynamic().bootstrapModule(AppModule)` de Angular).
+export {
+  bootstrapApplication,
+  CoreModule,
+  configureCore,
+  createComponent,
+  getNgModuleName,
+  installCoreModule,
+  registerNgModule,
+} from "./runtime/index.ts";
 export * from "./rxjs-interop/index.ts";

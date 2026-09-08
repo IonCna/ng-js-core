@@ -6,3 +6,4 @@ export { ɵbootstrapModules, platformBrowser, PlatformRef } from "./bootstrap.ts
 export { ErrorHandler } from "./error-handler.ts";
 export { NgZone } from "./ng-zone.ts";
 export type { NgZoneOptions } from "./ng-zone.ts";
+export { PLATFORM_ID } from "./platform-id.ts";

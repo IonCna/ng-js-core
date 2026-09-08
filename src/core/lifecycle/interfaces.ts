@@ -50,3 +50,17 @@ export interface AfterViewInit {
 export interface AfterContentInit {
   ngAfterContentInit(): void;
 }
+
+/**
+ * `ngAfterContentChecked` / `ngAfterViewChecked`: el `lifecycle-bridge` los
+ * encadena a `$doCheck` (una vez por digest, en el orden de Angular:
+ * `ngDoCheck` → `ngAfterContentChecked` → `ngAfterViewChecked`). Misma
+ * `brecha` que los `*Init`: AngularJS no separa vista propia de contenido.
+ */
+export interface AfterContentChecked {
+  ngAfterContentChecked(): void;
+}
+
+export interface AfterViewChecked {
+  ngAfterViewChecked(): void;
+}

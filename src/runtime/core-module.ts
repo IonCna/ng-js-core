@@ -10,6 +10,8 @@ import { EventEmitter } from "@/event-emitter";
 import { decorateControllerAsyncPipe } from "@/runtime/bridges/async-pipe-bridge.ts";
 import { decorateControllerAttributes } from "@/runtime/bridges/attribute-bridge.ts";
 import { decorateControllerChangeDetectorRef } from "@/runtime/bridges/change-detector-ref-bridge.ts";
+import { decorateControllerContentProjection } from "@/runtime/bridges/content-projection-bridge.ts";
+import { decorateControllerControlValueAccessor } from "@/runtime/bridges/control-value-accessor-bridge.ts";
 import { decorateControllerDestroyRef } from "@/runtime/bridges/destroy-ref-bridge.ts";
 import { decorateControllerElementRef } from "@/runtime/bridges/element-ref-bridge.ts";
 import { decorateControllerHostBindings } from "@/runtime/bridges/host-binding-bridge.ts";
@@ -19,8 +21,8 @@ import { decorateControllerInjectionContext } from "@/runtime/bridges/injection-
 import { decorateControllerInputDefer } from "@/runtime/bridges/input-defer-bridge.ts";
 import { decorateControllerLifecycle } from "@/runtime/bridges/lifecycle-bridge.ts";
 import { decorateNgDisabledDirective } from "@/runtime/bridges/ng-disabled-bridge.ts";
-import { decorateControllerOutputEmitters } from "@/runtime/bridges/output-emitter-bridge.ts";
 import { decorateControllerViewChildQueries, decorateNgRefDirective } from "@/runtime/bridges/ng-ref-bridge.ts";
+import { decorateControllerOutputEmitters } from "@/runtime/bridges/output-emitter-bridge.ts";
 import { decorateControllerScopedInjector } from "@/runtime/bridges/scoped-injector-bridge.ts";
 import { decorateControllerViewContainerRef } from "@/runtime/bridges/view-container-ref-bridge.ts";
 import { registerNgModule } from "@/runtime/ng-module-runtime.ts";
@@ -76,11 +78,15 @@ export function installCoreModule(): angular.IModule {
     // bridge mete en `$postLink`) envuelve por fuera al replay de este y corre antes.
     .decorator("$controller", decorateControllerInputDefer)
     .decorator("$controller", decorateControllerViewChildQueries)
+    // Después de `viewChildQueries`: cuando corre su `$onInit` (proyección
+    // eager) el `ViewQueryRegistry` del componente ya está armado.
+    .decorator("$controller", decorateControllerContentProjection)
     .decorator("$controller", decorateControllerAsyncPipe)
     .decorator("$controller", decorateControllerDestroyRef)
     .decorator("$controller", decorateControllerHostListeners)
     .decorator("$controller", decorateControllerHostBindings)
     .decorator("$controller", decorateControllerOutputEmitters)
+    .decorator("$controller", decorateControllerControlValueAccessor)
     .decorator("$controller", decorateControllerLifecycle)
     // El más externo: su `$delegate` es TODA la cadena de arriba, así una
     // directiva compuesta por `hostDirectives` pasa por todos los bridges.
