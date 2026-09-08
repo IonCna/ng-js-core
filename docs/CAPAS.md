@@ -1,30 +1,44 @@
 # Capas de `ngjs-core`
 
-`ngjs-core` se consume por una de **tres** superficies mutuamente excluyentes. La
-diferencia entre ellas es **quién traduce los decoradores a registro de AngularJS**:
-el CLI en build-time, el motor de runtime, o el motor de runtime siempre-encendido.
+`ngjs-core` se consume por una de **dos** superficies mutuamente excluyentes. La
+diferencia es **cómo se escribe** el código; en ambas el registro de AngularJS lo
+hace el **motor de runtime** al arrancar (no hay build step que traduzca).
 
 > El núcleo "lite" original (lo que vivía en `ngjs-core/reference/` — decoradores
 > AngularJS-flavored, menos superficie Angular, menos breaking changes) se movió a
 > su propio proyecto en `../ngjs-core-lite`. No comparte código con este `ngjs-core`.
 
-| Superficie | Para quién | Decoradores | Quién registra |
+| Superficie | Para quién | Cómo se escribe | Quién registra |
 |---|---|---|---|
-| `ngjs-core/core` + `ngjs-core/common` | TS **con CLI** (`ng-js-vite`) | estampan `ɵcmp`/`ɵmod`/… y nada más | el transform, en build |
-| `ngjs-core/runtime` (+ `runtime/core`, `runtime/common`, `runtime/testing`) | TS **sin CLI** | los mismos, estampan nomás | `bootstrapModuleRuntime(AppModule)` camina `ɵmod` al arrancar |
-| `ngjs-core/compat` | **JS puro**, sin build | forma funcional + decoradores legacy (Babel `{ legacy: true }`) | auto-registra al llamar `.define()` — **no se puede apagar** |
+| `ngjs-core` (raíz, **por defecto**) | TypeScript | clases + decoradores Angular (`@Component`, `@NgModule`, `@Injectable`, …) que estampan `ɵcmp`/`ɵmod`/… | `bootstrapApplication(AppModule)` camina `ɵmod` al arrancar |
+| `ngjs-core/compat` | **JS puro**, sin build | forma funcional (`component(Foo).define({…})`) + decoradores legacy (Babel `{ legacy: true }`) | auto-registra al llamar `.define()` — **no se puede apagar** |
 
-**No se mezclan.** Usás `ngjs-core` + CLI **o** `ngjs-core/runtime` **o**
-`ngjs-core/compat`. Importar de dos superficies a la vez duplica el registro
-(dos `ng-content`, dos `CoreModule`, …).
+**No se mezclan.** Usás `ngjs-core` **o** `ngjs-core/compat`. Importar de las dos a
+la vez duplica el registro (dos `ng-content`, dos `CoreModule`, …).
+
+### `ngjs-core/core` — sustrato, no superficie de consumo
+
+`ngjs-core/core` exporta los decoradores que **solo estampan** (sin motor) y el
+sustrato compartido (clases-token, interfaces de lifecycle). No arranca nada por
+sí solo. Sirve para dos cosas:
+
+- que el motor de runtime y `compat` compartan un único contrato de metadata;
+- ser el **punto de partida para migrar a Angular**: el código escrito contra
+  `ngjs-core` (raíz) compila contra `ngjs-core/core` quitando el import del motor
+  — las clases y decoradores quedan idénticos a Angular.
+
+> El traductor build-time (un CLI que lea los decoradores + `design:paramtypes` y
+> genere el registro AngularJS en build, en vez del motor en runtime) está
+> **diferido**. `ng-js-vite` hoy solo procesa `templateUrl`/`styleUrl`; `ng-js-cli`
+> se enfoca en scaffolding, reportes de migración y environments.
 
 ---
 
-## La línea `core` ↔ `runtime`
+## La línea `core` ↔ `runtime` (frontera interna)
 
-> **Si el CLI lo generaría, la versión de runtime va en `/runtime`.**
+> **Si un traductor build-time lo generaría, la versión de runtime va en `src/runtime/`.**
 
-El CLI genera, a partir de los decoradores + la metadata emitida:
+Un traductor generaría, a partir de los decoradores + la metadata emitida:
 
 - registro `.component()` / `.directive()` / `.service()` / `.filter()`
 - `bindings` de `@Input`/`@Output`
@@ -34,11 +48,11 @@ El CLI genera, a partir de los decoradores + la metadata emitida:
 - `require` de `@ViewChild`/`@ContentChild` con `read`
 - `transclude` según `<ng-content>` del template
 
-→ Todo eso, en modo sin-CLI, lo hace el motor de `/runtime`: los decoradores de
-`$controller`, `registerNgModule`, `applyConstructorInject`, `createComponent`,
+→ Todo eso lo hace el motor de `src/runtime/`: los decoradores de `$controller`,
+`registerNgModule`, `applyConstructorInject`, `createComponent`,
 `SelectorRegistry`, el `CoreModule` que instala los bridges.
 
-El CLI **no** genera:
+`src/core/` **no** contiene:
 
 - `NgZone`, el puente Zone→`$digest`
 - `ApplicationRef`, `PlatformRef`, `bootstrapApplication`
@@ -47,20 +61,19 @@ El CLI **no** genera:
   `TemplateRef`, `ViewContainerRef`, `ComponentRef`, `QueryList`, `Injector`, `DestroyRef`)
 - las interfaces de lifecycle
 
-→ Eso es **sustrato compartido**: vive en `ngjs-core/core`, lo usan las tres superficies.
+→ Eso es **sustrato compartido**: vive en `src/core/`, lo usan las dos superficies.
 
-**Restricción de `/core`:** no introspecta `ɵcmp`/`ɵmod`/`design:paramtypes` para
-decidir qué registrar. Sí depende de `angular` + `zone.js` + `rxjs` (ahí vive
-`platform`). Los decoradores de `/core` **solo estampan**, sin side-effects.
+**Restricción de `src/core/`:** no introspecta `ɵcmp`/`ɵmod`/`design:paramtypes`
+para decidir qué registrar. Sí depende de `angular` + `zone.js` + `rxjs` (ahí vive
+`platform`). Los decoradores de `src/core/` **solo estampan**, sin side-effects.
 
 ---
 
 ## Contrato de metadata: un modelo, varios productores
 
 `ɵcmp` / `ɵdir` / `ɵpipe` / `ɵmod` tienen una **forma base idéntica** la estampe quien
-la estampe — `@Component` de `core`, `@Component` de `runtime/core`,
-`component().define()` de `compat`, o el CLI leyendo el AST. El motor y el CLI
-consumen esa forma base igual.
+la estampe — `@Component` de `core`, `component().define()` de `compat`, o (en el
+futuro) un CLI leyendo el AST. El motor consume esa forma base igual.
 
 - Metadata de **miembro** (`@Input`/`@Output`/`@HostBinding`/…) → bucket por
   `prototype` (WeakMap), para que el merge de subclases funcione caminando la
@@ -69,23 +82,22 @@ consumen esa forma base igual.
   prototype ya fusionado adentro al momento de `.define()`.
 - Lo runtime-only (hints de auto-inject, override de `$name`, aceptar `$element`
   por ctor, …) va en un **anexo** aparte, nunca pisando un campo portable. Así el
-  código escrito contra `runtime/core` **compila** contra `core` (perdés el anexo,
-  que es justo lo que el CLI resolvía distinto).
+  código escrito contra `ngjs-core` **compila** contra `ngjs-core/core` (perdés el
+  anexo — que es justo lo que un traductor build-time resolvería distinto).
 
 ---
 
-## `common` vs `runtime/common`
+## `ngjs-core/common`
 
 Las cuatro directivas estructurales (`ng-content`, `ng-template`, `ng-container`,
-`ng-template-outlet`) tienen **dos implementaciones paralelas**:
+`ng-template-outlet`) tienen **dos formas** en el árbol:
 
-- `ngjs-core/common` — clases `@Directive` que **solo estampan** metadata. El CLL
-  las vuelve `.directive()`.
-- `ngjs-core/runtime/common` — las mismas **peladas**: objetos `angular.IDirective`
-  a mano, sin decorador, registradas imperativamente por el motor.
-
-Solo una se registra. `CommonModule` (`@NgModule` que estampa) vive en `common`;
-su wiring imperativo equivalente vive en `runtime/common`.
+- `src/runtime/common/` — objetos `angular.IDirective` a mano + el `angular.module`
+  (`ng.js.common`) que los registra imperativamente. **Es lo que exporta
+  `ngjs-core/common`.**
+- `src/common/` — las mismas como clases `@Directive` que **solo estampan**, más
+  `CommonModule` (`@NgModule` que estampa). Forma `core` / Angular; hoy no está en
+  `exports` (queda para el traductor build-time / la migración).
 
 ---
 
@@ -95,48 +107,41 @@ su wiring imperativo equivalente vive en `runtime/common`.
 ngjs-core/
   core/         decoradores (solo estampan) · def contract · markers · store
                 tokens + Impl · interfaces de lifecycle · afterNextRender
-    platform/   PlatformRef · platformBrowser · bootstrapApplication · NgZone ·
+    platform/   PlatformRef · platformBrowser · ɵbootstrapModules · NgZone ·
                 ApplicationRef · ErrorHandler · APP_INITIALIZER · ConfigProviderFactory
   common/       NgContent/NgTemplate/NgContainer/NgTemplateOutlet como @Directive
-                CommonModule (@NgModule)
-  runtime/
-    index.ts    bootstrapModuleRuntime(AppModule) · registerNgModule · createComponent
-    core/       re-export de ngjs-core/core (identidad preservada)
-    common/     las 4 directivas peladas + wiring imperativo
+                CommonModule (@NgModule) — forma core, sin exponer
+  runtime/      (implementación del modo por defecto — sin path público propio)
+    index.ts    bootstrapApplication(AppModule) · registerNgModule · createComponent
+    common/     las 4 directivas peladas + wiring imperativo  → ngjs-core/common
+    animations/ i18n/ platform-browser/ cdk/  → ngjs-core/animations, /i18n, …
     bridges/    decorateController* · ng-ref-bridge · ng-disabled
     core-module.ts   instala los bridges en el grafo de angular.module
-    testing/    configureTestingModule({ imports:[...] }) sobre angular.mock
+    testing/    configureTestingModule({ imports:[...] })  → ngjs-core/testing
   compat/       forma funcional + decoradores legacy, auto-registran al definir
 ```
 
-`exports`:
+`exports` (superficie pública):
 
 ```jsonc
 {
-  "./core":            "./dist/core/index.js",
-  "./common":          "./dist/common/index.js",
-  "./runtime":         "./dist/runtime/index.js",
-  "./runtime/core":    "./dist/runtime/core/index.js",
-  "./runtime/common":  "./dist/runtime/common/index.js",
-  "./runtime/testing": "./dist/runtime/testing/index.js",
-  "./compat":          "./dist/compat/index.js"
-  // http / router / rxjs-interop / pipes / animations: cada uno parte core/runtime
-  // con la misma regla, más adelante
+  ".":                "./dist/index.js",              // runtime — por defecto
+  "./core":           "./dist/core/index.js",         // sustrato / migración a Angular
+  "./compat":         "./dist/compat/index.js",       // JS puro
+  "./common":         "./dist/runtime/common/index.js",
+  "./animations":     "./dist/runtime/animations/index.js",
+  "./i18n":           "./dist/runtime/i18n/index.js",
+  "./cdk/a11y":       "./dist/runtime/cdk/a11y/index.js",
+  "./cdk/layout":     "./dist/runtime/cdk/layout/index.js",
+  "./platform-browser":"./dist/runtime/platform-browser/index.js",
+  "./testing":        "./dist/runtime/testing/index.js",
+  "./router":         "./dist/router/index.js",
+  "./rxjs-interop":   "./dist/rxjs-interop/index.js",
+  "./platform":       "./dist/core/platform/index.js",
+  "./i18n/locales/*": "./dist/i18n/locales/*.js"
+  // http / pipes: solo desde la raíz (".")
 }
 ```
 
----
-
-## Orden de trabajo
-
-1. **`docs/CAPAS.md`** ← este archivo.
-2. **Mover a la estructura** (sin cambiar lógica): reconfigurar `exports`,
-   tsconfig paths, entries de esbuild. Suite de `ngjs-core` sigue verde.
-3. **`bootstrapModuleRuntime(AppModule)`** + `runtime/testing`. Se borran los
-   `registerNgModule(X)` sueltos al final de `core-module`/`common-module`/`ngb.module`
-   — los reemplaza el walk.
-4. **`runtime/common` pelado**; `common` queda solo estampando.
-5. **Revertir los hacks en `ngb-js`**, re-apuntar a `ngjs-core/runtime`, migrar por lotes.
-6. **`compat`**.
-7. (después) el CLI de verdad, que es lo que hace útil a `/core` a secas.
-```
+Ya no hay namespace `ngjs-core/runtime/*`: `src/runtime/` es la implementación
+interna del modo por defecto y de los subpaths de features.
