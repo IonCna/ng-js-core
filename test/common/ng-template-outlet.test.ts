@@ -65,6 +65,25 @@ describe("etapa 8 — *ngTemplateOutlet", () => {
     expect(outlet.nextElementSibling).toBeNull();
   });
 
+  it("refleja una mutación in-place del objeto de contexto (sin cambiar la referencia)", () => {
+    const { host, $rootScope } = bootOutlet(
+      '<ng-template ng-ref="tpl" ng-ref-read="ngTemplate" let-fill="fill"><span>{{ fill }}</span></ng-template>' +
+        '<div id="outlet" ng-template-outlet="tpl" ng-template-outlet-context="ctx"></div>',
+    );
+    const $scope = $rootScope as unknown as { ctx: { fill: number }; tpl?: TemplateRef };
+    $scope.ctx = { fill: 50 };
+    $rootScope.$digest();
+
+    const outlet = host.querySelector("#outlet") as Element;
+    expect(outlet.nextElementSibling?.textContent).toBe("50");
+
+    // mismo objeto, campo mutado — como hace NgbRating._updateState
+    $scope.ctx.fill = 100;
+    $rootScope.$digest();
+
+    expect(outlet.nextElementSibling?.textContent).toBe("100");
+  });
+
   it("$onDestroy limpia la vista embebida insertada", () => {
     const { host, $rootScope } = bootOutlet(
       '<ng-template ng-ref="tpl" ng-ref-read="ngTemplate"><span>hola</span></ng-template>' +

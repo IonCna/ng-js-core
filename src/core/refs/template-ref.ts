@@ -1,4 +1,4 @@
-import angular, { type IController, type IDirective, type IDirectiveCompileFn, type IScope, type ITranscludeFunction } from "angular";
+import type { IController, IDirective, IDirectiveCompileFn, IScope, ITranscludeFunction } from "angular";
 import { Directive } from "@/core/metadata/directive.ts";
 import type { ContextObject } from "@/core/refs/embedded-view-ref.ts";
 import { EmbeddedViewRefImpl } from "@/core/refs/embedded-view-ref.ts";
@@ -28,14 +28,25 @@ export class TemplateRef<C = ContextObject> implements IController {
     this.declarations = new Map(declarations);
   }
 
-  /** `let-item="clave"` → dentro de la vista embebida, `item` resuelve a `context.clave` (`"$implicit"` si no se puso valor). */
+  /**
+   * `let-item="clave"` → dentro de la vista embebida, `item` resuelve a
+   * `context.clave` (`"$implicit"` si no se puso valor).
+   *
+   * La variable se define como **getter en vivo** sobre el objeto `context`, no
+   * como copia de valor: si el consumidor muta `context.clave` in-place (patrón
+   * de `NgbRating`, `NgbCarousel`, …), el diget de la vista lo refleja — igual
+   * que Angular, donde el contexto se pasa por referencia.
+   */
   createEmbeddedView(context: C, scope?: IScope): EmbeddedViewRefImpl<C> {
     const targetScope = (scope ?? this.$scope).$new();
-    const locals: Record<string, unknown> = Object.create(null);
-    angular.extend(locals, context);
+    const source = (context ?? {}) as Record<string, unknown>;
 
     for (const [localName, key] of this.declarations) {
-      angular.extend(targetScope, { [localName]: locals[key] });
+      Object.defineProperty(targetScope, localName, {
+        get: () => source[key],
+        configurable: true,
+        enumerable: true,
+      });
     }
 
     return new EmbeddedViewRefImpl(context, targetScope, this.$transclude);

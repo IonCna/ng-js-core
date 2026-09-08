@@ -30,7 +30,10 @@ export class NgTemplateOutlet<C = unknown> implements IController {
 
     if (!this.ngTemplateOutlet) return;
 
-    const context = { ...(this.ngTemplateOutletContext ?? {}) } as C;
+    // Por referencia (sin copiar): así una mutación in-place del objeto de
+    // contexto se ve en la vista, como en Angular. La vista se re-crea solo
+    // cuando cambia la REFERENCIA del binding (`$onChanges` de `<`).
+    const context = (this.ngTemplateOutletContext ?? {}) as C;
     this.embeddedView = this.ngTemplateOutlet.createEmbeddedView(context);
     insertAfter(this.$element[0] as Node, this.embeddedView.rootNodes);
   }
