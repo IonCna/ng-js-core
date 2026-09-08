@@ -41,8 +41,24 @@ export class ViewQueryRegistry {
    */
   onDynamicChange?: () => void;
 
+  /**
+   * Nodo del elemento host de este registry (el `$element` del controller que lo
+   * creó). Sirve para el caso de `@ContentChild`/`@ContentChildren` sobre una
+   * `@Directive` sin template (contenido = light DOM, sin `<ng-content>` que
+   * llame `bindContentQueryOwners`): un candidato del mismo scope cuyo nodo esté
+   * dentro de este host es "contenido" de este controller.
+   */
+  hostNode?: Node;
+
   get hasContentQueries(): boolean {
     return this.contentQueries.length > 0 || this.contentChildrenQueries.length > 0;
+  }
+
+  /** `true` si `node` está dentro del host de este registry (y no es el host). */
+  containsLightDomNode(node: Node | undefined): boolean {
+    const host = this.hostNode;
+    if (!host || !node || node === host) return false;
+    return typeof host.contains === "function" && host.contains(node);
   }
 
   private notifyDynamic(): void {

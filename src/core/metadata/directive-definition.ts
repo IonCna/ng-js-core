@@ -34,6 +34,31 @@ function resolveComponentControllerAs(own: string | undefined, fromModule: strin
 }
 
 /**
+ * `controllerAs` de una `@Directive`:
+ * - lo explícito de la clase gana siempre;
+ * - una directiva **sin template propio pero con `@Input`/`@Output`** necesita un
+ *   `identifier` para que AngularJS corra `initializeDirectiveBindings` sobre el
+ *   `bindToController`-hash — pero NO el `controllerAs` del `@NgModule` (p.ej.
+ *   `"$"`): ese es para los templates de los componentes, y compartido entre
+ *   muchas directivas colisiona en el scope (`scope.$` pisado). Se usa el nombre
+ *   de registro (`ngbNavPane`), único por tipo de directiva y sin uso en template;
+ * - una directiva con template propio sí hereda el `controllerAs` del módulo
+ *   (su template puede necesitarlo);
+ * - sin bindings y sin template: `undefined` (como antes).
+ */
+function resolveDirectiveControllerAs(
+  def: StampedDirectiveDef,
+  registrationName: string,
+  moduleControllerAs: string | undefined,
+): string | undefined {
+  if (def.controllerAs) return def.controllerAs;
+  const hasTemplate = Boolean(def.template || def.templateUrl);
+  if (hasTemplate) return moduleControllerAs;
+  const hasBindings = def.inputs.length > 0 || def.outputs.length > 0;
+  return hasBindings ? registrationName : moduleControllerAs;
+}
+
+/**
  * Envuelve `compile`/`link` para que, cuando el selector es más que un tag o
  * `[attr]` sueltos (compuesto tipo `button[ngbNavLink]`, o con `:not(...)`), se
  * verifiquen contra el elemento real (`Element.matches`) antes de linkear. Si no
@@ -98,7 +123,7 @@ export function buildDirectiveDefinition(
     transclude: def.transclude,
     template: def.template,
     templateUrl: def.templateUrl,
-    controllerAs: def.controllerAs ?? moduleControllerAs,
+    controllerAs: resolveDirectiveControllerAs(def, parsed.registrationName, moduleControllerAs),
     priority: def.priority,
     terminal: def.terminal,
     compile,

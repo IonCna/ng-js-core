@@ -1,6 +1,8 @@
 import type angular from "angular";
 import { ContentChildQuery, createDecoratedContentChildQueries } from "@/core/queries/content-child.ts";
 import { ContentChildrenQuery, createDecoratedContentChildrenQueries } from "@/core/queries/content-children.ts";
+import { getComponentDef } from "@/core/metadata/define-component.ts";
+import { getDirectiveDef } from "@/core/metadata/directive.ts";
 import { getControllerTokens } from "@/core/queries/controller-tokens.ts";
 import {
   getAncestorQueryRegistries,
@@ -36,7 +38,15 @@ export function decorateControllerViewChildQueries($delegate: angular.IControlle
       const $element = locals?.$element as angular.IAugmentedJQuery | undefined;
       const node = $element?.[0] as Node | undefined;
       const registry = new ViewQueryRegistry();
-      if (node) controllerNodes.set(instance, node);
+      if (node) {
+        controllerNodes.set(instance, node);
+        // Una `@Directive` SIN template (no `@Component`) proyecta light DOM:
+        // sus `@ContentChild`/`@ContentChildren` matchean descendientes del host
+        // sin `<ng-content>` de por medio. Un `@Component` NO — su contenido va
+        // por `<ng-content>` (que llama `bindContentQueryOwners`).
+        const Clase = (instance as { constructor: Function }).constructor;
+        if (!getComponentDef(Clase) && getDirectiveDef(Clase)) registry.hostNode = node;
+      }
 
       installOwnQueries(instance, registry);
 
@@ -54,7 +64,7 @@ export function decorateControllerViewChildQueries($delegate: angular.IControlle
             registry.resolve();
           });
         };
-        publishToOwners(instance, $scope);
+        publishToOwners(instance, $scope, registry);
         $scope.$on("$destroy", () => registry.destroy());
       }
 
@@ -159,7 +169,7 @@ function install(
   });
 }
 
-function publishToOwners(instance: object, $scope: angular.IScope): void {
+function publishToOwners(instance: object, $scope: angular.IScope, ownRegistry?: ViewQueryRegistry): void {
   const tokens = getControllerTokens(instance);
   if (tokens.length === 0) return;
   const node = controllerNodes.get(instance);
@@ -172,6 +182,19 @@ function publishToOwners(instance: object, $scope: angular.IScope): void {
   for (const owner of getContentQueryOwners($scope)) {
     owner.registerContentCandidate(tokens, instance, node);
     published.push(owner);
+  }
+
+  // Light DOM: `@ContentChild`/`@ContentChildren` sobre una `@Directive` sin
+  // template comparte `$scope` con este controller, así que no aparece en
+  // `getAncestorQueryRegistries` ni en `getContentQueryOwners`. Se publica como
+  // candidato de contenido a las registries del MISMO scope marcadas como
+  // light-DOM (host sin template) cuyo host contenga este nodo.
+  for (const registry of getScopeViewQueryRegistries($scope)) {
+    if (registry === ownRegistry || !registry.hostNode || !registry.hasContentQueries) continue;
+    if (registry.containsLightDomNode(node)) {
+      registry.registerContentCandidate(tokens, instance, node);
+      published.push(registry);
+    }
   }
 
   // Cuando este controller proyectado se destruye (`ng-if`/`ng-repeat` lo saca),
