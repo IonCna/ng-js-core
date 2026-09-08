@@ -46,32 +46,63 @@ function bridgeLifecycle(instance: unknown, locals?: Record<string, unknown>): v
   if (typeof inst.ngOnDestroy === "function" && typeof inst.$onDestroy !== "function") {
     inst.$onDestroy = () => inst.ngOnDestroy?.();
   }
-  // `ngDoCheck` → `ngAfterContentChecked` → `ngAfterViewChecked` corren, en ese
-  // orden, en cada ciclo de detección de cambios de Angular. AngularJS solo tiene
-  // `$doCheck` (una vez por digest): los tres se encadenan ahí. Encadenado (no
-  // "si no existe") para no pisar un `$doCheck` que ya haya puesto el autor.
-  const perDigestHooks = [inst.ngDoCheck, inst.ngAfterContentChecked, inst.ngAfterViewChecked].filter(
-    (hook): hook is () => void => typeof hook === "function",
-  );
-  for (const hook of perDigestHooks) {
-    chainInstanceMethod(inst as object, "$doCheck", () => hook.call(inst));
+  // Orden de Angular en cada CD: `ngDoCheck` → `ngAfterContentInit` (una vez) →
+  // `ngAfterContentChecked` → `ngAfterViewInit` (una vez) → `ngAfterViewChecked`.
+  // AngularJS solo tiene `$doCheck` (una vez por digest, y una llamada inicial
+  // síncrona DENTRO del `nodeLinkFn`, ANTES del `$postLink`).
+  //
+  //  - `ngDoCheck` sí corre antes de `ngAfterContentInit` en Angular → se
+  //    encadena a `$doCheck` sin gate.
+  //  - `ngAfterContentChecked` NO puede correr antes de `ngAfterContentInit`
+  //    (si no, un `this.contentChild.foo` en el checked explota, porque las
+  //    queries se resuelven en el `$postLink`). Se gatea con un flag que se
+  //    prende al correr el `Init`, y se dispara una vez ahí mismo (el "checked"
+  //    del CD del init).
+  //  - Ídem `ngAfterViewChecked` respecto de `ngAfterViewInit`.
+  let contentInitDone = false;
+  let viewInitDone = false;
+
+  if (typeof inst.ngDoCheck === "function") {
+    chainInstanceMethod(inst as object, "$doCheck", () => inst.ngDoCheck?.());
   }
-  if (typeof inst.ngAfterContentInit === "function" || typeof inst.ngAfterViewInit === "function") {
+  if (typeof inst.ngAfterContentChecked === "function") {
+    chainInstanceMethod(inst as object, "$doCheck", () => {
+      if (contentInitDone) inst.ngAfterContentChecked?.();
+    });
+  }
+  if (typeof inst.ngAfterViewChecked === "function") {
+    chainInstanceMethod(inst as object, "$doCheck", () => {
+      if (viewInitDone) inst.ngAfterViewChecked?.();
+    });
+  }
+
+  if (
+    typeof inst.ngAfterContentInit === "function" ||
+    typeof inst.ngAfterViewInit === "function" ||
+    typeof inst.ngAfterContentChecked === "function" ||
+    typeof inst.ngAfterViewChecked === "function"
+  ) {
     // `ngAfterContentInit` en `$postLink`: el contenido proyectado ya está
-    // linkeado ahí. `ngAfterViewInit`, en cambio, se difiere a `$$postDigest`
-    // (Gap D): en Angular corre DESPUÉS de que la vista propia (incl.
-    // `ng-repeat`/estructurales del template) renderizó — y en AngularJS eso
-    // pasa recién al terminar el primer `$digest`, no en `$postLink`. Se
-    // mantiene el orden de Angular (content antes que view).
-    // Encadenado (no "si no existe"): así no pisa un `$postLink` ya puesto por
-    // otro bridge (ej. `ng-ref-bridge.ts`) ni por el autor.
+    // linkeado y las queries resueltas ahí. `ngAfterViewInit`, en cambio, se
+    // difiere a `$$postDigest` (Gap D): en Angular corre DESPUÉS de que la vista
+    // propia (incl. `ng-repeat`/estructurales) renderizó — en AngularJS eso pasa
+    // al terminar el primer `$digest`, no en `$postLink`.
+    // Encadenado (no "si no existe"): no pisa un `$postLink` ya puesto por otro
+    // bridge (`ng-ref-bridge.ts`) ni por el autor.
     chainInstanceMethod(inst as object, "$postLink", () => {
       inst.ngAfterContentInit?.();
-      if (typeof inst.ngAfterViewInit !== "function") return;
+      contentInitDone = true;
+      inst.ngAfterContentChecked?.();
+
+      const runViewInit = () => {
+        inst.ngAfterViewInit?.();
+        viewInitDone = true;
+        inst.ngAfterViewChecked?.();
+      };
       if (typeof $scope?.$$postDigest === "function") {
-        $scope.$$postDigest(() => inst.ngAfterViewInit?.());
+        $scope.$$postDigest(runViewInit);
       } else {
-        inst.ngAfterViewInit();
+        runViewInit();
       }
     });
   }

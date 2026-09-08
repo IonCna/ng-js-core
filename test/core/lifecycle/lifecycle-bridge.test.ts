@@ -251,11 +251,19 @@ describe("etapa 5 — controller-bridge: ngOnChanges/ngOnDestroy/ngDoCheck", () 
     document.body.appendChild(host);
 
     const injector = angular.bootstrap(host, [name], { strictDi: false });
-    injector.get<angular.IRootScopeService>("$rootScope").$digest();
+    const $rootScope = injector.get<angular.IRootScopeService>("$rootScope");
+    $rootScope.$digest();
+    $rootScope.$digest(); // vacía el `$$postDigest` del primer `ngAfterViewChecked`
 
-    expect(calls.length).toBeGreaterThanOrEqual(3);
-    // el primer trío respeta el orden de Angular
-    expect(calls.slice(0, 3)).toEqual(["doCheck", "contentChecked", "viewChecked"]);
+    expect(calls).toContain("doCheck");
+    expect(calls).toContain("contentChecked");
+    expect(calls).toContain("viewChecked");
+    // orden relativo de Angular: doCheck → contentChecked → viewChecked
+    expect(calls.indexOf("doCheck")).toBeLessThan(calls.indexOf("contentChecked"));
+    expect(calls.indexOf("contentChecked")).toBeLessThan(calls.indexOf("viewChecked"));
+    // el `$doCheck` inicial (síncrono en el link, antes del `$postLink`) NO
+    // dispara los "checked": corren recién tras su `Init` correspondiente.
+    expect(calls[0]).toBe("doCheck");
   });
 
   it("ngAfterContentInit y ngAfterViewInit se reenvían al mismo $postLink, content antes que view", () => {

@@ -10,6 +10,10 @@ import { type QueryOptions, type QueryToken, resolveQueryLocator, resolveQueryOp
 export class ViewChildrenQuery<T> {
   private readonly queryList?: QueryList<T>;
   private values: T[] = [];
+  /** El primer `resolve()` corre en `ngAfterViewInit`. Antes, el campo
+   * `@ViewChildren` vale `undefined` — como en Angular. La forma de array plano
+   * (`viewChildren()` función) sigue devolviendo `[]`. */
+  private resolved = false;
 
   constructor(
     public readonly locator: QueryToken<T>,
@@ -19,11 +23,13 @@ export class ViewChildrenQuery<T> {
     if (asQueryList) this.queryList = new QueryList<T>();
   }
 
-  get value(): readonly T[] | QueryList<T> {
-    return this.queryList ?? this.values;
+  get value(): readonly T[] | QueryList<T> | undefined {
+    if (this.queryList) return this.resolved ? this.queryList : undefined;
+    return this.values;
   }
 
   resolve(values: readonly unknown[]): void {
+    this.resolved = true;
     this.values = values as T[];
     if (this.queryList) {
       this.queryList.reset(this.values);

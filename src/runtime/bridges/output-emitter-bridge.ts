@@ -8,13 +8,14 @@ interface EmitterLike {
   emit?(value?: unknown): void;
 }
 
+/**
+ * Cualquier `Subscribable` sirve como `@Output`: un `EventEmitter` (tiene
+ * `emit`), pero también un `Observable`/`Subject` pelado — ng-bootstrap hace
+ * `@Output() activeChange = this._service.active$`. Solo hace falta `subscribe`
+ * para cablearlo al binding `&`; `emit` es opcional.
+ */
 function isEmitterLike(value: unknown): value is EmitterLike {
-  return (
-    !!value &&
-    typeof value === "object" &&
-    typeof (value as EmitterLike).subscribe === "function" &&
-    typeof (value as { emit?: unknown }).emit === "function"
-  );
+  return !!value && typeof value === "object" && typeof (value as EmitterLike).subscribe === "function";
 }
 
 function outputDefsOf(instance: object): { propName: string }[] {
@@ -24,14 +25,20 @@ function outputDefsOf(instance: object): { propName: string }[] {
 
 /**
  * `@Output() x = new EventEmitter()` (estilo Angular / ng-bootstrap): el campo se
- * inicializa a un emitter en el ctor. Al bindear, AngularJS pisa `this.x` con la
- * función del binding `&` (evalúa la expresión del padre). Este bridge, en
- * `$onInit` (ya aplicados los bindings):
- *   1. rescata esa función `&`,
- *   2. restaura el emitter en `this.x` (para que `this.x.emit(v)` ande),
- *   3. suscribe el emitter a la función → `x.emit(v)` dispara `(x)="handler($event)"`.
- * Se limpia en `$onDestroy`. Si el `@Output` no es un emitter (uso viejo como
- * callback `&`), no toca nada.
+ * inicializa a un emitter en el ctor. Al bindear, AngularJS asigna `this.x` con
+ * la función del binding `&` (evalúa la expresión del padre), lo que pisaría el
+ * emitter.
+ *
+ * En Angular el emitter NUNCA se pisa y ya está suscrito cuando corre el primer
+ * `ngOnChanges` (que va ANTES de `ngOnInit`), así que un `this.x.emit(v)` dentro
+ * de ese primer `ngOnChanges` funciona. Para lograr la misma semántica, este
+ * bridge redefine `this.x` como accessor en cuanto se construye el controller:
+ *   - `get` devuelve siempre el emitter → `this.x.emit(v)` anda desde el primer
+ *     momento, incluso en `$onChanges` (antes de `$onInit`),
+ *   - `set` (lo llama AngularJS con la función `&`) guarda esa función aparte y
+ *     suscribe el emitter a ella → `x.emit(v)` dispara `(x)="handler($event)"`.
+ * La suscripción se limpia en `$onDestroy`. Si el `@Output` no es un emitter
+ * (uso viejo como callback `&`), no toca nada.
  */
 export function decorateControllerOutputEmitters(
   $delegate: angular.IControllerService,
@@ -45,21 +52,34 @@ export function decorateControllerOutputEmitters(
       );
       if (outputs.length === 0) return;
 
-      const captured = new Map<string, EmitterLike>();
-      for (const output of outputs) {
-        captured.set(output.propName, (instance as Record<string, EmitterLike>)[output.propName]);
+      const activeSubs = new Map<string, { unsubscribe(): void }>();
+
+      for (const { propName } of outputs) {
+        const emitter = (instance as Record<string, unknown>)[propName] as EmitterLike;
+        let boundFn: unknown;
+
+        Object.defineProperty(instance, propName, {
+          configurable: true,
+          enumerable: true,
+          get: () => emitter,
+          set: (value: unknown) => {
+            if (value === boundFn) return;
+            boundFn = value;
+            activeSubs.get(propName)?.unsubscribe();
+            activeSubs.delete(propName);
+            if (typeof value === "function") {
+              activeSubs.set(
+                propName,
+                emitter.subscribe((emitted) => (value as (locals: object) => unknown)({ $event: emitted })),
+              );
+            }
+          },
+        });
       }
 
-      chainInstanceMethod(instance, "$onInit", () => {
-        const target = instance as Record<string, unknown>;
-        for (const [propName, emitter] of captured) {
-          const boundFn = target[propName];
-          target[propName] = emitter;
-          if (typeof boundFn === "function") {
-            const subscription = emitter.subscribe((value) => (boundFn as (locals: object) => unknown)({ $event: value }));
-            chainInstanceMethod(instance, "$onDestroy", () => subscription.unsubscribe());
-          }
-        }
+      chainInstanceMethod(instance, "$onDestroy", () => {
+        for (const subscription of activeSubs.values()) subscription.unsubscribe();
+        activeSubs.clear();
       });
     },
   });
