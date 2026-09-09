@@ -76,7 +76,15 @@ export class ApplicationRefImpl extends ApplicationRef implements ViewOwner {
     tick(): void {
         if (this._destroyed || this.$rootScope.$$phase) return;
         this.$rootScope.$digest();
-        this.afterRenderEventManager.notify();
+        // Los callbacks de `afterRender`/`afterNextRender` corren en contexto NO
+        // reactivo, igual que en Angular real: fuera de la NgZone. Si corrieran
+        // dentro, una microtask que agende un callback —p. ej. la `Promise` que
+        // devuelve `popper.update()` desde un `afterEveryRender`— dejaría el zone
+        // inestable y, al drenarse, re-dispararía `onMicrotaskEmpty` -> `tick()`
+        // -> `notify()` -> ... loop infinito de microtasks (que además mata la
+        // cola de macrotasks). Un callback que necesite reactividad debe reentrar
+        // explícito con `ngZone.run(...)` (lo hace `ngbRunTransition`).
+        this.ngZone.runOutsideAngular(() => this.afterRenderEventManager.notify());
     }
 
     whenStable(): Promise<void> {
