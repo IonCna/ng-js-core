@@ -20,7 +20,7 @@ interface TitleSink {
 
 /**
  * Aplica el título tal cual, vía el servicio `Title` si está en el injector
- * (`PlatformBrowserModule`), o `document.title` directo si no.
+ * (`ngjs-core/platform-browser`), o `document.title` directo si no.
  */
 export class DefaultTitleStrategy extends TitleStrategy {
   constructor(private readonly title?: TitleSink) {

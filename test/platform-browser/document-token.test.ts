@@ -1,11 +1,7 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import {
-  DOCUMENT,
-  PlatformBrowserModule,
-  platformBrowserModule,
-  providePlatformBrowser,
-} from "@/runtime/platform-browser/index.ts";
+import { DOCUMENT } from "@/runtime/common/index.ts";
+import { PlatformBrowserModule, platformBrowserModule, providePlatformBrowser } from "@/runtime/platform-browser/index.ts";
 
 function boot(mod: angular.IModule) {
   const host = document.createElement("div");
@@ -14,10 +10,10 @@ function boot(mod: angular.IModule) {
 }
 
 describe("etapa 14 — platform-browser: DOCUMENT", () => {
-  it("PlatformBrowserModule es memoizado y depende de ng.js.core", () => {
+  it("PlatformBrowserModule es memoizado y depende de ng.js.core + ng.js.common", () => {
     expect(platformBrowserModule()).toBe(PlatformBrowserModule);
     expect(providePlatformBrowser()).toBe(PlatformBrowserModule);
-    expect(PlatformBrowserModule.requires).toEqual(["ng.js.core"]);
+    expect(PlatformBrowserModule.requires).toEqual(["ng.js.core", "ng.js.common"]);
   });
 
   it("inyectar DOCUMENT devuelve $document[0] (el document global)", () => {

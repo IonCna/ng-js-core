@@ -6,7 +6,13 @@ describe("etapa 4 - ngModule() / @NgModule", () => {
     class AppModule {}
     ngModule(AppModule).define({ id: "app" });
 
-    expect(getNgModuleDef(AppModule)).toEqual({ id: "app", declarations: [], imports: [], providers: [] });
+    expect(getNgModuleDef(AppModule)).toEqual({
+      id: "app",
+      declarations: [],
+      imports: [],
+      providers: [],
+      bootstrap: [],
+    });
   });
 
   it("@NgModule(def) produce el mismo NgModuleDef que ngModule(Clase).define(def)", () => {
@@ -39,6 +45,7 @@ describe("etapa 4 - ngModule() / @NgModule", () => {
       declarations: [],
       imports: [],
       providers: [SomeProvider],
+      bootstrap: [],
     });
   });
 });

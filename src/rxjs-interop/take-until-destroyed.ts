@@ -1,5 +1,5 @@
 import { EMPTY, type MonoTypeOperatorFunction, type Observable, Subject, takeUntil } from "rxjs";
-import type { DestroyRef } from "@/rxjs-interop/destroy-ref.ts";
+import type { DestroyRef } from "@/core/refs/destroy-ref.ts";
 
 /**
  * A diferencia del `takeUntilDestroyed()` real de Angular, `destroyRef` NO

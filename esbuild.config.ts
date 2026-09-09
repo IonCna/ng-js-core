@@ -6,6 +6,8 @@ await esbuild.build({
     "src/animations/index.ts",
     "src/core/index.ts",
     "src/common/index.ts",
+    "src/http/index.ts",
+    "src/forms/index.ts",
     "src/core/platform/index.ts",
     "src/cdk/a11y/index.ts",
     "src/cdk/layout/index.ts",
@@ -41,6 +43,6 @@ await esbuild.build({
     "zone.js/*",
     "@uirouter/angularjs",
   ],
-  sourcemap: true,
+  sourcemap: false,
   target: ["es2022"],
 });

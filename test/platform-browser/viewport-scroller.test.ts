@@ -1,6 +1,6 @@
 import angular from "angular";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ViewportScroller } from "@/platform-browser/index.ts";
+import { ViewportScroller } from "@/common/index.ts";
 import { PlatformBrowserModule } from "@/runtime/platform-browser/index.ts";
 
 let scrollToSpy: ReturnType<typeof vi.fn>;

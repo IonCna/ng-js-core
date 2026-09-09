@@ -99,6 +99,14 @@ Las cuatro directivas estructurales (`ng-content`, `ng-template`, `ng-container`
   `CommonModule` (`@NgModule` que estampa). Forma `core` / Angular; hoy no está en
   `exports` (queda para el traductor build-time / la migración).
 
+Además, `src/common/` es el hogar de los servicios de `@angular/common` que no son
+de plataforma pura: `DOCUMENT`, `Location` / `LocationStrategy` (`Path` / `Hash`) /
+`PlatformLocation` / `APP_BASE_HREF`, y `ViewportScroller`. `ng.js.common` registra
+todos salvo `LocationStrategy` (la fija `RouterModule.forRoot`). `@angular/platform-browser`
+en Angular real **no** exporta ninguno de estos — `ngjs-core/platform-browser` tampoco:
+se queda con `Title`, `Meta`, `DomSanitizer`. `ng.js.platform-browser` depende de
+`ng.js.common` (como `BrowserModule` re-exporta `CommonModule`).
+
 ---
 
 ## Árbol
@@ -111,6 +119,8 @@ ngjs-core/
                 ApplicationRef · ErrorHandler · APP_INITIALIZER · ConfigProviderFactory
   common/       NgContent/NgTemplate/NgContainer/NgTemplateOutlet como @Directive
                 CommonModule (@NgModule) — forma core, sin exponer
+    location/   Location · LocationStrategy (Path/Hash) · PlatformLocation · APP_BASE_HREF
+                DOCUMENT · ViewportScroller  (todos @angular/common, no platform-browser)
   runtime/      (implementación del modo por defecto — sin path público propio)
     index.ts    bootstrapApplication(AppModule) · registerNgModule · createComponent
     common/     las 4 directivas peladas + wiring imperativo  → ngjs-core/common
@@ -125,10 +135,15 @@ ngjs-core/
 
 ```jsonc
 {
-  ".":                "./dist/index.js",              // runtime — por defecto
+  // raíz = @angular/core + el motor de runtime (`bootstrapApplication`, …).
+  // Las features NO se re-exportan desde acá: cada una es un subpath, como los
+  // paquetes `@angular/*` de Angular real.
+  ".":                "./dist/index.js",
   "./core":           "./dist/core/index.js",         // sustrato / migración a Angular
   "./compat":         "./dist/compat/index.js",       // JS puro
   "./common":         "./dist/runtime/common/index.js",
+  "./common/http":    "./dist/http/index.js",         // = @angular/common/http
+  "./forms":          "./dist/forms/index.js",
   "./animations":     "./dist/runtime/animations/index.js",
   "./i18n":           "./dist/runtime/i18n/index.js",
   "./cdk/a11y":       "./dist/runtime/cdk/a11y/index.js",
@@ -136,10 +151,11 @@ ngjs-core/
   "./platform-browser":"./dist/runtime/platform-browser/index.js",
   "./testing":        "./dist/runtime/testing/index.js",
   "./router":         "./dist/router/index.js",
-  "./rxjs-interop":   "./dist/rxjs-interop/index.js",
+  "./rxjs-interop":   "./dist/rxjs-interop/index.js",  // = @angular/core/rxjs-interop
   "./platform":       "./dist/core/platform/index.js",
   "./i18n/locales/*": "./dist/i18n/locales/*.js"
-  // http / pipes: solo desde la raíz (".")
+  // pipes (`AsyncPipe`, `KeyValue`): salen por `ngjs-core/common` (= @angular/common).
+  // `PipeTransform` es @angular/core → sale por la raíz.
 }
 ```
 

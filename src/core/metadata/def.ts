@@ -119,6 +119,14 @@ export interface NgModuleDef {
   imports?: (Function | angular.IModule | string)[];
   providers?: Provider[];
   /**
+   * Componentes raíz (`@Component` con selector de elemento). Al arrancar con
+   * `bootstrapApplication(AppModule)`, por cada uno se crea su elemento dentro del
+   * host (default `<body>`) si no está ya en el DOM, y AngularJS lo compila.
+   * Equivale a `@NgModule({ bootstrap: [...] })` de Angular. No hace falta
+   * repetirlos en `declarations`: se auto-declaran.
+   */
+  bootstrap?: Function[];
+  /**
    * `controllerAs` por default para las `declarations` de este módulo que no lo
    * declaren en su `@Component`/`@Directive`. Se hereda hacia los `@NgModule`
    * importados que tampoco lo pongan (gana el más cercano). Sin nada en ningún

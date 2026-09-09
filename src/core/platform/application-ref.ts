@@ -76,7 +76,12 @@ export class ApplicationRefImpl extends ApplicationRef implements ViewOwner {
     tick(): void {
         if (this._destroyed || this.$rootScope.$$phase) return;
         this.$rootScope.$digest();
-        this.afterRenderEventManager.notify();
+        // Los render hooks corren FUERA de la zona — como en Angular. Si un
+        // callback agenda trabajo async (ej. `popperInstance.update()` de Popper,
+        // que devuelve una Promise debounced), su microtask NO tiene que contar
+        // para `onMicrotaskEmpty`; si no, cada `tick()` agenda el siguiente y el
+        // navegador se cuelga.
+        this.ngZone.runOutsideAngular(() => this.afterRenderEventManager.notify());
     }
 
     whenStable(): Promise<void> {

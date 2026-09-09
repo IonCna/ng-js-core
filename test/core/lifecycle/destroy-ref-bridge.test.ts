@@ -1,7 +1,7 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
 import { decorateControllerDestroyRef } from "@/runtime/bridges/destroy-ref-bridge.ts";
-import { DestroyRef } from "@/rxjs-interop/destroy-ref.ts";
+import { DestroyRef } from "@/core/refs/destroy-ref.ts";
 
 let counter = 0;
 function uniqueName(prefix: string): string {

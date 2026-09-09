@@ -6,7 +6,7 @@ import { Component } from "@/core/metadata/component.ts";
 import { NgModule } from "@/core/metadata/ng-module.ts";
 import type { Routes } from "@/router/index.ts";
 import { Router, RouterModule, withInMemoryScrolling } from "@/router/index.ts";
-import type { ViewportScroller } from "@/platform-browser/index.ts";
+import type { ViewportScroller } from "@/common/index.ts";
 import { CommonModule } from "@/runtime/common/index.ts";
 import { bootstrapApplication } from "@/runtime/index.ts";
 

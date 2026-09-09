@@ -15,6 +15,7 @@ import type {
   RouterStateSnapshot,
 } from "@/router/route.ts";
 import { resolveRouteComponentInstance } from "@/router/route-component-registry.ts";
+import { routerRegistry } from "@/router/router-registry.ts";
 
 export interface GuardBinding {
   stateName: string;
@@ -56,6 +57,13 @@ export interface TranslatedRoutes {
   wildcardState?: string;
   /** Full path desde root → state name (para resolver `redirectTo`). */
   pathToName: Map<string, string>;
+  /**
+   * Rutas con `redirectTo`, con el `redirectTo` **crudo** (path) + el `parentPath`
+   * para re-resolverlo. `translate()` ya hizo la resolución local (misma tree);
+   * esta lista deja re-resolver contra el `pathToName` global de `routerRegistry`
+   * (redirects que cruzan `forRoot`↔`forChild`).
+   */
+  redirects: { state: Ng1StateDeclaration; redirectTo: string; parentPath: string }[];
   /** Componentes de ruta (`{ camelCase, clase, state }`) — `loadChildren` los registra en el chunk lazy; `canDeactivate` los trackea. */
   components: { name: string; cls: Function; stateName: string }[];
 }
@@ -153,7 +161,7 @@ function lazyLoadFor(route: Route, stateName: string, url: string, data: Data) {
       controller: cls as never,
       template: def.template,
       templateUrl: def.templateUrl,
-      controllerAs: def.controllerAs,
+      controllerAs: def.controllerAs ?? routerRegistry.controllerAs,
       bindings: def.bindings ?? bindingsFromDefs(def.inputs, def.outputs),
     });
 
@@ -198,22 +206,42 @@ type TransitionsLike = {
 };
 
 /**
+ * Corre una lista de guards y devuelve un `boolean` **síncrono** cuando ninguno
+ * es async. Esto es clave para los hooks `onBefore`: si el callback devuelve una
+ * Promise, UI-Router descarta un `redirectTo` de otra ruta que apunte a este
+ * estado (la transición redirigida se pierde en la primera navegación). Solo se
+ * devuelve una Promise si algún guard realmente lo es.
+ */
+function runGuards<T>(guards: ((arg: T) => boolean | Promise<boolean>)[], arg: T): boolean | Promise<boolean> {
+  const pending: Promise<boolean>[] = [];
+  for (const guard of guards) {
+    const result = guard(arg);
+    if (result === false) return false;
+    if (result !== true) pending.push(Promise.resolve(result));
+  }
+  if (pending.length === 0) return true;
+  return (async () => {
+    for (const p of pending) {
+      if ((await p) === false) return false;
+    }
+    return true;
+  })();
+}
+
+/**
  * Registra un guard (`canActivate` / `canActivateChild`) como hook `onBefore`.
  * Reusado por `RouterModule` (guards eager) y por el handler de `loadChildren`
  * (guards del subárbol lazy — se wirean con el `$transitions` de la transición).
  */
 export function wireGuardHook($transitions: TransitionsLike, guard: GuardBinding): void {
   const criteria = guard.forChildren ? { to: `${guard.stateName}.**` } : { to: guard.stateName };
-  $transitions.onBefore(criteria, async (transition: GuardTransition) => {
+  $transitions.onBefore(criteria, (transition: GuardTransition) => {
     if (guard.forChildren && transition.to().name === guard.stateName) return true;
     const snapshot = {
       params: transition.params(),
       data: guard.data,
     } as ActivatedRouteSnapshot;
-    for (const canActivate of guard.canActivate) {
-      if ((await canActivate(snapshot)) === false) return false;
-    }
-    return true;
+    return runGuards(guard.canActivate, snapshot);
   });
 }
 
@@ -253,14 +281,13 @@ export function wireDeactivateHook($transitions: TransitionsLike, binding: Deact
  * `loadChildren` no baja el chunk si no matchea). UI-Router no tiene fallthrough:
  * si algún guard da `false`, se **aborta** la transición (la app se queda donde
  * estaba). "Probá la siguiente ruta / caé al `**`" no se replica — brecha.
+ *
+ * `runGuards` mantiene el hook **síncrono** cuando los `canMatch` no son async —
+ * un `onBefore` que devuelve Promise rompe un `redirectTo` de otra ruta hacia
+ * este estado.
  */
 export function wireMatchHook($transitions: TransitionsLike, binding: MatchBinding): void {
-  $transitions.onBefore({ to: binding.criteria }, async () => {
-    for (const canMatch of binding.guards) {
-      if ((await canMatch(binding.route)) === false) return false;
-    }
-    return true;
-  });
+  $transitions.onBefore({ to: binding.criteria }, () => runGuards(binding.guards, binding.route));
 }
 
 function unwrapLazyRoutes(loaded: Routes | { routes: Routes } | { default: Routes }): Routes {
@@ -282,20 +309,23 @@ interface LazyChildrenTransition {
  * titles/resolveKeys, y reemplaza el future state por el `stateName` real.
  * UI-Router reintenta la transición y ahí ya resuelve.
  */
-function lazyLoadChildrenFor(
-  route: Route,
-  stateName: string,
-  url: string,
-  fullPath: string,
-  data: Data,
-  out: TranslatedRoutes,
-) {
+function lazyLoadChildrenFor(route: Route, stateName: string, url: string, fullPath: string, data: Data) {
   const load = route.loadChildren;
   if (!load) throw new Error("lazyLoadChildrenFor: ruta sin loadChildren");
 
   return async (transition: LazyChildrenTransition) => {
     const childRoutes = unwrapLazyRoutes(await load());
     const sub = translate(childRoutes, stateName, fullPath);
+
+    // El subárbol lazy entra al registro global: sus `titles`/`resolveKeys` los
+    // leen `wireTitles` / `ActivatedRoute` en vivo, y su `pathToName` deja
+    // resolver un `redirectTo` cruzado hacia/desde el resto del árbol.
+    routerRegistry.mergeTitles(sub.titles);
+    routerRegistry.mergeResolveKeys(sub.resolveKeys);
+    routerRegistry.mergePathToName(sub.pathToName);
+    for (const { state, redirectTo, parentPath } of sub.redirects) {
+      state.redirectTo = resolveRedirect(redirectTo, parentPath, routerRegistry.pathToName);
+    }
 
     const registrar = ConfigProviderFactory.current;
     if (!registrar) throw new Error("RouterModule: no hay config-providers capturados.");
@@ -311,16 +341,12 @@ function lazyLoadChildrenFor(
         controller: cls as never,
         template: def.template,
         templateUrl: def.templateUrl,
-        controllerAs: def.controllerAs,
+        controllerAs: def.controllerAs ?? routerRegistry.controllerAs,
         bindings: def.bindings ?? bindingsFromDefs(def.inputs, def.outputs),
       });
     }
 
     for (const state of sub.states) registry.register(state);
-
-    // `titles` / `resolveKeys` → los `Map`s vivos del closure de `RouterModule`.
-    for (const [key, value] of sub.titles) out.titles.set(key, value);
-    for (const [key, value] of sub.resolveKeys) out.resolveKeys.set(key, value);
 
     const $transitions = transition.injector().get("$transitions") as TransitionsLike;
     for (const guard of sub.guards) wireGuardHook($transitions, guard);
@@ -339,7 +365,7 @@ function lazyLoadChildrenFor(
  * Sin soporte para `../` (fuera del MVP). Si no matchea, se deja el string crudo
  * (UI-Router lo interpretará como pueda).
  */
-function resolveRedirect(redirectTo: string, parentPath: string, pathToName: Map<string, string>): string {
+export function resolveRedirect(redirectTo: string, parentPath: string, pathToName: Map<string, string>): string {
   const target = redirectTo.startsWith("/") ? redirectTo.slice(1) : joinPath(parentPath, redirectTo);
   return pathToName.get(target.replace(/^\/|\/$/g, "")) ?? redirectTo;
 }
@@ -348,6 +374,9 @@ interface WalkCtx {
   out: TranslatedRoutes;
   parentName?: string;
   parentPath: string;
+  /** `true` en el árbol de `forRoot`: la ruta índice (`path: ""` sin padre) se registra con `url: "/"`
+   *  para matchear la raíz. En `forChild` queda `url: ""` (relativa al padre). */
+  isRoot: boolean;
   /** Rutas con `redirectTo` para resolver en 2ª pasada, cuando `pathToName` está completo. */
   redirects: { state: Ng1StateDeclaration; redirectTo: string; parentPath: string }[];
 }
@@ -360,7 +389,10 @@ function walk(routes: Routes, ctx: WalkCtx): void {
     const name = ctx.parentName ? `${ctx.parentName}.${local}` : local;
     const fullPath = isWildcard ? `${ctx.parentPath}/**` : joinPath(ctx.parentPath, route.path ?? "");
     // `**` → param greedy `.+` (≥1 char, así no pisa la ruta `/` del root).
-    const url = isWildcard ? "/{ngjsCatchAll:.+}" : segmentUrl(route.path);
+    // Índice del root (`forRoot`, `path: ""` sin padre) → `url: "/"` para matchear la raíz;
+    // se calcula acá (no en `RouterModule`) para que también lo capture `lazyLoadFor`.
+    const isRootIndex = ctx.isRoot && ctx.parentName === undefined && (route.path ?? "") === "";
+    const url = isWildcard ? "/{ngjsCatchAll:.+}" : isRootIndex ? "/" : segmentUrl(route.path);
     const data = route.data ?? {};
 
     ctx.out.pathToName.set(fullPath.replace(/^\/|\/$/g, ""), name);
@@ -376,7 +408,7 @@ function walk(routes: Routes, ctx: WalkCtx): void {
       // Future state: el sufijo `.**` hace que la URL de este segmento matchee
       // como prefijo y dispare `lazyLoad` aunque los hijos no existan todavía.
       state.name = `${name}.**`;
-      state.lazyLoad = lazyLoadChildrenFor(route, name, url, fullPath, data, ctx.out) as never;
+      state.lazyLoad = lazyLoadChildrenFor(route, name, url, fullPath, data) as never;
     } else {
       const comp = componentName(route);
       if (comp) {
@@ -430,7 +462,12 @@ function walk(routes: Routes, ctx: WalkCtx): void {
 }
 
 /** Traduce un árbol de `Routes` a estados, rooteado en `parentName`/`parentPath`. */
-function translate(routes: Routes, parentName: string | undefined, parentPath: string): TranslatedRoutes {
+function translate(
+  routes: Routes,
+  parentName: string | undefined,
+  parentPath: string,
+  isRoot = false,
+): TranslatedRoutes {
   const out: TranslatedRoutes = {
     states: [],
     guards: [],
@@ -439,18 +476,20 @@ function translate(routes: Routes, parentName: string | undefined, parentPath: s
     titles: new Map(),
     resolveKeys: new Map(),
     pathToName: new Map(),
+    redirects: [],
     components: [],
   };
-  const redirects: WalkCtx["redirects"] = [];
-  walk(routes, { out, parentName, parentPath, redirects });
+  walk(routes, { out, parentName, parentPath, isRoot, redirects: out.redirects });
 
-  for (const { state, redirectTo, parentPath: pp } of redirects) {
+  // Resolución local (misma tree). La global (contra `routerRegistry.pathToName`)
+  // la aplica `RouterModule` en fase config, cuando ya están todos los árboles.
+  for (const { state, redirectTo, parentPath: pp } of out.redirects) {
     state.redirectTo = resolveRedirect(redirectTo, pp, out.pathToName);
   }
 
   return out;
 }
 
-export function routesToStates(routes: Routes): TranslatedRoutes {
-  return translate(routes, undefined, "");
+export function routesToStates(routes: Routes, isRoot = false): TranslatedRoutes {
+  return translate(routes, undefined, "", isRoot);
 }

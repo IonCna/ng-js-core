@@ -190,4 +190,30 @@ describe("etapa 5 — afterRender / afterNextRender", () => {
 
     platform.destroy();
   });
+
+  it("un afterEveryRender que agenda un microtask NO dispara un loop de tick (freeze del navegador)", async () => {
+    const { appRef, platform } = await bootApp();
+    // biome-ignore lint/suspicious/noExplicitAny: la NgZone se resuelve por token string
+    const ngZone = (appRef.injector as any).get("NgZone") as {
+      run: (fn: () => void) => void;
+    };
+
+    let renders = 0;
+    // simula `popperInstance.update()` de Popper v2: agenda una Promise (microtask).
+    // Si `notify()` corre DENTRO de la zona, ese microtask re-dispara
+    // `onMicrotaskEmpty` → `tick()` → `notify()` → ... loop.
+    // El `< 100` evita colgar el test si el fix regresa: cortamos a mano.
+    afterEveryRender(() => {
+      renders++;
+      if (renders < 100) Promise.resolve().then(() => {});
+    });
+
+    ngZone.run(() => {}); // un tick real, vía la zona (como en runtime)
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // con el fix: 1–2 renders (uno por digest real). Sin el fix: llega a 100.
+    expect(renders).toBeLessThan(10);
+
+    platform.destroy();
+  });
 });

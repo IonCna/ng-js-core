@@ -12,6 +12,12 @@ export interface BootstrapOptions {
     modules?: string[];
     /** Host donde montar la app. Selector o `Element`. Default: `<body>`. */
     hostElement?: string | Element;
+    /**
+     * Tags (kebab-case) de los componentes raíz — sale de `@NgModule({ bootstrap })`.
+     * Por cada uno, si no está ya en el host, se crea `<tag></tag>` dentro antes de
+     * `angular.bootstrap`. Vacío = se compila el host tal como está en el DOM.
+     */
+    rootComponentTags?: string[];
 }
 
 /**
@@ -39,6 +45,11 @@ export class PlatformRefImpl extends PlatformRef {
         const coreName = configureCore(ngZone); // "ng.js.core" + .constant("NgZone", ngZone) per-bootstrap
 
         const host = resolveHost(options.hostElement);
+        // `@NgModule({ bootstrap })`: montar cada componente raíz dentro del host
+        // (default `<body>`) si el autor no lo puso ya en el HTML.
+        for (const tag of options.rootComponentTags ?? []) {
+            if (!host.querySelector(tag)) host.appendChild((host.ownerDocument ?? document).createElement(tag));
+        }
         const modules = [coreName, ...(options.modules ?? []), moduleName];
 
         let injector!: angular.auto.IInjectorService;

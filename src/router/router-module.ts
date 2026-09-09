@@ -6,30 +6,52 @@ import {
   LocationStrategy,
   PathLocationStrategy,
   PlatformLocation,
-} from "@/platform-browser/location/index.ts";
+} from "@/common/location/index.ts";
+import { ViewportScroller } from "@/common/viewport-scroller.ts";
 import { Title } from "@/platform-browser/title.ts";
-import { ViewportScroller } from "@/platform-browser/viewport-scroller.ts";
-import { platformBrowserModule } from "@/runtime/platform-browser/index.ts";
 import { ActivatedRoute, ActivatedRouteImpl } from "@/router/activated-route.ts";
 import type { Data, ResolveFn, Routes } from "@/router/route.ts";
 import { mergeResolvedData, pickRouteTitle } from "@/router/route-title.ts";
+import { routerRegistry } from "@/router/router-registry.ts";
 import { Router, RouterImpl } from "@/router/router.ts";
-import { DefaultTitleStrategy, TitleStrategy } from "@/router/title-strategy.ts";
 import {
   type DeactivateBinding,
   type GuardBinding,
   type MatchBinding,
+  resolveRedirect,
   routesToStates,
+  type TranslatedRoutes,
   wireDeactivateHook,
   wireGuardHook,
   wireMatchHook,
 } from "@/router/state-translator.ts";
+import { DefaultTitleStrategy, TitleStrategy } from "@/router/title-strategy.ts";
+import { commonModule } from "@/runtime/common/index.ts";
 
 let moduleSeq = 0;
 
 function nextModuleName(prefix: string): string {
   moduleSeq += 1;
   return `${prefix}.${moduleSeq}`;
+}
+
+/**
+ * Un `$injector` por cada `forRoot` activo — el guard "forRoot llamado dos veces"
+ * de `@angular/router` (`ROUTER_FORROOT_GUARD`). Es por inyector, no por llamada:
+ * cada `bootstrapApplication` tiene su `$injector`, así que un helper de tests que
+ * arma varias apps no dispara el error; dos `forRoot` en la MISMA app sí.
+ */
+const forRootInjectors = new WeakSet<object>();
+
+/**
+ * Re-resuelve los `redirectTo` de `translated` contra el `pathToName` **global**
+ * (todos los árboles de `forRoot` + `forChild`), no solo el árbol propio. Corre
+ * en fase config, cuando todos los `forRoot`/`forChild` ya poblaron el registro.
+ */
+function applyGlobalRedirects(translated: TranslatedRoutes): void {
+  for (const { state, redirectTo, parentPath } of translated.redirects) {
+    state.redirectTo = resolveRedirect(redirectTo, parentPath, routerRegistry.pathToName);
+  }
 }
 
 interface UrlRouterProvider {
@@ -107,10 +129,7 @@ function wireMatchGuards(bindings: MatchBinding[]) {
   return run;
 }
 
-function wireTitles(
-  titles: Map<string, string | ResolveFn<string>>,
-  resolveKeys: Map<string, string[]>,
-) {
+function wireTitles(titles: Map<string, string | ResolveFn<string>>, resolveKeys: Map<string, string[]>) {
   const run = (
     $transitions: TransitionService,
     $state: StateService,
@@ -215,14 +234,7 @@ function wireRouterScroller(options: InMemoryScrollingOptions) {
       }, 0);
     });
   };
-  run.$inject = [
-    ViewportScroller.$name,
-    PlatformLocation.$name,
-    "$transitions",
-    "$location",
-    "$timeout",
-    "$rootScope",
-  ];
+  run.$inject = [ViewportScroller.$name, PlatformLocation.$name, "$transitions", "$location", "$timeout", "$rootScope"];
   return run;
 }
 
@@ -233,8 +245,15 @@ function wireRouterScroller(options: InMemoryScrollingOptions) {
  */
 export const RouterModule = {
   forRoot(routes: Routes, ...features: RouterFeature[]): angular.IModule {
-    const translated = routesToStates(routes);
+    const translated = routesToStates(routes, /* isRoot */ true);
     const { states, guards, deactivateGuards, matchGuards, titles, resolveKeys } = translated;
+
+    // El árbol de `forRoot` entra al registro global. Los `Map`s del registro son
+    // los que leen `wireTitles` y `ActivatedRoute` — así los `title` / resolvers
+    // de rutas de `forChild` (que se suman al mismo registro) también cuentan.
+    routerRegistry.mergeTitles(titles);
+    routerRegistry.mergeResolveKeys(resolveKeys);
+    routerRegistry.mergePathToName(translated.pathToName);
 
     const root = states.find((state) => !state.name?.includes("."));
     // El root (con componente o con `redirectTo`) matchea la carga inicial en `/`.
@@ -242,10 +261,11 @@ export const RouterModule = {
     const fallbackUrl = (typeof root?.url === "string" && root.url) || "/";
 
     const useHash = hashRequested(features);
-    // El router depende de `platform-browser` (como `@angular/router` de `@angular/common`):
-    // trae `PlatformLocation` + `APP_BASE_HREF` + `DOCUMENT`.
-    platformBrowserModule();
-    const mod = angular.module(nextModuleName("ngjs.router"), ["ui.router", "ng.js.platform-browser"]);
+    // El router depende de `@angular/common` (`ng.js.common`): trae `PlatformLocation`
+    // + `APP_BASE_HREF` + `Location` + `DOCUMENT`. `LocationStrategy` la fija acá abajo.
+    commonModule();
+    const mod = angular.module(nextModuleName("ngjs.router"), ["ui.router", "ng.js.common"]);
+    routerRegistry.registerModuleName(mod.name); // para heredar el `controllerAs` del @NgModule que lo importa
 
     // `@angular/common` no da un `LocationStrategy` por default — lo elige el router
     // según `withHashLocation()`.
@@ -260,6 +280,7 @@ export const RouterModule = {
       if (!useHash) {
         $locationProvider.html5Mode({ enabled: true, requireBase: false });
       }
+      applyGlobalRedirects(translated); // redirects cruzados forRoot↔forChild — el registro ya está completo
       for (const state of states) $stateProvider.state({ ...state }); // clon: UI-Router muta la decl (quita lazyLoad); no compartir entre bootstraps
 
       // La ruta `**` (si hay) matchea via su param greedy `/{ngjsCatchAll:.+}`.
@@ -269,11 +290,25 @@ export const RouterModule = {
     config.$inject = ["$stateProvider", "$urlRouterProvider", "$locationProvider"];
 
     mod.config(config);
+
+    // Guard "forRoot llamado dos veces" — por `$injector` (una app), no por llamada.
+    const forRootGuard = ($injector: angular.auto.IInjectorService) => {
+      if (forRootInjectors.has($injector)) {
+        throw new Error(
+          "RouterModule.forRoot() se llamó dos veces en la misma app. Usá RouterModule.forChild() en los feature modules.",
+        );
+      }
+      forRootInjectors.add($injector);
+    };
+    forRootGuard.$inject = ["$injector"];
+    mod.run(forRootGuard);
+
     if (guards.length) mod.run(wireGuards(guards));
     if (deactivateGuards.length) mod.run(wireDeactivateGuards(deactivateGuards));
     if (matchGuards.length) mod.run(wireMatchGuards(matchGuards));
-    // Siempre — `loadChildren` puede agregar títulos al `Map` después (lo lee en cada transición).
-    mod.run(wireTitles(titles, resolveKeys));
+    // Lee el registro global (no los `Map`s locales): `forChild` y `loadChildren`
+    // le agregan títulos/resolvers después, y `wireTitles` los ve en cada transición.
+    mod.run(wireTitles(routerRegistry.titles, routerRegistry.resolveKeys));
 
     const scrollFeature = features.find((f) => f.ɵkind === "in-memory-scrolling");
     if (scrollFeature) mod.run(wireRouterScroller(scrollFeature.options ?? {}));
@@ -285,7 +320,15 @@ export const RouterModule = {
       $transitions: TransitionService,
       $location: ILocationService,
       $rootScope: IRootScopeService,
-    ) => new ActivatedRouteImpl($state, $transitions, $location, $rootScope, titles, resolveKeys);
+    ) =>
+      new ActivatedRouteImpl(
+        $state,
+        $transitions,
+        $location,
+        $rootScope,
+        routerRegistry.titles,
+        routerRegistry.resolveKeys,
+      );
     activatedRouteFactory.$inject = ["$state", "$transitions", "$location", "$rootScope"];
     mod.factory(ActivatedRoute.$name, activatedRouteFactory);
 
@@ -293,16 +336,30 @@ export const RouterModule = {
   },
 
   forChild(routes: Routes): angular.IModule {
-    const { states, guards } = routesToStates(routes);
+    const translated = routesToStates(routes);
+    const { states, guards, deactivateGuards, matchGuards, titles, resolveKeys } = translated;
+
+    // Mismo registro global que `forRoot`: así `title`, `canDeactivate`, `canMatch`
+    // y la `data` resuelta de estas rutas dejan de perderse (los leen el
+    // `wireTitles` / `ActivatedRoute` del módulo de `forRoot`), y sus paths
+    // entran al `pathToName` para los `redirectTo` cruzados.
+    routerRegistry.mergeTitles(titles);
+    routerRegistry.mergeResolveKeys(resolveKeys);
+    routerRegistry.mergePathToName(translated.pathToName);
+
     const mod = angular.module(nextModuleName("ngjs.router.child"), ["ui.router"]);
+    routerRegistry.registerModuleName(mod.name);
 
     const config = ($stateProvider: StateProvider) => {
+      applyGlobalRedirects(translated);
       for (const state of states) $stateProvider.state({ ...state }); // clon: UI-Router muta la decl (quita lazyLoad); no compartir entre bootstraps
     };
     config.$inject = ["$stateProvider"];
 
     mod.config(config);
     if (guards.length) mod.run(wireGuards(guards));
+    if (deactivateGuards.length) mod.run(wireDeactivateGuards(deactivateGuards));
+    if (matchGuards.length) mod.run(wireMatchGuards(matchGuards));
 
     return mod;
   },

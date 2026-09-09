@@ -10,7 +10,7 @@ import {
   LocationStrategy,
   PathLocationStrategy,
   PlatformLocation,
-} from "@/platform-browser/index.ts";
+} from "@/common/index.ts";
 import type { Routes } from "@/router/index.ts";
 import { RouterModule, withHashLocation } from "@/router/index.ts";
 import { PlatformBrowserModule } from "@/runtime/platform-browser/index.ts";

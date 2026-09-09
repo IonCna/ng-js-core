@@ -1,6 +1,6 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { DestroyRefImpl } from "@/rxjs-interop/destroy-ref.ts";
+import { DestroyRefImpl } from "@/core/refs/destroy-ref.ts";
 
 function freshScope(): angular.IScope {
   const injector = angular.injector(["ng"]);

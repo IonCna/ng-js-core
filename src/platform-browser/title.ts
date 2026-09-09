@@ -1,4 +1,4 @@
-import { DOCUMENT } from "@/platform-browser/dom-tokens.ts";
+import { DOCUMENT } from "@/core/dom-tokens.ts";
 
 /**
  * `Title` — mismo servicio que `@angular/platform-browser`. Lee y escribe

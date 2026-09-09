@@ -1,6 +1,8 @@
 import type { NgModuleDef } from "@/core/metadata/def.ts";
 
-export type StampedNgModuleDef = Required<Pick<NgModuleDef, "id" | "declarations" | "imports" | "providers">> & {
+export type StampedNgModuleDef = Required<
+  Pick<NgModuleDef, "id" | "declarations" | "imports" | "providers" | "bootstrap">
+> & {
   controllerAs?: string;
 };
 
@@ -43,6 +45,7 @@ export function stampNgModuleDef(Clase: Function, def: NgModuleDef): Function {
     declarations: def.declarations ?? [],
     imports: def.imports ?? [],
     providers: def.providers ?? [],
+    bootstrap: def.bootstrap ?? [],
     controllerAs: def.controllerAs,
   };
   target.$name = id;

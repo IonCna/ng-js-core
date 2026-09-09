@@ -13,6 +13,7 @@ import { getNgModuleDef } from "@/core/metadata/ng-module.ts";
 import { getPipeDef } from "@/core/metadata/pipe.ts";
 import { parseSelector } from "@/core/metadata/selector-name.ts";
 import { createPipeFilter } from "@/pipes/pipe-transform.ts";
+import { routerRegistry } from "@/router/router-registry.ts";
 
 const modules = new WeakMap<Function, angular.IModule>();
 
@@ -60,7 +61,15 @@ function resolveNgModuleImport(
     return registerNgModule(imported, inheritedControllerAs).name;
   }
 
-  if (isAngularModule(imported)) return imported.name;
+  if (isAngularModule(imported)) {
+    // `RouterModule.forRoot`/`forChild`: los componentes de ruta lazy no están en
+    // ningún `@NgModule`, así que no heredan `controllerAs`. Guardamos el del
+    // `@NgModule` que importa el router para que `lazyLoadFor` lo use de fallback.
+    if (inheritedControllerAs && routerRegistry.hasModuleName(imported.name)) {
+      routerRegistry.controllerAs = inheritedControllerAs;
+    }
+    return imported.name;
+  }
 
   throw new Error("NgModule.imports solo acepta clases con @NgModule, angular.IModule o nombres de modulo");
 }

@@ -1,25 +1,18 @@
 /**
  * `ngjs-core/runtime/platform-browser` — el `angular.module` que registra los
- * servicios de plataforma (`@angular/common` / `@angular/platform-browser`).
- * Cubre `DOCUMENT`, `Title`, `Meta`, `PlatformLocation` + `APP_BASE_HREF`,
- * `Location`, `ViewportScroller`, `DomSanitizer`. `LocationStrategy` NO se
- * registra acá (como en Angular: sin default en `common`) — lo provee
- * `RouterModule.forRoot` (`Path` por default, `withHashLocation()` → `Hash`), por
- * eso `Location` solo resuelve con el router presente. **Opt-in** — no se carga solo.
+ * servicios propios de `@angular/platform-browser`: `Title`, `Meta`, `DomSanitizer`.
+ *
+ * `DOCUMENT`, `PlatformLocation` + `APP_BASE_HREF`, `Location` y `ViewportScroller`
+ * son `@angular/common`: los registra `ng.js.common`, del que este módulo depende
+ * (como `BrowserModule` re-exporta `CommonModule` en Angular). `LocationStrategy`
+ * NO tiene default acá — lo provee `RouterModule.forRoot`. **Opt-in** — no se
+ * carga solo.
  */
 import angular from "angular";
-import { DOCUMENT } from "@/platform-browser/dom-tokens.ts";
-import {
-  APP_BASE_HREF,
-  BrowserPlatformLocation,
-  Location,
-  LocationImpl,
-  PlatformLocation,
-} from "@/platform-browser/location/index.ts";
 import { Meta, MetaImpl } from "@/platform-browser/meta.ts";
 import { DomSanitizer, DomSanitizerImpl } from "@/platform-browser/security/index.ts";
 import { Title, TitleImpl } from "@/platform-browser/title.ts";
-import { BrowserViewportScroller, ViewportScroller } from "@/platform-browser/viewport-scroller.ts";
+import { commonModule } from "@/runtime/common/index.ts";
 import { installCoreModule } from "@/runtime/core-module.ts";
 
 export * from "@/platform-browser/index.ts";
@@ -30,16 +23,12 @@ let base: angular.IModule | undefined;
 export function platformBrowserModule(): angular.IModule {
   if (base) return base;
   installCoreModule();
+  commonModule();
 
   base = angular
-    .module("ng.js.platform-browser", ["ng.js.core"])
-    .factory(DOCUMENT.toString(), ["$document", ($document: angular.IDocumentService) => $document[0]])
+    .module("ng.js.platform-browser", ["ng.js.core", "ng.js.common"])
     .service(Title.$name, TitleImpl)
     .service(Meta.$name, MetaImpl)
-    .value(APP_BASE_HREF.toString(), "/")
-    .service(PlatformLocation.$name, BrowserPlatformLocation)
-    .service(Location.$name, LocationImpl)
-    .service(ViewportScroller.$name, BrowserViewportScroller)
     .service(DomSanitizer.$name, DomSanitizerImpl);
 
   return base;

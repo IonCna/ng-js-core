@@ -4,7 +4,7 @@ import type angular from "angular";
 import { afterEach, describe, expect, it } from "vitest";
 import { Component } from "@/core/metadata/component.ts";
 import { NgModule } from "@/core/metadata/ng-module.ts";
-import { Location } from "@/platform-browser/index.ts";
+import { Location } from "@/common/index.ts";
 import type { Routes } from "@/router/index.ts";
 import { RouterModule, withHashLocation } from "@/router/index.ts";
 import { bootstrapApplication } from "@/runtime/index.ts";
