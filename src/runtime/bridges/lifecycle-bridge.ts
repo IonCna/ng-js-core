@@ -1,7 +1,7 @@
 import type angular from "angular";
 import type { SimpleChanges } from "@/core/lifecycle/interfaces.ts";
 import { withFirstChangeProperty } from "@/core/lifecycle/simple-changes.ts";
-import { chainInstanceMethod, decorateControllerWith } from "@/runtime/bridges/shared.ts";
+import { chainInstanceMethod, decorateControllerWith, prependInstanceMethod } from "@/runtime/bridges/shared.ts";
 
 interface ControllerInstance {
   ngOnInit?(): void;
@@ -43,8 +43,20 @@ function bridgeLifecycle(instance: unknown, locals?: Record<string, unknown>): v
   if (typeof inst.ngOnChanges === "function" && typeof inst.$onChanges !== "function") {
     inst.$onChanges = (changes: unknown) => inst.ngOnChanges?.(withFirstChangeProperty(changes as SimpleChanges));
   }
-  if (typeof inst.ngOnDestroy === "function" && typeof inst.$onDestroy !== "function") {
-    inst.$onDestroy = () => inst.ngOnDestroy?.();
+  if (typeof inst.ngOnDestroy === "function") {
+    // Mismo criterio que `ngOnInit`: un `$onDestroy` escrito por el autor (método
+    // en el prototipo) gana y anula `ngOnDestroy`. Pero un `$onDestroy` que puso
+    // OTRO bridge como propiedad de instancia (p. ej. `output-emitter-bridge`,
+    // que corre antes y engancha ahí la baja de sus subscripciones) NO debe
+    // tapar `ngOnDestroy`: se combina. Va con `prepend` —no `chain`— para
+    // respetar el orden de Angular: `ngOnDestroy()` corre ANTES de que el
+    // framework desarme sus bindings, así un `this.miOutput.emit()` dentro de
+    // `ngOnDestroy` todavía llega al padre.
+    const authoredOnDestroy =
+      typeof inst.$onDestroy === "function" && !Object.prototype.hasOwnProperty.call(inst, "$onDestroy");
+    if (!authoredOnDestroy) {
+      prependInstanceMethod(inst as object, "$onDestroy", () => inst.ngOnDestroy?.());
+    }
   }
   // Orden de Angular en cada CD: `ngDoCheck` → `ngAfterContentInit` (una vez) →
   // `ngAfterContentChecked` → `ngAfterViewInit` (una vez) → `ngAfterViewChecked`.

@@ -1,6 +1,6 @@
 import type { IController, IDirective, IDirectiveCompileFn, IScope, ITranscludeFunction } from "angular";
 import { Directive } from "@/core/metadata/directive.ts";
-import type { ContextObject } from "@/core/refs/embedded-view-ref.ts";
+import type { ContextObject, EmbeddedViewHost } from "@/core/refs/embedded-view-ref.ts";
 import { EmbeddedViewRefImpl } from "@/core/refs/embedded-view-ref.ts";
 
 const DECLARATION_PREFIX = "let";
@@ -37,7 +37,7 @@ export class TemplateRef<C = ContextObject> implements IController {
    * de `NgbRating`, `NgbCarousel`, …), el diget de la vista lo refleja — igual
    * que Angular, donde el contexto se pasa por referencia.
    */
-  createEmbeddedView(context: C, scope?: IScope): EmbeddedViewRefImpl<C> {
+  createEmbeddedView(context: C, scope?: IScope, host?: EmbeddedViewHost): EmbeddedViewRefImpl<C> {
     const targetScope = (scope ?? this.$scope).$new();
     const source = (context ?? {}) as Record<string, unknown>;
 
@@ -49,7 +49,7 @@ export class TemplateRef<C = ContextObject> implements IController {
       });
     }
 
-    return new EmbeddedViewRefImpl(context, targetScope, this.$transclude);
+    return new EmbeddedViewRefImpl(context, targetScope, this.$transclude, host);
   }
 
   static $factory(): IDirective {
