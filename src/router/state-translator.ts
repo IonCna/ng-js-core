@@ -53,6 +53,8 @@ export interface TranslatedRoutes {
   titles: Map<string, string | ResolveFn<string>>;
   /** Keys de `resolve` por state name — `ActivatedRoute.data` las mergea desde `transition.injector()`. */
   resolveKeys: Map<string, string[]>;
+  /** State names con `path` vacío (`""`) — `ActivatedRoute.data` los usa para `paramsInheritanceStrategy: 'emptyOnly'`. */
+  emptyPathStates: Set<string>;
   /** State name para `$urlRouterProvider.otherwise` (la ruta `**`), si hay. */
   wildcardState?: string;
   /** Full path desde root → state name (para resolver `redirectTo`). */
@@ -322,6 +324,7 @@ function lazyLoadChildrenFor(route: Route, stateName: string, url: string, fullP
     // resolver un `redirectTo` cruzado hacia/desde el resto del árbol.
     routerRegistry.mergeTitles(sub.titles);
     routerRegistry.mergeResolveKeys(sub.resolveKeys);
+    routerRegistry.mergeEmptyPathStates(sub.emptyPathStates);
     routerRegistry.mergePathToName(sub.pathToName);
     for (const { state, redirectTo, parentPath } of sub.redirects) {
       state.redirectTo = resolveRedirect(redirectTo, parentPath, routerRegistry.pathToName);
@@ -470,6 +473,7 @@ function walk(routes: Routes, ctx: WalkCtx): void {
     if (route.title !== undefined) ctx.out.titles.set(name, route.title);
     const rk = resolveKeysOf(route.resolve);
     if (rk.length) ctx.out.resolveKeys.set(name, rk);
+    if ((route.path ?? "") === "" && route.redirectTo === undefined) ctx.out.emptyPathStates.add(name);
     if (isWildcard) ctx.out.wildcardState = name; // último gana
 
     ctx.out.states.push(state);
@@ -524,6 +528,7 @@ function translate(
     matchGuards: [],
     titles: new Map(),
     resolveKeys: new Map(),
+    emptyPathStates: new Set(),
     pathToName: new Map(),
     redirects: [],
     components: [],

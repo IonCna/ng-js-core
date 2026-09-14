@@ -28,6 +28,7 @@ import type { ResolveFn } from "@/router/route.ts";
 class RouterRegistry {
   readonly titles = new Map<string, string | ResolveFn<string>>();
   readonly resolveKeys = new Map<string, string[]>();
+  readonly emptyPathStates = new Set<string>();
   readonly pathToName = new Map<string, string>();
   /** `controllerAs` del `@NgModule` que importa el `RouterModule` — fallback para componentes de ruta lazy. */
   controllerAs: string | undefined;
@@ -39,6 +40,10 @@ class RouterRegistry {
 
   mergeResolveKeys(resolveKeys: Map<string, string[]>): void {
     for (const [key, value] of resolveKeys) this.resolveKeys.set(key, value);
+  }
+
+  mergeEmptyPathStates(emptyPathStates: Set<string>): void {
+    for (const name of emptyPathStates) this.emptyPathStates.add(name);
   }
 
   mergePathToName(pathToName: Map<string, string>): void {
@@ -57,6 +62,7 @@ class RouterRegistry {
   reset(): void {
     this.titles.clear();
     this.resolveKeys.clear();
+    this.emptyPathStates.clear();
     this.pathToName.clear();
     this.controllerAs = undefined;
     this.moduleNames.clear();

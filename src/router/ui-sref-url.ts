@@ -69,11 +69,35 @@ export function urlToStateRef(uiRouter: UiRouterLike, raw: string): string {
 }
 
 /**
+ * `ui-sref` dinámico (`[routerLink]="tab.to"` de Angular, típicamente dentro de
+ * un `ng-repeat`): una expresión de scope que devuelve un path (`"/x/y"`), NO
+ * un nombre de estado ni interpolación `{{ }}` (`uiSref` nativo no evalúa su
+ * atributo como expresión — solo lee texto literal u observa `{{ }}`, así que
+ * `ui-sref="tab.to"` sin este soporte quedaría apuntando al estado inexistente
+ * `"tab.to"`, un no-op silencioso). Se evalúa **una sola vez** (mismo timing
+ * que la forma estática — ver abajo), igual que Angular no re-evalúa
+ * `[routerLink]` como binding watcheado para el HREF ya resuelto en cada
+ * ciclo. Si la expresión no evalúa a un string que empiece con `/`, se deja
+ * el atributo intacto (nombre de estado literal, u otra cosa que el `uiSref`
+ * nativo sepa resolver).
+ */
+function evalDynamicRef(scope: angular.IScope, expr: string): string | undefined {
+  if (expr.includes("{{")) return undefined; // interpolación `{{ }}`: la maneja `uiSref` nativo vía `$observe`.
+  try {
+    const value = scope.$eval(expr);
+    return typeof value === "string" && value.trim().startsWith("/") ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Decora `uiSrefDirective` para reescribir una `ui-sref` en forma URL a la forma
  * `estado(params)` **antes** del `link` original. `uiSref` parsea el nombre del
  * estado una sola vez y no lo watchea (ver `@uirouter/angularjs` /
- * `stateDirectives.js`), así que alcanza con un reemplazo de un tiro; la forma
- * dinámica (`[routerLink]="['/x', id]"`) la sigue armando el codemod. El resto de
+ * `stateDirectives.js`), así que alcanza con un reemplazo de un tiro — tanto
+ * para la forma estática (`ui-sref="/algo"`, texto literal) como para la
+ * dinámica (`ui-sref="tab.to"`, expresión — ver `evalDynamicRef`). El resto de
  * la mecánica de `uiSref` (href, click con modificadores, `target`, integración
  * con `ui-sref-active`) queda intacta porque delegamos en el `link` real con el
  * ref ya traducido.
@@ -90,8 +114,12 @@ export function decorateUiSrefWithUrl($provide: angular.auto.IProvideService): v
         directive.compile =
           (): angular.IDirectiveLinkFn =>
           (scope, element, attrs, ...rest) => {
-            if (typeof attrs.uiSref === "string" && attrs.uiSref.trim().startsWith("/")) {
-              attrs.uiSref = urlToStateRef($injector.get<UiRouterLike>("$uiRouter"), attrs.uiSref);
+            const raw = attrs.uiSref;
+            if (typeof raw === "string" && raw.trim()) {
+              const literal = raw.trim().startsWith("/") ? raw : evalDynamicRef(scope, raw);
+              if (literal !== undefined) {
+                attrs.uiSref = urlToStateRef($injector.get<UiRouterLike>("$uiRouter"), literal);
+              }
             }
             return originalLink(scope, element, attrs, ...rest);
           };

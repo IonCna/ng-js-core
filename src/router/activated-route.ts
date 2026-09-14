@@ -2,7 +2,7 @@ import type { StateService, Transition, TransitionService } from "@uirouter/angu
 import type { ILocationService, IRootScopeService } from "angular";
 import { BehaviorSubject, map, type Observable } from "rxjs";
 import { convertToParamMap, type ParamMap } from "@/router/param-map.ts";
-import { mergeResolvedData, pickRouteTitle } from "@/router/route-title.ts";
+import { mergeResolvedData, mergeStaticData, type ParamsInheritanceStrategy, pickRouteTitle } from "@/router/route-title.ts";
 import type { ActivatedRouteSnapshot, Data, ResolveFn } from "@/router/route.ts";
 
 type Params = Record<string, string>;
@@ -11,12 +11,14 @@ type Params = Record<string, string>;
  * Shim de `ActivatedRoute` sobre `$transitions`/`$location` de UI-Router.
  * `params`/`paramMap`/`data`/`title` emiten en cada `onSuccess`; `queryParams`/
  * `queryParamMap`/`fragment` también en cada `$locationChangeSuccess` (la query
- * cambia sin transición). `data` mergea los valores de `resolve` desde
- * `transition.injector()`. `snapshot` es el valor actual.
+ * cambia sin transición). `data` mergea la `data` estática heredada de la
+ * cadena (según `paramsInheritanceStrategy`, ver `mergeStaticData`) con los
+ * valores de `resolve` desde `transition.injector()`. `snapshot` es el valor
+ * actual.
  *
- * Es un servicio único de app, **plano** (params/data del estado activo más
- * profundo). El árbol `.parent`/`.children`/params-por-nivel es una brecha
- * documentada (Tier 5).
+ * Es un servicio único de app (params/data del estado activo más profundo,
+ * ya con la herencia de ancestros resuelta — no expone `.parent`/`.children`
+ * como árbol navegable). Eso sigue siendo una brecha documentada (Tier 5).
  */
 export abstract class ActivatedRoute {
   static readonly $name = "ActivatedRoute";
@@ -47,6 +49,8 @@ export class ActivatedRouteImpl extends ActivatedRoute {
     $rootScope: IRootScopeService,
     private readonly titles: Map<string, string | ResolveFn<string>> = new Map(),
     private readonly resolveKeys: Map<string, string[]> = new Map(),
+    private readonly emptyPathStates: Set<string> = new Set(),
+    private readonly paramsInheritanceStrategy: ParamsInheritanceStrategy = "emptyOnly",
   ) {
     super();
     this.syncRoute();
@@ -83,17 +87,17 @@ export class ActivatedRouteImpl extends ActivatedRoute {
     return this.title$.asObservable();
   }
 
-  private currentChain(): { name: string }[] {
-    return (this.$state.$current as unknown as { path?: { name: string }[] }).path ?? [];
+  private currentChain(): { name: string; data?: Data }[] {
+    return (this.$state.$current as unknown as { path?: { name: string; data?: Data }[] }).path ?? [];
   }
 
   private syncRoute(transition?: Transition): void {
     const params = { ...(this.$state.params as Params) };
-    const current = this.$state.$current as unknown as { data?: Data } | undefined;
     const chain = this.currentChain();
 
-    // `data` = estático + valores de `resolve` disponibles (Angular).
-    const data = mergeResolvedData(chain, this.resolveKeys, (current?.data ?? {}) as Data, transition?.injector());
+    // `data` = estático (según `paramsInheritanceStrategy`) + valores de `resolve` disponibles (Angular).
+    const staticData = mergeStaticData(chain, this.emptyPathStates, this.paramsInheritanceStrategy);
+    const data = mergeResolvedData(chain, this.resolveKeys, staticData, transition?.injector());
 
     this.params$.next(params);
     this.data$.next(data);

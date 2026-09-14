@@ -30,10 +30,16 @@ class UserDetailPage {}
     <a id="l-about" ui-sref="/about" ui-sref-active="is-active">about</a>
     <a id="l-name" ui-sref="about">about (state name)</a>
     <a id="l-dotted" ui-sref="users.id({ id: '9' })">user 9 (state name + params)</a>
+    <a ng-repeat="tab in $.tabs track by tab.to" id="{{ 'l-tab-' + $index }}" ui-sref="tab.to">{{ tab.name }}</a>
     <ui-view></ui-view>
   `,
 })
-class SrefRoot {}
+class SrefRoot {
+  tabs = [
+    { name: "Home", to: "/" },
+    { name: "About", to: "/about" },
+  ];
+}
 
 const routes: Routes = [
   { path: "", component: HomePage },
@@ -102,6 +108,19 @@ describe("ngjs-core/router — ui-sref acepta forma URL", () => {
     $rootScope.$digest();
     $rootScope.$digest();
     expect(document.getElementById("l-about")?.classList.contains("is-active")).toBe(true);
+
+    // `ui-sref="tab.to"` (expresión de scope, típico `ng-repeat` con paths dinámicos por item —
+    // equivalente a `[routerLink]="tab.to"` de Angular): resuelve y navega igual que la forma estática.
+    expect(href("l-tab-1")).toBe($state.href("about"));
+    document
+      .getElementById("l-tab-0")
+      ?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    $rootScope.$digest();
+    $rootScope.$digest();
+    await Promise.resolve();
+    $rootScope.$digest();
+    expect(host.textContent).toContain("home");
 
     host.remove();
   });

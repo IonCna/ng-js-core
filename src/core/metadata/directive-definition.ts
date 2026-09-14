@@ -25,9 +25,8 @@ function computeDirectiveBindings(def: StampedDirectiveDef): Record<string, stri
 /**
  * Solo para componentes (`.component()`/`buildComponentAsDirective`) cae a
  * `"$ctrl"` — el default nativo de `.component()`, así no cambia nada. Las
- * directivas (`buildDirectiveDefinition`) NO fuerzan este default: si nadie puso
- * `controllerAs`, queda `undefined` — AngularJS no lo auto-defaultea, y forzarlo
- * metería un `$ctrl` en el scope compartido de una directiva sin `controllerAs`.
+ * directivas sin template (`buildDirectiveDefinition`) usan su nombre de registro
+ * para no sobrescribir el alias del componente en el scope compartido.
  */
 function resolveComponentControllerAs(own: string | undefined, fromModule: string | undefined): string {
   return own ?? fromModule ?? "$ctrl";
@@ -36,15 +35,15 @@ function resolveComponentControllerAs(own: string | undefined, fromModule: strin
 /**
  * `controllerAs` de una `@Directive`:
  * - lo explícito de la clase gana siempre;
- * - una directiva **sin template propio pero con `@Input`/`@Output`** necesita un
+ * - una directiva sin template propio usa su nombre de registro, tenga o no
+ *   bindings. Con `@Input`/`@Output` también necesita un
  *   `identifier` para que AngularJS corra `initializeDirectiveBindings` sobre el
  *   `bindToController`-hash — pero NO el `controllerAs` del `@NgModule` (p.ej.
  *   `"$"`): ese es para los templates de los componentes, y compartido entre
  *   muchas directivas colisiona en el scope (`scope.$` pisado). Se usa el nombre
  *   de registro (`ngbNavPane`), único por tipo de directiva y sin uso en template;
  * - una directiva con template propio sí hereda el `controllerAs` del módulo
- *   (su template puede necesitarlo);
- * - sin bindings y sin template: `undefined` (como antes).
+ *   (su template puede necesitarlo).
  */
 function resolveDirectiveControllerAs(
   def: StampedDirectiveDef,
@@ -54,8 +53,7 @@ function resolveDirectiveControllerAs(
   if (def.controllerAs) return def.controllerAs;
   const hasTemplate = Boolean(def.template || def.templateUrl);
   if (hasTemplate) return moduleControllerAs;
-  const hasBindings = def.inputs.length > 0 || def.outputs.length > 0;
-  return hasBindings ? registrationName : moduleControllerAs;
+  return registrationName;
 }
 
 /**

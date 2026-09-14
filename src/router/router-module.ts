@@ -11,7 +11,7 @@ import { ViewportScroller } from "@/common/viewport-scroller.ts";
 import { Title } from "@/platform-browser/title.ts";
 import { ActivatedRoute, ActivatedRouteImpl } from "@/router/activated-route.ts";
 import type { Data, ResolveFn, Routes } from "@/router/route.ts";
-import { mergeResolvedData, pickRouteTitle } from "@/router/route-title.ts";
+import { mergeResolvedData, mergeStaticData, type ParamsInheritanceStrategy, pickRouteTitle } from "@/router/route-title.ts";
 import { routerRegistry } from "@/router/router-registry.ts";
 import { Router, RouterImpl } from "@/router/router.ts";
 import {
@@ -73,9 +73,21 @@ export interface InMemoryScrollingOptions {
   anchorScrolling?: "disabled" | "enabled";
 }
 
+/** Opciones de `withRouterConfig()` — mismo nombre/forma que `@angular/router`. */
+export interface RouterConfigOptions {
+  /**
+   * Mismo nombre/semántica que Angular. `'emptyOnly'` (default) = un hijo
+   * hereda `data`/params del padre solo si su propio `path` es `""` (ruta
+   * contenedora sin URL propia, el idiom `{ path: "", children: [...] }`).
+   * `'always'` = cualquier hijo hereda `data`/params de toda la cadena de
+   * ancestros, sin importar el `path`.
+   */
+  paramsInheritanceStrategy?: ParamsInheritanceStrategy;
+}
+
 interface RouterFeature {
-  readonly ɵkind: "hash-location" | "in-memory-scrolling";
-  readonly options?: InMemoryScrollingOptions;
+  readonly ɵkind: "hash-location" | "in-memory-scrolling" | "router-config";
+  readonly options?: InMemoryScrollingOptions | RouterConfigOptions;
 }
 
 /**
@@ -104,6 +116,16 @@ export function withInMemoryScrolling(options: InMemoryScrollingOptions = {}): R
   return { ɵkind: "in-memory-scrolling", options };
 }
 
+/**
+ * Feature para `RouterModule.forRoot(routes, withRouterConfig(opts))` — mismo
+ * nombre que `@angular/router`. Hoy solo cubre `paramsInheritanceStrategy`
+ * (ver `mergeStaticData`); el resto de las opciones de Angular quedan fuera
+ * del MVP.
+ */
+export function withRouterConfig(options: RouterConfigOptions = {}): RouterFeature {
+  return { ɵkind: "router-config", options };
+}
+
 // --- Wiring interno --------------------------------------------------------
 
 function wireGuards(guards: GuardBinding[]) {
@@ -130,7 +152,12 @@ function wireMatchGuards(bindings: MatchBinding[]) {
   return run;
 }
 
-function wireTitles(titles: Map<string, string | ResolveFn<string>>, resolveKeys: Map<string, string[]>) {
+function wireTitles(
+  titles: Map<string, string | ResolveFn<string>>,
+  resolveKeys: Map<string, string[]>,
+  emptyPathStates: Set<string>,
+  paramsInheritanceStrategy: ParamsInheritanceStrategy,
+) {
   const run = (
     $transitions: TransitionService,
     $state: StateService,
@@ -144,7 +171,7 @@ function wireTitles(titles: Map<string, string | ResolveFn<string>>, resolveKeys
 
     $transitions.onSuccess({}, async (transition: Transition) => {
       // Estado activo más profundo con `title` definido.
-      const chain = ($state.$current as unknown as { path?: { name: string }[] }).path ?? [];
+      const chain = ($state.$current as unknown as { path?: { name: string; data?: Data }[] }).path ?? [];
       const picked = pickRouteTitle(chain, titles);
       if (picked === undefined) return;
 
@@ -152,7 +179,7 @@ function wireTitles(titles: Map<string, string | ResolveFn<string>>, resolveKeys
       if (typeof picked === "function") {
         // Mismo contexto que recibe `ActivatedRoute.title` (params + data mergeada + query + fragment).
         const params = { ...($state.params as Record<string, string>) };
-        const staticData = (($state.$current as unknown as { data?: Data }).data ?? {}) as Data;
+        const staticData = mergeStaticData(chain, emptyPathStates, paramsInheritanceStrategy);
         const data = mergeResolvedData(chain, resolveKeys, staticData, transition.injector());
         const value = await picked({
           params,
@@ -254,7 +281,12 @@ export const RouterModule = {
     // de rutas de `forChild` (que se suman al mismo registro) también cuentan.
     routerRegistry.mergeTitles(titles);
     routerRegistry.mergeResolveKeys(resolveKeys);
+    routerRegistry.mergeEmptyPathStates(translated.emptyPathStates);
     routerRegistry.mergePathToName(translated.pathToName);
+
+    const configFeature = features.find((f) => f.ɵkind === "router-config");
+    const paramsInheritanceStrategy: ParamsInheritanceStrategy =
+      (configFeature?.options as RouterConfigOptions | undefined)?.paramsInheritanceStrategy ?? "emptyOnly";
 
     const root = states.find((state) => !state.name?.includes("."));
     // El root (con componente o con `redirectTo`) matchea la carga inicial en `/`.
@@ -316,10 +348,12 @@ export const RouterModule = {
     if (matchGuards.length) mod.run(wireMatchGuards(matchGuards));
     // Lee el registro global (no los `Map`s locales): `forChild` y `loadChildren`
     // le agregan títulos/resolvers después, y `wireTitles` los ve en cada transición.
-    mod.run(wireTitles(routerRegistry.titles, routerRegistry.resolveKeys));
+    mod.run(
+      wireTitles(routerRegistry.titles, routerRegistry.resolveKeys, routerRegistry.emptyPathStates, paramsInheritanceStrategy),
+    );
 
     const scrollFeature = features.find((f) => f.ɵkind === "in-memory-scrolling");
-    if (scrollFeature) mod.run(wireRouterScroller(scrollFeature.options ?? {}));
+    if (scrollFeature) mod.run(wireRouterScroller((scrollFeature.options as InMemoryScrollingOptions | undefined) ?? {}));
 
     mod.service(Router.$name, RouterImpl);
 
@@ -336,6 +370,8 @@ export const RouterModule = {
         $rootScope,
         routerRegistry.titles,
         routerRegistry.resolveKeys,
+        routerRegistry.emptyPathStates,
+        paramsInheritanceStrategy,
       );
     activatedRouteFactory.$inject = ["$state", "$transitions", "$location", "$rootScope"];
     mod.factory(ActivatedRoute.$name, activatedRouteFactory);
@@ -353,6 +389,7 @@ export const RouterModule = {
     // entran al `pathToName` para los `redirectTo` cruzados.
     routerRegistry.mergeTitles(titles);
     routerRegistry.mergeResolveKeys(resolveKeys);
+    routerRegistry.mergeEmptyPathStates(translated.emptyPathStates);
     routerRegistry.mergePathToName(translated.pathToName);
 
     const mod = angular.module(nextModuleName("ngjs.router.child"), ["ui.router"]);

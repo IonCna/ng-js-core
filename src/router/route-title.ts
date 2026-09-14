@@ -1,5 +1,8 @@
 import type { Data, ResolveFn } from "@/router/route.ts";
 
+/** Mismo nombre/semántica que `withRouterConfig({ paramsInheritanceStrategy })` de `@angular/router`. */
+export type ParamsInheritanceStrategy = "emptyOnly" | "always";
+
 /** Contexto que recibe una `title: ResolveFn<string>` — el mismo en `wireTitles` y en `ActivatedRoute`. */
 export interface RouteTitleContext {
   params: Record<string, string>;
@@ -22,6 +25,34 @@ export function pickRouteTitle(
     if (candidate !== undefined) picked = candidate;
   }
   return picked;
+}
+
+/**
+ * `data` estática efectiva del estado activo más profundo, según
+ * `paramsInheritanceStrategy` (mismo nombre/semántica que `@angular/router`):
+ *
+ * - `'always'`: mergea la `data` estática de TODA la cadena root → hoja (el
+ *   hijo gana en choques).
+ * - `'emptyOnly'` (default, paridad con el default de Angular): solo hereda
+ *   la `data` del padre mientras, subiendo desde la hoja, cada state tenga
+ *   `path` vacío (`""`) — el idiom de "ruta contenedora sin URL propia". Un
+ *   state con `path` propio no vacío corta la herencia ahí.
+ */
+export function mergeStaticData(
+  chain: { name: string; data?: Data }[],
+  emptyPathStates: Set<string>,
+  strategy: ParamsInheritanceStrategy,
+): Data {
+  if (chain.length === 0) return {};
+  if (strategy === "always") {
+    return chain.reduce<Data>((acc, node) => ({ ...acc, ...(node.data ?? {}) }), {});
+  }
+  let merged: Data = { ...(chain[chain.length - 1].data ?? {}) };
+  for (let i = chain.length - 1; i > 0; i--) {
+    if (!emptyPathStates.has(chain[i].name)) break;
+    merged = { ...(chain[i - 1].data ?? {}), ...merged };
+  }
+  return merged;
 }
 
 /**
