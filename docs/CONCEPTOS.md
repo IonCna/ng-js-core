@@ -558,7 +558,7 @@ Sustrato: `@uirouter/angularjs` (no `ngRoute`).
 | `RouterModule.forRoot(routes)` / `forChild` | módulo `ui.router` + `.config($stateProvider => …)` | shim | árbol de estados con nombre |
 | `Route { path, component, children, data }` | `$stateProvider.state({ name, url, component })` anidado | brecha | mapa estado↔path para el codemod |
 | `<router-outlet>` (+ `name`) | `<ui-view>` (+ `name`) | tpl | |
-| `routerLink` / `routerLinkActive` | `ui-sref` / `ui-sref-active` | tpl | la forma `['/x', id]` la arma el codemod |
+| `routerLink` / `routerLinkActive` | `ui-sref` / `ui-sref-active` | tpl | `ui-sref` decorado acepta la forma URL (`ui-sref="/x/5"`, `ui-sref-url.ts`) además del state name; la forma dinámica `['/x', id]` la arma el codemod |
 | `Router.navigate` / `navigateByUrl` | `$state.go` / `$state.href` | shim | |
 | `ActivatedRoute` (params/data/query como `Observable`) | shim RxJS sobre `$transitions.onSuccess` + `$state.params` | brecha | UI-Router entrega valores planos |
 | re-uso de componente al cambiar un param | UI-Router re-crea la vista salvo `dynamic: true` | brecha | |

@@ -381,6 +381,37 @@ interface WalkCtx {
   redirects: { state: Ng1StateDeclaration; redirectTo: string; parentPath: string }[];
 }
 
+/**
+ * Detecta el hijo "índice" (`{ path: "", pathMatch: "full", redirectTo }`, el
+ * idiom de Angular real para "layout con componente + redirect por default a
+ * un hijo") cuando es el ÚNICO responsable de ese `redirectTo` — sin `title`,
+ * sin `children`, sin guards ni `loadComponent`/`loadChildren` propios.
+ *
+ * Existe porque UI-Router, a diferencia de Angular real, no resuelve un match
+ * de URL contra el hijo más específico cuando padre e hijo-índice computan la
+ * MISMA url (padre con `url` propia + hijo con `url: ""`): dos states con
+ * texto de url idéntico son ambiguos para UI-Router, y en la práctica gana el
+ * registrado primero (el padre) — el hijo-índice nunca llega a activarse por
+ * navegación directa a esa URL. Ver CONCEPTOS/gap del router.
+ */
+function findFoldableIndexRedirect(route: Route): Route | undefined {
+  if (!route.children?.length) return undefined;
+  const candidates = route.children.filter(
+    (child) =>
+      (child.path ?? "") === "" &&
+      child.redirectTo !== undefined &&
+      !child.children?.length &&
+      !child.loadComponent &&
+      !child.loadChildren &&
+      !child.title &&
+      !child.canActivate?.length &&
+      !child.canActivateChild?.length &&
+      !child.canDeactivate?.length &&
+      !child.canMatch?.length,
+  );
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
 function walk(routes: Routes, ctx: WalkCtx): void {
   const usedLocals = new Set<string>();
   routes.forEach((route, index) => {
@@ -398,6 +429,15 @@ function walk(routes: Routes, ctx: WalkCtx): void {
     ctx.out.pathToName.set(fullPath.replace(/^\/|\/$/g, ""), name);
 
     const state: Ng1StateDeclaration = { name, url, data };
+
+    // Hijo-índice (`{ path: "", redirectTo }`) que computaría la MISMA url que
+    // este state — se pliega acá (ver `findFoldableIndexRedirect`) en vez de
+    // registrarse como sibling separado, porque UI-Router no lo activaría nunca
+    // por navegación directa a esa URL (ambigüedad de url idéntica padre/hijo).
+    const foldableRedirect =
+      route.redirectTo === undefined && !route.loadComponent && !route.loadChildren
+        ? findFoldableIndexRedirect(route)
+        : undefined;
 
     if (route.redirectTo !== undefined) {
       state.redirectTo = route.redirectTo; // se re-resuelve en la 2ª pasada
@@ -417,6 +457,14 @@ function walk(routes: Routes, ctx: WalkCtx): void {
       }
       const resolve = translateResolve(route.resolve, data);
       if (resolve) state.resolve = resolve as never;
+
+      if (foldableRedirect) {
+        // Relativo a `fullPath` de ESTE state — es el mismo `parentPath` que
+        // hubiera usado el hijo si se procesara normalmente (`walk` recursivo
+        // pasa `parentPath: fullPath` a sus hijos).
+        state.redirectTo = foldableRedirect.redirectTo;
+        ctx.redirects.push({ state, redirectTo: foldableRedirect.redirectTo as string, parentPath: fullPath });
+      }
     }
 
     if (route.title !== undefined) ctx.out.titles.set(name, route.title);
@@ -455,8 +503,9 @@ function walk(routes: Routes, ctx: WalkCtx): void {
       });
     }
 
-    if (route.children?.length) {
-      walk(route.children, { ...ctx, parentName: name, parentPath: fullPath, redirects: ctx.redirects });
+    const remainingChildren = foldableRedirect ? route.children!.filter((c) => c !== foldableRedirect) : route.children;
+    if (remainingChildren?.length) {
+      walk(remainingChildren, { ...ctx, parentName: name, parentPath: fullPath, redirects: ctx.redirects });
     }
   });
 }

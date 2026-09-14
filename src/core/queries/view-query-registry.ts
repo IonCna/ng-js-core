@@ -1,3 +1,4 @@
+import type angular from "angular";
 import type { ContentChildQuery } from "@/core/queries/content-child.ts";
 import type { ContentChildrenQuery } from "@/core/queries/content-children.ts";
 import type { QueryToken } from "@/core/queries/query-types.ts";
@@ -5,7 +6,7 @@ import type { ViewChildQuery } from "@/core/queries/view-child.ts";
 import type { ViewChildrenQuery } from "@/core/queries/view-children.ts";
 import { ElementRef, ElementRefImpl } from "@/core/refs/element-ref.ts";
 import { TemplateRef } from "@/core/refs/template-ref.ts";
-import { ViewContainerRef } from "@/core/refs/view-container-ref.ts";
+import { ViewContainerRef, ViewContainerRefImpl } from "@/core/refs/view-container-ref.ts";
 
 interface Candidate {
   tokens: readonly QueryToken<unknown>[];
@@ -49,6 +50,14 @@ export class ViewQueryRegistry {
    * dentro de este host es "contenido" de este controller.
    */
   hostNode?: Node;
+
+  /**
+   * `$injector` real del controller dueño de este registry — lo setea
+   * `ng-ref-bridge.ts` al crearlo. Solo hace falta para sintetizar un
+   * `ViewContainerRef` bajo demanda (`read: ViewContainerRef` sobre un
+   * candidato que no publicó uno ya armado, ver `readCandidate`).
+   */
+  injector?: angular.auto.IInjectorService;
 
   get hasContentQueries(): boolean {
     return this.contentQueries.length > 0 || this.contentChildrenQueries.length > 0;
@@ -116,14 +125,16 @@ export class ViewQueryRegistry {
   resolve(): void {
     for (const query of this.queries) {
       const match = this.candidates.find((candidate) => matches(query, candidate));
-      if (match) query.resolve(readCandidate(query, match, this.candidates));
+      if (match) query.resolve(readCandidate(query, match, this.candidates, this.injector));
       else query.reset();
     }
 
     for (const query of this.childrenQueries) {
       const found = this.candidates.filter((candidate) => matches(query, candidate));
       query.resolve(
-        found.map((candidate) => readCandidate(query, candidate, this.candidates)).filter((value) => value !== undefined),
+        found
+          .map((candidate) => readCandidate(query, candidate, this.candidates, this.injector))
+          .filter((value) => value !== undefined),
       );
     }
 
@@ -131,7 +142,7 @@ export class ViewQueryRegistry {
       const match = this.contentCandidates.find(
         (candidate) => matches(query, candidate) && matchesContentDepth(query, candidate, this.contentRoots),
       );
-      if (match) query.resolve(readCandidate(query, match, this.contentCandidates));
+      if (match) query.resolve(readCandidate(query, match, this.contentCandidates, this.injector));
       else query.reset();
     }
 
@@ -141,7 +152,7 @@ export class ViewQueryRegistry {
       );
       query.resolve(
         found
-          .map((candidate) => readCandidate(query, candidate, this.contentCandidates))
+          .map((candidate) => readCandidate(query, candidate, this.contentCandidates, this.injector))
           .filter((value) => value !== undefined),
       );
     }
@@ -166,13 +177,29 @@ function matchesContentDepth(query: QueryLike, candidate: Candidate, roots: Read
   return candidate.node !== undefined && roots.has(candidate.node);
 }
 
-function readCandidate(query: QueryLike, candidate: Candidate, siblings: readonly Candidate[] = []): unknown {
+function readCandidate(
+  query: QueryLike,
+  candidate: Candidate,
+  siblings: readonly Candidate[] = [],
+  injector?: angular.auto.IInjectorService,
+): unknown {
   const read = query.options?.read;
   if (!read) return candidate.value;
 
   if (read === ElementRef) return candidate.node ? new ElementRefImpl(candidate.node as HTMLElement) : undefined;
   if (read === TemplateRef && candidate.value instanceof TemplateRef) return candidate.value;
-  if (read === ViewContainerRef && candidate.value instanceof ViewContainerRef) return candidate.value;
+  if (read === ViewContainerRef) {
+    if (candidate.value instanceof ViewContainerRef) return candidate.value;
+    const owned = candidate.value && typeof candidate.value === "object" ? readOwnedToken(candidate.value, ViewContainerRef) : undefined;
+    if (owned) return owned;
+    // Ancla sin controller (`<ng-container #x>` pelado) o cuyo candidato
+    // publicado no es ya un VCR: se sintetiza uno directo del nodo — mismo
+    // criterio que `read: ElementRef` arriba, no depende de lo que se haya
+    // publicado. Necesita el `$injector` real (`ViewContainerRefImpl` lo usa
+    // para `$q`/`$compile` al hacer `createComponent`).
+    if (candidate.node && injector) return new ViewContainerRefImpl(new ElementRefImpl(candidate.node as HTMLElement), injector);
+    return undefined;
+  }
 
   if (typeof read !== "string") {
     if (candidate.tokens.includes(read)) return candidate.value;

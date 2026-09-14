@@ -26,6 +26,7 @@ import {
   wireMatchHook,
 } from "@/router/state-translator.ts";
 import { DefaultTitleStrategy, TitleStrategy } from "@/router/title-strategy.ts";
+import { decorateUiSrefWithUrl } from "@/router/ui-sref-url.ts";
 import { commonModule } from "@/runtime/common/index.ts";
 
 let moduleSeq = 0;
@@ -290,6 +291,13 @@ export const RouterModule = {
     config.$inject = ["$stateProvider", "$urlRouterProvider", "$locationProvider"];
 
     mod.config(config);
+
+    // `ui-sref` acepta también la forma URL (`/algo`), no solo el state name — se
+    // traduce contra la misma config (ver `ui-sref-url.ts`). Solo en `forRoot`:
+    // la directiva es global y `forChild` comparte el mismo `ui.router`.
+    const srefUrlConfig = ($provide: angular.auto.IProvideService) => decorateUiSrefWithUrl($provide);
+    srefUrlConfig.$inject = ["$provide"];
+    mod.config(srefUrlConfig);
 
     // Guard "forRoot llamado dos veces" — por `$injector` (una app), no por llamada.
     const forRootGuard = ($injector: angular.auto.IInjectorService) => {

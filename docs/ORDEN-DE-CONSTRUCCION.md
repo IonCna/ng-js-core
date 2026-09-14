@@ -231,6 +231,8 @@ Subpath propio: `ngjs-core/router`. `RouterModule.forRoot(routes)`/`forChild(rou
 
 **Template = AngularJS nativo** (ver "Regla de coherencia" arriba): el outlet es `<ui-view>`, los links `ui-sref` / `ui-sref-active`, o `Router.navigate` imperativo. Los equivalentes de sintaxis Angular (`<router-outlet>` / `routerLink`) están fuera de alcance — se quitaron del runtime (antes vivían en `src/router/router-link.ts`, borrado).
 
+**`ui-sref` acepta también la forma URL** (`ui-sref="/algo/5?q=1#top"`, la misma sintaxis que `routerLink`): `decorateUiSrefWithUrl` (`src/router/ui-sref-url.ts`, wireado en `forRoot`) decora `uiSrefDirective` y, si el valor empieza con `/`, lo reescribe a `estado(params)` **antes** del `link` original — resolviendo con `urlService.match()` (states con `url` propia, params tipados) y `routerRegistry.pathToName` de fallback (componentless / `path: ""`). Así `path` (de la `Route`) y `ui-sref` matchean por construcción: los dos salen de la config del translator. El state name pelado (`ui-sref="algo"`) sigue funcionando igual; `ui-sref-active` y el click quedan intactos porque se delega en el `link` real. La forma dinámica `[routerLink]="['/x', id]"` la sigue armando el codemod (el nombre del estado no se watchea). Test: `test/router/router-sref-url.test.ts`.
+
 - [x] tipos `Route`/`Routes` (`src/router/route.ts`)
 - [x] traductor `Routes → $stateProvider.state()` (`state-translator.ts`): deriva `name` del árbol, URL relativa al padre, `component` de `ɵcmp.selector` en camelCase, `resolve` a la forma `{ key: ["$stateParams", fn] }`, `data` directo
 - [x] `RouterModule.forRoot`/`forChild` (`router-module.ts` — `angular.module` con dep `ui.router`, `.config($stateProvider)`, `$urlRouterProvider.otherwise`)

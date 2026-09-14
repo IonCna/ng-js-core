@@ -52,6 +52,32 @@ describe("query options", () => {
     expect(ctrl.vcr).toBeInstanceOf(ViewContainerRef);
   });
 
+  it("ViewChild soporta read: ViewContainerRef sobre un ancla SIN ng-ref-read explícito (patrón <ng-container #x> de upstream)", () => {
+    // Exactamente el patrón de ng-bootstrap real (`NgbAccordionBody`):
+    // `<ng-container #container />` sin anotar cómo leerlo — el `read` vive
+    // solo en el `@ViewChild` de TS. Antes quedaba `undefined` (CORE_GAPS):
+    // `<ng-container>` no publica un VCR por default, y nada sintetizaba uno
+    // desde el nodo como sí hace `read: ElementRef`.
+    class Host {
+      @ViewChild("container", { read: ViewContainerRef, static: true })
+      vcr?: ViewContainerRef;
+    }
+
+    const name = uniqueName("queryReadVcrBareAnchor");
+    angular.module(name, [commonModuleName()]).component("host", {
+      template: '<ng-container ng-ref="container"></ng-container>',
+      controller: Host,
+    });
+
+    const host = document.createElement("div");
+    host.innerHTML = "<host></host>";
+    document.body.appendChild(host);
+    angular.bootstrap(host, [name], { strictDi: false });
+
+    const ctrl = angular.element(host.querySelector("host") as Element).controller("host") as Host;
+    expect(ctrl.vcr).toBeInstanceOf(ViewContainerRef);
+  });
+
   it("ContentChild soporta read: TemplateRef cuando el candidato expone templateRef", () => {
     class HeaderMarker {
       templateRef!: TemplateRef<unknown>;

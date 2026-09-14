@@ -32,7 +32,10 @@ const controllerNodes = new WeakMap<object, Node>();
  * que esa pieza exista, ver `query-context.ts`) — y engancha `resolve()` a
  * `$postLink`, cuando ya está garantizado que todos los hijos se publicaron.
  */
-export function decorateControllerViewChildQueries($delegate: angular.IControllerService): angular.IControllerService {
+export function decorateControllerViewChildQueries(
+  $delegate: angular.IControllerService,
+  $injector: angular.auto.IInjectorService,
+): angular.IControllerService {
   return decorateControllerWith($delegate, {
     onInstance: (instance, locals) => {
       if (!instance || typeof instance !== "object") return;
@@ -41,6 +44,7 @@ export function decorateControllerViewChildQueries($delegate: angular.IControlle
       const $element = locals?.$element as angular.IAugmentedJQuery | undefined;
       const node = $element?.[0] as Node | undefined;
       const registry = new ViewQueryRegistry();
+      registry.injector = $injector;
       if (node) {
         controllerNodes.set(instance, node);
         // Una `@Directive` SIN template (no `@Component`) proyecta light DOM:
@@ -77,7 +81,7 @@ export function decorateControllerViewChildQueries($delegate: angular.IControlle
     },
   });
 }
-decorateControllerViewChildQueries.$inject = ["$delegate"];
+decorateControllerViewChildQueries.$inject = ["$delegate", "$injector"];
 
 function installOwnQueries(instance: object, registry: ViewQueryRegistry): void {
   for (const key of Reflect.ownKeys(instance)) {

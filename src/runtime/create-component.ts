@@ -66,7 +66,7 @@ function resolveInjector(options: CreateComponentOptions): angular.auto.IInjecto
 function classComponentDef(Clase: Function, injector: angular.auto.IInjectorService): ComponentLinkDef {
   const def = requireComponentDef(Clase);
   ensureRegistered(Clase, def, injector);
-  return { ...def, controllerName: def.selector };
+  return { ...def, controllerName: def.selector, bindingModes: computeBindings(def) };
 }
 
 function stringComponentDef(component: string, injector: angular.auto.IInjectorService): ComponentLinkDef {

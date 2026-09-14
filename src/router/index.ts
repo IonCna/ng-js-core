@@ -34,3 +34,4 @@ export {
   withInMemoryScrolling,
 } from "@/router/router-module.ts";
 export { DefaultTitleStrategy, TitleStrategy } from "@/router/title-strategy.ts";
+export { type UiRouterLike, urlToStateRef } from "@/router/ui-sref-url.ts";
