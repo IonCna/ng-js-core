@@ -16,6 +16,8 @@ export interface ConfigProviderParams {
     $provide: angular.auto.IProvideService;
     $filter: angular.IFilterProvider;
     $animate: IAnimateProvider;
+    /** `$injector` de fase config (el *provider injector*) — para cargar `@NgModule`s lazy. */
+    $providerInjector: angular.auto.IInjectorService;
 }
 
 /**
@@ -36,6 +38,7 @@ export class ConfigProviderFactory {
         public readonly $provide: angular.auto.IProvideService,
         public readonly $filter: angular.IFilterProvider,
         public readonly $animate: IAnimateProvider,
+        public readonly $providerInjector: angular.auto.IInjectorService,
     ) {}
 
     static from(providers: ConfigProviderParams): void {
@@ -45,6 +48,7 @@ export class ConfigProviderFactory {
             providers.$provide,
             providers.$filter,
             providers.$animate,
+            providers.$providerInjector,
         );
     }
 }

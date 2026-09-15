@@ -8,6 +8,7 @@ import {
   PlatformLocation,
 } from "@/common/location/index.ts";
 import { ViewportScroller } from "@/common/viewport-scroller.ts";
+import { ConfigProviderFactory } from "@/core/platform/config-providers.ts";
 import { Title } from "@/platform-browser/title.ts";
 import { ActivatedRoute, ActivatedRouteImpl } from "@/router/activated-route.ts";
 import type { Data, ResolveFn, Routes } from "@/router/route.ts";
@@ -387,13 +388,19 @@ export const RouterModule = {
     // y la `data` resuelta de estas rutas dejan de perderse (los leen el
     // `wireTitles` / `ActivatedRoute` del módulo de `forRoot`), y sus paths
     // entran al `pathToName` para los `redirectTo` cruzados.
-    routerRegistry.mergeTitles(titles);
-    routerRegistry.mergeResolveKeys(resolveKeys);
-    routerRegistry.mergeEmptyPathStates(translated.emptyPathStates);
-    routerRegistry.mergePathToName(translated.pathToName);
+    // Después del bootstrap (`forChild` dentro de un chunk de `loadChildren`) NO:
+    // acá los nombres/paths serían de raíz; `loadChildren` re-traduce estas
+    // `Routes` rooteadas en la ruta padre y mergea eso.
+    if (!ConfigProviderFactory.current) {
+      routerRegistry.mergeTitles(titles);
+      routerRegistry.mergeResolveKeys(resolveKeys);
+      routerRegistry.mergeEmptyPathStates(translated.emptyPathStates);
+      routerRegistry.mergePathToName(translated.pathToName);
+    }
 
     const mod = angular.module(nextModuleName("ngjs.router.child"), ["ui.router"]);
     routerRegistry.registerModuleName(mod.name);
+    routerRegistry.registerChildRoutes(mod.name, routes);
 
     const config = ($stateProvider: StateProvider) => {
       applyGlobalRedirects(translated);

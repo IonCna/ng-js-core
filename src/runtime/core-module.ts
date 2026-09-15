@@ -175,6 +175,7 @@ function catchConfigProviders() {
     $provide: angular.auto.IProvideService,
     $filterProvider: angular.IFilterProvider,
     $animateProvider: IAnimateProvider,
+    $injector: angular.auto.IInjectorService,
   ) => {
     ConfigProviderFactory.from({
       $compile: $compileProvider,
@@ -182,9 +183,17 @@ function catchConfigProviders() {
       $provide: $provide,
       $filter: $filterProvider,
       $animate: $animateProvider,
+      $providerInjector: $injector,
     });
   };
-  config.$inject = ["$compileProvider", "$controllerProvider", "$provide", "$filterProvider", "$animateProvider"];
+  config.$inject = [
+    "$compileProvider",
+    "$controllerProvider",
+    "$provide",
+    "$filterProvider",
+    "$animateProvider",
+    "$injector",
+  ];
   return config;
 }
 

@@ -1,6 +1,7 @@
 import type { Ng1StateDeclaration } from "@uirouter/angularjs";
 import { bindingsFromDefs } from "@/core/metadata/component-bindings.ts";
 import { getComponentDef } from "@/core/metadata/define-component.ts";
+import { getNgModuleDef } from "@/core/metadata/ng-module.ts";
 import { ConfigProviderFactory } from "@/core/platform/config-providers.ts";
 import type {
   ActivatedRouteSnapshot,
@@ -8,6 +9,7 @@ import type {
   CanDeactivateFn,
   CanMatchFn,
   Data,
+  LoadChildrenResult,
   ResolveData,
   ResolveFn,
   Route,
@@ -16,6 +18,7 @@ import type {
 } from "@/router/route.ts";
 import { resolveRouteComponentInstance } from "@/router/route-component-registry.ts";
 import { routerRegistry } from "@/router/router-registry.ts";
+import { LazyNgModuleLoader } from "@/runtime/lazy-ng-module-loader.ts";
 
 export interface GuardBinding {
   stateName: string;
@@ -292,11 +295,19 @@ export function wireMatchHook($transitions: TransitionsLike, binding: MatchBindi
   $transitions.onBefore({ to: binding.criteria }, () => runGuards(binding.guards, binding.route));
 }
 
-function unwrapLazyRoutes(loaded: Routes | { routes: Routes } | { default: Routes }): Routes {
+/**
+ * Resultado de `loadChildren` → `Routes`. Una clase `@NgModule` (o `{ default }` con
+ * una) se carga en la app viva con `LazyNgModuleLoader`, que registra sus
+ * declarations/providers/imports y devuelve las `Routes` de sus `forChild`.
+ */
+function unwrapLazyRoutes(loaded: LoadChildrenResult, $injector: unknown): Routes {
   if (Array.isArray(loaded)) return loaded;
+  if (typeof loaded === "function" && getNgModuleDef(loaded)) {
+    return new LazyNgModuleLoader($injector as ConstructorParameters<typeof LazyNgModuleLoader>[0]).load(loaded);
+  }
   if ("routes" in loaded && Array.isArray(loaded.routes)) return loaded.routes;
-  if ("default" in loaded && Array.isArray(loaded.default)) return loaded.default;
-  throw new Error("RouterModule: loadChildren no resolvió Routes / { routes } / { default }.");
+  if ("default" in loaded && loaded.default) return unwrapLazyRoutes(loaded.default, $injector);
+  throw new Error("RouterModule: loadChildren no resolvió Routes / { routes } / { default } / clase @NgModule.");
 }
 
 interface LazyChildrenTransition {
@@ -316,7 +327,8 @@ function lazyLoadChildrenFor(route: Route, stateName: string, url: string, fullP
   if (!load) throw new Error("lazyLoadChildrenFor: ruta sin loadChildren");
 
   return async (transition: LazyChildrenTransition) => {
-    const childRoutes = unwrapLazyRoutes(await load());
+    const $injector = transition.injector().get("$injector") as { has(name: string): boolean };
+    const childRoutes = unwrapLazyRoutes(await load(), $injector);
     const sub = translate(childRoutes, stateName, fullPath);
 
     // El subárbol lazy entra al registro global: sus `titles`/`resolveKeys` los
@@ -333,7 +345,6 @@ function lazyLoadChildrenFor(route: Route, stateName: string, url: string, fullP
     const registrar = ConfigProviderFactory.current;
     if (!registrar) throw new Error("RouterModule: no hay config-providers capturados.");
     const registry = transition.router.stateRegistry;
-    const $injector = transition.injector().get("$injector") as { has(name: string): boolean };
 
     // Componentes del chunk lazy — idempotente (en compat se auto-registran al `import()`).
     for (const { name, cls } of sub.components) {
@@ -358,8 +369,11 @@ function lazyLoadChildrenFor(route: Route, stateName: string, url: string, fullP
 
     // Reemplazar el future state por el `stateName` real (pass-through, sin componente
     // propio — los hijos renderizan en el `<ui-view>` ancestro, como en Angular).
+    // Con hijo índice (`path: ""`, el idiom de un `@NgModule` lazy) padre e hijo
+    // computan la misma URL: el padre va `abstract` para que UI-Router matchee al hijo.
+    const hasIndexChild = childRoutes.some((child) => (child.path ?? "") === "");
     registry.deregister(`${stateName}.**`);
-    registry.register({ name: stateName, url, data });
+    registry.register({ name: stateName, url, data, abstract: hasIndexChild || undefined });
   };
 }
 
@@ -371,6 +385,18 @@ function lazyLoadChildrenFor(route: Route, stateName: string, url: string, fullP
 export function resolveRedirect(redirectTo: string, parentPath: string, pathToName: Map<string, string>): string {
   const target = redirectTo.startsWith("/") ? redirectTo.slice(1) : joinPath(parentPath, redirectTo);
   return pathToName.get(target.replace(/^\/|\/$/g, "")) ?? redirectTo;
+}
+
+/**
+ * URL del *future state* `nombre.**`. UI-Router le agrega `{remainder:any}` y la
+ * matchea como prefijo de **texto**: `/admin` agarraría también `/admin-default`
+ * (baja el chunk equivocado y cae en `otherwise`). Un param de ancho cero con
+ * lookahead exige que el prefijo termine en un límite de segmento (`/` o fin).
+ * Sin segmento propio (`""`/`"/"`) no hace falta — y romperia el match.
+ */
+function futureStateUrl(url: string): string {
+  if (!url || url.endsWith("/")) return url;
+  return `${url}{ngjsSegmentEnd:(?=/|$)}`;
 }
 
 interface WalkCtx {
@@ -451,6 +477,7 @@ function walk(routes: Routes, ctx: WalkCtx): void {
       // Future state: el sufijo `.**` hace que la URL de este segmento matchee
       // como prefijo y dispare `lazyLoad` aunque los hijos no existan todavía.
       state.name = `${name}.**`;
+      state.url = futureStateUrl(url);
       state.lazyLoad = lazyLoadChildrenFor(route, name, url, fullPath, data) as never;
     } else {
       const comp = componentName(route);

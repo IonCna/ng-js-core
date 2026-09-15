@@ -1,4 +1,4 @@
-import type { ResolveFn } from "@/router/route.ts";
+import type { ResolveFn, Routes } from "@/router/route.ts";
 
 /**
  * Registro global del router — el "config único" que `@angular/router` arma con
@@ -33,6 +33,12 @@ class RouterRegistry {
   /** `controllerAs` del `@NgModule` que importa el `RouterModule` — fallback para componentes de ruta lazy. */
   controllerAs: string | undefined;
   private readonly moduleNames = new Set<string>();
+  /**
+   * `Routes` de cada `RouterModule.forChild` por nombre de `angular.module` — un
+   * `@NgModule` lazy (`loadChildren` → clase) las junta de sus `imports` y las
+   * traduce rooteadas en la ruta padre (Angular: multi-provider `ROUTES`).
+   */
+  private readonly childRoutes = new Map<string, Routes>();
 
   mergeTitles(titles: Map<string, string | ResolveFn<string>>): void {
     for (const [key, value] of titles) this.titles.set(key, value);
@@ -59,7 +65,16 @@ class RouterRegistry {
     return this.moduleNames.has(name);
   }
 
+  registerChildRoutes(moduleName: string, routes: Routes): void {
+    this.childRoutes.set(moduleName, routes);
+  }
+
+  childRoutesOf(moduleName: string): Routes | undefined {
+    return this.childRoutes.get(moduleName);
+  }
+
   reset(): void {
+    this.childRoutes.clear();
     this.titles.clear();
     this.resolveKeys.clear();
     this.emptyPathStates.clear();

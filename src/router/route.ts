@@ -48,11 +48,13 @@ export type CanMatchFn = (route: Route) => boolean | Promise<boolean>;
 
 /**
  * `loadChildren: () => import("./x").then(m => m.ROUTES)`. Se acepta el array de
- * `Routes` pelado (forma moderna de Angular), `{ routes }` o `{ default }`. La
- * forma vieja "clase `@NgModule`" queda fuera del MVP. El traductor registra un
- * *future state* (`nombre.**`) y baja el chunk recién al navegar adentro.
+ * `Routes` pelado (forma moderna de Angular), `{ routes }`, una clase `@NgModule`
+ * (`m => m.AdminModule`, con `RouterModule.forChild(routes)` en sus `imports`) o
+ * `{ default }` con cualquiera de esas. El traductor registra un *future state*
+ * (`nombre.**`) y baja el chunk recién al navegar adentro.
  */
-export type LoadChildrenCallback = () => Promise<Routes | { routes: Routes } | { default: Routes }>;
+export type LoadChildrenResult = Routes | Type<unknown> | { routes: Routes } | { default: Routes | Type<unknown> };
+export type LoadChildrenCallback = () => Promise<LoadChildrenResult>;
 export type LoadComponentCallback = () => Promise<Type<unknown> | { default: Type<unknown> }>;
 
 export interface Route {
