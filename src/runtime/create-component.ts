@@ -1,6 +1,12 @@
-import type angular from "angular";
-import type { ICompileService, IPromise, IQService, IRootScopeService, ITimeoutService } from "angular";
+import angular, {
+  type ICompileService,
+  type IPromise,
+  type IQService,
+  type IRootScopeService,
+  type ITimeoutService,
+} from "angular";
 import { ChangeDetectorRefImpl } from "@/core/change-detection/change-detector-ref.ts";
+import { Injector, unwrapAngularInjector } from "@/core/di/injector.ts";
 import { ensureInject } from "@/core/di/reflect.ts";
 import { bindingsFromDefs } from "@/core/metadata/component-bindings.ts";
 import type { ComponentDef, InputDef, OutputDef } from "@/core/metadata/def.ts";
@@ -9,13 +15,27 @@ import { ConfigProviderFactory } from "@/core/platform/config-providers.ts";
 import { type ComponentRef, ComponentRefImpl } from "@/core/refs/component-ref.ts";
 import { ElementRefImpl } from "@/core/refs/element-ref.ts";
 import { ViewRefImpl } from "@/core/refs/view-ref.ts";
+import { ELEMENT_INJECTOR_DATA_KEY, ElementInjectorNode, NodeInjector } from "@/runtime/element-injector-node.ts";
 
 type Bindings = Readonly<Record<string, unknown>>;
 
+type AnyInjector = angular.auto.IInjectorService | Injector;
+
 export interface CreateComponentOptions {
-  injector?: angular.auto.IInjectorService;
-  environmentInjector?: angular.auto.IInjectorService;
-  elementInjector?: angular.auto.IInjectorService;
+  /**
+   * `$injector` nativo o `Injector` público. Un `Injector` de una rama lazy
+   * (`inject(Injector)` dentro de la rama) hace que el componente vea los
+   * providers de esa rama, aunque su host viva fuera de su DOM (modal, overlay).
+   */
+  injector?: AnyInjector;
+  environmentInjector?: AnyInjector;
+  elementInjector?: AnyInjector;
+  /**
+   * Interno (`ViewContainerRef`): elemento del contenedor. Si no se pasó un
+   * `injector`/`elementInjector` y el contenedor está dentro de una rama lazy, el
+   * componente hereda su cadena de DI (Angular: el `parentInjector` del contenedor).
+   */
+  ɵparentElement?: Element;
   hostElement?: Element;
   projectableNodes?: Node[][];
   directives?: string[];
@@ -60,7 +80,31 @@ export function createComponent<C = unknown>(
 function resolveInjector(options: CreateComponentOptions): angular.auto.IInjectorService {
   const injector = options.elementInjector ?? options.injector ?? options.environmentInjector;
   if (!injector) throw new Error("createComponent: falta injector/environmentInjector");
-  return injector;
+  return injector instanceof Injector ? unwrapAngularInjector(injector) : injector;
+}
+
+/**
+ * Nodo del que cuelga el host, **solo** si hay una rama lazy de por medio (fuera de
+ * ramas lazy todo queda como siempre): un `NodeInjector` explícito, o — sin
+ * injector de elemento explícito — el nodo del contenedor si pertenece a una rama.
+ */
+function anchorNodeFor(options: CreateComponentOptions): ElementInjectorNode | undefined {
+  const explicit = [options.elementInjector, options.injector, options.environmentInjector].find(
+    (candidate): candidate is NodeInjector => candidate instanceof NodeInjector,
+  );
+  if (explicit) {
+    // Si el `NodeInjector` ES el entorno de la rama, el host cuelga directo de él (sin cadena de elementos).
+    const parent = explicit.node === explicit.environment ? undefined : explicit.node;
+    return new ElementInjectorNode([], parent, resolveInjector(options), explicit.environment);
+  }
+
+  // `ɵparentElement` solo lo pasa `ViewContainerRef` cuando no hay `injector` explícito.
+  if (options.elementInjector || !options.ɵparentElement) return undefined;
+  const containerNode = angular.element(options.ɵparentElement).inheritedData(ELEMENT_INJECTOR_DATA_KEY) as
+    | ElementInjectorNode
+    | undefined;
+  if (!containerNode?.environment) return undefined;
+  return new ElementInjectorNode([], containerNode, resolveInjector(options), containerNode.environment);
 }
 
 function classComponentDef(Clase: Function, injector: angular.auto.IInjectorService): ComponentLinkDef {
@@ -127,6 +171,11 @@ function linkComponent(def: ComponentLinkDef, options: CreateComponentOptions): 
   const hostElement = resolveComponentHost(requestedHost, def.selector);
 
   Object.assign(ownerScope, bindings);
+  const anchor = anchorNodeFor(options);
+  if (anchor) {
+    angular.element(hostElement).data(ELEMENT_INJECTOR_DATA_KEY, anchor);
+    ownerScope.$on("$destroy", () => anchor.destroy());
+  }
   applyHostAttributes(hostElement, bindings, options.directives ?? [], def.bindingModes);
   const projectableNodes = options.projectableNodes ?? [];
   appendProjectionMarkers(hostElement, projectableNodes);

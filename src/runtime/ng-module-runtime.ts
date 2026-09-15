@@ -3,17 +3,18 @@ import type { Provider, TypeProvider } from "@/core/di/provider.ts";
 import { ensureInject, ReflectInjection } from "@/core/di/reflect.ts";
 import { assertNotServiceProvider } from "@/core/di/service.ts";
 import { getComponentDef } from "@/core/metadata/define-component.ts";
+import { getDirectiveDef } from "@/core/metadata/directive.ts";
 import {
   buildComponentAsDirective,
   buildComponentOptions,
   buildDirectiveDefinition,
 } from "@/core/metadata/directive-definition.ts";
-import { getDirectiveDef } from "@/core/metadata/directive.ts";
-import { getNgModuleDef } from "@/core/metadata/ng-module.ts";
+import { getNgModuleDef, ngModuleInjectionName } from "@/core/metadata/ng-module.ts";
 import { getPipeDef } from "@/core/metadata/pipe.ts";
 import { parseSelector } from "@/core/metadata/selector-name.ts";
 import { createPipeFilter } from "@/pipes/pipe-transform.ts";
 import { routerRegistry } from "@/router/router-registry.ts";
+import { markNgModuleId, ngModuleScopes } from "@/runtime/ng-module-instances.ts";
 
 const modules = new WeakMap<Function, angular.IModule>();
 
@@ -22,10 +23,10 @@ const modules = new WeakMap<Function, angular.IModule>();
  * nombres de módulo (deps), registra `providers` y `declarations`. Memoizado por
  * clase — llamarlo dos veces devuelve el mismo `angular.module` sin re-registrar.
  *
- * No instancia la clase del módulo ni le pasa nada al constructor: un `@NgModule`
- * es solo metadata declarativa, igual que en Angular. La config imperativa que un
- * módulo necesite (`.decorator()`, `.config()`, `.run()`) se hace por fuera, sobre
- * el `angular.IModule` que devuelve esta función (ver `core-module.ts`).
+ * La clase del módulo se instancia en un `.run` (como Angular al crear el injector),
+ * con DI de constructor — ver `NgModuleScope`. La config imperativa que un módulo
+ * necesite (`.decorator()`, `.config()`) se hace por fuera, sobre el
+ * `angular.IModule` que devuelve esta función (ver `core-module.ts`).
  */
 export function registerNgModule(moduleType: Function, inheritedControllerAs?: string): angular.IModule {
   const existing = modules.get(moduleType);
@@ -44,17 +45,38 @@ export function registerNgModule(moduleType: Function, inheritedControllerAs?: s
   registerProviders(module, def.providers);
   for (const declaration of def.declarations) registerDeclaration(module, declaration, controllerAs);
 
+  // Angular instancia cada clase `@NgModule` al crear su injector (imports primero —
+  // AngularJS corre los `.run` de los `requires` antes que los propios).
+  markNgModuleId(def.id, moduleType);
+  module.run(instantiateNgModuleBlock(moduleType));
+  // La instancia es inyectable (`inject(AppModule)`, nombre `ɵmod:<id>`), como en
+  // Angular. Memoizado en el scope raíz: la misma que crea el `.run`. En una rama
+  // lazy el loader saltea este `$provide` y publica la instancia de la rama en su entorno.
+  module.factory(ngModuleInjectionName(def.id), [
+    "$injector",
+    ($injector: angular.auto.IInjectorService) => ngModuleScopes.root($injector).instantiate(moduleType, $injector),
+  ]);
+
   return module;
+}
+
+/** Marca de los `.run` que instancian un `@NgModule` — el loader lazy los saltea e instancia en su scope. */
+export const NG_MODULE_RUN_BLOCK = Symbol("ngjs-ng-module-run-block");
+
+function instantiateNgModuleBlock(moduleType: Function) {
+  const run = ($injector: angular.auto.IInjectorService) => {
+    ngModuleScopes.root($injector).instantiate(moduleType, $injector);
+  };
+  run.$inject = ["$injector"];
+  (run as unknown as Record<symbol, Function>)[NG_MODULE_RUN_BLOCK] = moduleType;
+  return run;
 }
 
 export function getNgModuleName(moduleType: Function): string {
   return registerNgModule(moduleType).name;
 }
 
-function resolveNgModuleImport(
-  imported: Function | angular.IModule | string,
-  inheritedControllerAs?: string,
-): string {
+function resolveNgModuleImport(imported: Function | angular.IModule | string, inheritedControllerAs?: string): string {
   if (typeof imported === "string") return imported;
 
   if (typeof imported === "function" && getNgModuleDef(imported)) {

@@ -5,7 +5,7 @@ import {
   getScopeViewQueryRegistries,
   runWithContentQueryOwners,
 } from "@/core/queries/query-context.ts";
-import { type ContentProjection, CONTENT_PROJECTION_KEY } from "@/runtime/bridges/content-projection-bridge.ts";
+import { CONTENT_PROJECTION_KEY, type ContentProjection } from "@/runtime/bridges/content-projection-bridge.ts";
 
 /**
  * `<ng-content>` pelado (sin `@Directive`).

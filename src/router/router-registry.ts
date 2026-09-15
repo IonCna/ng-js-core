@@ -1,3 +1,4 @@
+import type { Provider } from "@/core/di/provider.ts";
 import type { ResolveFn, Routes } from "@/router/route.ts";
 
 /**
@@ -29,6 +30,10 @@ class RouterRegistry {
   readonly titles = new Map<string, string | ResolveFn<string>>();
   readonly resolveKeys = new Map<string, string[]>();
   readonly emptyPathStates = new Set<string>();
+  /** State names de rutas `loadChildren` (todas las ramas) — ver `runInRouteContext`. */
+  readonly lazyChildrenStates = new Set<string>();
+  /** `Route.providers` por state name (todas las ramas). */
+  readonly routeProviders = new Map<string, Provider[]>();
   readonly pathToName = new Map<string, string>();
   /** `controllerAs` del `@NgModule` que importa el `RouterModule` — fallback para componentes de ruta lazy. */
   controllerAs: string | undefined;
@@ -50,6 +55,14 @@ class RouterRegistry {
 
   mergeEmptyPathStates(emptyPathStates: Set<string>): void {
     for (const name of emptyPathStates) this.emptyPathStates.add(name);
+  }
+
+  mergeRouteProviders(routeProviders: Map<string, Provider[]>): void {
+    for (const [key, value] of routeProviders) this.routeProviders.set(key, value);
+  }
+
+  mergeLazyChildrenStates(names: Set<string>): void {
+    for (const name of names) this.lazyChildrenStates.add(name);
   }
 
   mergePathToName(pathToName: Map<string, string>): void {
@@ -78,6 +91,8 @@ class RouterRegistry {
     this.titles.clear();
     this.resolveKeys.clear();
     this.emptyPathStates.clear();
+    this.lazyChildrenStates.clear();
+    this.routeProviders.clear();
     this.pathToName.clear();
     this.controllerAs = undefined;
     this.moduleNames.clear();

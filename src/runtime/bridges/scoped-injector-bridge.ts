@@ -6,6 +6,7 @@ import { getDirectiveDef } from "@/core/metadata/directive.ts";
 import { SelectorRegistry } from "@/core/metadata/selector-registry.ts";
 import { decorateControllerWith } from "@/runtime/bridges/shared.ts";
 import { ElementInjectorNode } from "@/runtime/element-injector-node.ts";
+import { ngModuleScopes } from "@/runtime/ng-module-instances.ts";
 
 const NODE_DATA_KEY = "$ngjsInjector";
 
@@ -62,8 +63,20 @@ export function decorateControllerScopedInjector(
       // `$element` todavía no tiene data propia acá (recién estamos por ponerla si
       // corresponde), así que esto es lo mismo que preguntar por el nodo del padre.
       let node = $element.inheritedData(NODE_DATA_KEY) as ElementInjectorNode | undefined;
-      if (ownProviders.length > 0) {
-        node = new ElementInjectorNode(ownProviders, node, $injector);
+      // Declaración de un `@NgModule` lazy: su DI termina en el entorno de esa rama
+      // (no en el `$injector`). Si el nodo heredado no apunta ya a ese entorno, este
+      // elemento arranca uno propio que sí — sus descendientes lo heredan.
+      //
+      // Primero el entorno de la ruta que renderiza este elemento (`<ui-view>` →
+      // estado → rama lazy / `Route.providers` más cercana); fuera de un `<ui-view>`
+      // (modal, overlay), el de la clase. Solo si la app tiene algún entorno.
+      const routeEnvironment = ngModuleScopes.hasEnvironments($injector)
+        ? environmentOfUiView($element, $injector)
+        : undefined;
+      const ownEnvironment = routeEnvironment ?? ngModuleScopes.environmentForClass($injector, Clase as Function);
+      const environment = ownEnvironment ?? node?.environment;
+      if (ownProviders.length > 0 || (ownEnvironment && node?.environment !== ownEnvironment)) {
+        node = new ElementInjectorNode(ownProviders, node, $injector, environment);
         $element.data(NODE_DATA_KEY, node);
 
         const $scope = locals?.$scope as angular.IScope | undefined;
@@ -97,7 +110,7 @@ export function decorateControllerScopedInjector(
       let node = $element.data(NODE_DATA_KEY) as ElementInjectorNode | undefined;
       if (!node) {
         const parent = $element.inheritedData(NODE_DATA_KEY) as ElementInjectorNode | undefined;
-        node = new ElementInjectorNode([], parent, $injector);
+        node = new ElementInjectorNode([], parent, $injector, parent?.environment);
         $element.data(NODE_DATA_KEY, node);
 
         const $scope = locals?.$scope as angular.IScope | undefined;
@@ -108,3 +121,15 @@ export function decorateControllerScopedInjector(
   });
 }
 decorateControllerScopedInjector.$inject = ["$delegate", "$injector"];
+
+/** Estado que renderiza el `<ui-view>` más cercano (UI-Router guarda la config de la vista en `data('$uiView')`). */
+function environmentOfUiView(
+  $element: JqLiteData,
+  $injector: angular.auto.IInjectorService,
+): ElementInjectorNode | undefined {
+  const uiView = $element.inheritedData("$uiView") as
+    | { $cfg?: { viewDecl?: { $context?: { name?: string } } } }
+    | undefined;
+  const stateName = uiView?.$cfg?.viewDecl?.$context?.name;
+  return stateName ? ngModuleScopes.environmentForState($injector, stateName) : undefined;
+}

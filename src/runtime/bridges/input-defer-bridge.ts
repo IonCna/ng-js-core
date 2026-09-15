@@ -99,11 +99,12 @@ function patchInputSetters(Clase: Function, propNames: string[]): void {
   }
 }
 
-function findAccessor(
-  proto: object,
-  prop: PropertyKey,
-): { target: object; desc: PropertyDescriptor } | undefined {
-  for (let target: object | null = proto; target && target !== Object.prototype; target = Object.getPrototypeOf(target)) {
+function findAccessor(proto: object, prop: PropertyKey): { target: object; desc: PropertyDescriptor } | undefined {
+  for (
+    let target: object | null = proto;
+    target && target !== Object.prototype;
+    target = Object.getPrototypeOf(target)
+  ) {
     const desc = Object.getOwnPropertyDescriptor(target, prop);
     if (desc) return { target, desc };
   }

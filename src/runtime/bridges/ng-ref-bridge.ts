@@ -1,11 +1,11 @@
 import type angular from "angular";
-import { ContentChildQuery, createDecoratedContentChildQueries } from "@/core/queries/content-child.ts";
-import { ContentChildrenQuery, createDecoratedContentChildrenQueries } from "@/core/queries/content-children.ts";
+import { getInjectableId } from "@/core/di/injectable-registry.ts";
 import { getComponentDef } from "@/core/metadata/define-component.ts";
 import { getDirectiveDef } from "@/core/metadata/directive.ts";
 import { exportAsRegistry } from "@/core/metadata/export-as-registry.ts";
 import { SelectorRegistry } from "@/core/metadata/selector-registry.ts";
-import { getInjectableId } from "@/core/di/injectable-registry.ts";
+import { ContentChildQuery, createDecoratedContentChildQueries } from "@/core/queries/content-child.ts";
+import { ContentChildrenQuery, createDecoratedContentChildrenQueries } from "@/core/queries/content-children.ts";
 import { getControllerTokens } from "@/core/queries/controller-tokens.ts";
 import {
   getAncestorQueryRegistries,

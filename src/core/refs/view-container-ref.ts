@@ -1,13 +1,13 @@
 import type angular from "angular";
 import type { IPromise, IQService } from "angular";
-import { Injector, unwrapAngularInjector } from "@/core/di/injector.ts";
-import { createComponent } from "@/runtime/create-component.ts";
+import type { Injector } from "@/core/di/injector.ts";
 import type { ComponentRef } from "@/core/refs/component-ref.ts";
 import type { ElementRefImpl } from "@/core/refs/element-ref.ts";
 import type { EmbeddedViewRefImpl } from "@/core/refs/embedded-view-ref.ts";
 import type { TemplateRef } from "@/core/refs/template-ref.ts";
 import { claimView, getViewOwner, releaseView, type ViewOwner } from "@/core/refs/view-owner.ts";
 import type { ViewRef, ViewRefImpl } from "@/core/refs/view-ref.ts";
+import { createComponent } from "@/runtime/create-component.ts";
 
 export abstract class ViewContainerRef {
   static readonly $name = "ViewContainerRef";
@@ -16,7 +16,11 @@ export abstract class ViewContainerRef {
   abstract clear(): void;
   abstract get(index: number): ViewRef | null;
   abstract readonly length: number;
-  abstract createEmbeddedView<C>(templateRef: TemplateRef<C>, context?: C, options?: { index?: number }): EmbeddedViewRefImpl<C>;
+  abstract createEmbeddedView<C>(
+    templateRef: TemplateRef<C>,
+    context?: C,
+    options?: { index?: number },
+  ): EmbeddedViewRefImpl<C>;
   abstract createEmbeddedView<C>(templateRef: TemplateRef<C>, context?: C, index?: number): EmbeddedViewRefImpl<C>;
   abstract insert(viewRef: ViewRef, index?: number): ViewRef;
   abstract move(viewRef: ViewRef, currentIndex: number): ViewRef;
@@ -35,14 +39,6 @@ export abstract class ViewContainerRef {
       bindings?: Readonly<Record<string, unknown>> | readonly Readonly<Record<string, unknown>>[];
     },
   ): IPromise<ComponentRef<C>>;
-}
-
-/** `undefined` pasa tal cual; un `Injector` público se desenvuelve al `$injector` real; un `$injector` ya crudo se devuelve sin tocar. */
-function toNativeInjector(
-  value: Injector | angular.auto.IInjectorService | undefined,
-): angular.auto.IInjectorService | undefined {
-  if (!value) return undefined;
-  return value instanceof Injector ? unwrapAngularInjector(value) : value;
 }
 
 export class ViewContainerRefImpl extends ViewContainerRef implements ViewOwner {
@@ -79,8 +75,11 @@ export class ViewContainerRefImpl extends ViewContainerRef implements ViewOwner 
     const $q = this.injector.get<IQService>("$q");
 
     return createComponent<C>(componentType, {
-      injector: toNativeInjector(options?.injector) ?? this.injector,
-      environmentInjector: toNativeInjector(options?.environmentInjector),
+      injector: options?.injector ?? this.injector,
+      environmentInjector: options?.environmentInjector,
+      // Sin `injector` explícito, el componente hereda la cadena de DI del contenedor
+      // (solo tiene efecto dentro de una rama lazy — ver `createComponent`).
+      ɵparentElement: options?.injector ? undefined : (this.element.nativeElement as Element),
       projectableNodes: options?.projectableNodes,
       directives: options?.directives,
       bindings: options?.bindings,

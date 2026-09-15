@@ -37,9 +37,7 @@ export interface ContentProjection {
  * hay proyección). Corre después de `ng-ref-bridge` para que el
  * `ViewQueryRegistry` del componente ya exista y reciba los candidatos.
  */
-export function decorateControllerContentProjection(
-  $delegate: angular.IControllerService,
-): angular.IControllerService {
+export function decorateControllerContentProjection($delegate: angular.IControllerService): angular.IControllerService {
   return decorateControllerWith($delegate, {
     onInstance: (instance, locals) => {
       if (!instance || typeof instance !== "object") return;

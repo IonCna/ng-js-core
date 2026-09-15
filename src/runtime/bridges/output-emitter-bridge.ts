@@ -40,9 +40,7 @@ function outputDefsOf(instance: object): { propName: string }[] {
  * La suscripción se limpia en `$onDestroy`. Si el `@Output` no es un emitter
  * (uso viejo como callback `&`), no toca nada.
  */
-export function decorateControllerOutputEmitters(
-  $delegate: angular.IControllerService,
-): angular.IControllerService {
+export function decorateControllerOutputEmitters($delegate: angular.IControllerService): angular.IControllerService {
   return decorateControllerWith($delegate, {
     onInstance: (instance) => {
       if (!instance || typeof instance !== "object") return;

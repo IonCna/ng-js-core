@@ -2,8 +2,15 @@ import type { StateService, Transition, TransitionService } from "@uirouter/angu
 import type { ILocationService, IRootScopeService } from "angular";
 import { BehaviorSubject, map, type Observable } from "rxjs";
 import { convertToParamMap, type ParamMap } from "@/router/param-map.ts";
-import { mergeResolvedData, mergeStaticData, type ParamsInheritanceStrategy, pickRouteTitle } from "@/router/route-title.ts";
 import type { ActivatedRouteSnapshot, Data, ResolveFn } from "@/router/route.ts";
+import {
+  mergeResolvedData,
+  mergeStaticData,
+  type ParamsInheritanceStrategy,
+  pickRouteTitle,
+  pickRouteTitleState,
+} from "@/router/route-title.ts";
+import { runInRouteContext } from "@/router/state-translator.ts";
 
 type Params = Record<string, string>;
 
@@ -51,6 +58,7 @@ export class ActivatedRouteImpl extends ActivatedRoute {
     private readonly resolveKeys: Map<string, string[]> = new Map(),
     private readonly emptyPathStates: Set<string> = new Set(),
     private readonly paramsInheritanceStrategy: ParamsInheritanceStrategy = "emptyOnly",
+    private readonly $injector?: unknown,
   ) {
     super();
     this.syncRoute();
@@ -121,7 +129,10 @@ export class ActivatedRouteImpl extends ActivatedRoute {
     const picked = pickRouteTitle(chain, this.titles);
     if (picked === undefined) return "";
     if (typeof picked === "string") return picked;
-    const resolved = picked({ params, data, queryParams: this.queryParams$.value, fragment: this.fragment$.value });
+    const titleState = pickRouteTitleState(chain, this.titles) as string;
+    const resolved = runInRouteContext(this.$injector, titleState, () =>
+      picked({ params, data, queryParams: this.queryParams$.value, fragment: this.fragment$.value }),
+    );
     return typeof resolved === "string" ? resolved : "";
   }
 }

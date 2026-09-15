@@ -34,8 +34,7 @@ function bridgeLifecycle(instance: unknown, locals?: Record<string, unknown>): v
     // Pero un `$onInit` que puso OTRO bridge como propiedad de instancia
     // (`output-emitter-bridge` corre antes y rescata los emitters `@Output`) NO
     // debe tapar `ngOnInit`: se encadena, y `ngOnInit` corre después del rescate.
-    const authoredOnInit =
-      typeof inst.$onInit === "function" && !Object.prototype.hasOwnProperty.call(inst, "$onInit");
+    const authoredOnInit = typeof inst.$onInit === "function" && !Object.hasOwn(inst, "$onInit");
     if (!authoredOnInit) {
       chainInstanceMethod(inst as object, "$onInit", () => inst.ngOnInit?.());
     }
@@ -52,8 +51,7 @@ function bridgeLifecycle(instance: unknown, locals?: Record<string, unknown>): v
     // respetar el orden de Angular: `ngOnDestroy()` corre ANTES de que el
     // framework desarme sus bindings, así un `this.miOutput.emit()` dentro de
     // `ngOnDestroy` todavía llega al padre.
-    const authoredOnDestroy =
-      typeof inst.$onDestroy === "function" && !Object.prototype.hasOwnProperty.call(inst, "$onDestroy");
+    const authoredOnDestroy = typeof inst.$onDestroy === "function" && !Object.hasOwn(inst, "$onDestroy");
     if (!authoredOnDestroy) {
       prependInstanceMethod(inst as object, "$onDestroy", () => inst.ngOnDestroy?.());
     }

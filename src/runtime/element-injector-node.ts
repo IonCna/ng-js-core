@@ -1,6 +1,9 @@
 import type angular from "angular";
 import { getInjectFlags, type InjectFlags } from "@/core/di/inject-flags.ts";
+import { runInInjectionContext } from "@/core/di/injection-context.ts";
+import { Injector } from "@/core/di/injector.ts";
 import type { Provider } from "@/core/di/provider.ts";
+import type { ProviderToken } from "@/core/di/provider-token.ts";
 import { ensureInject, ReflectInjection } from "@/core/di/reflect.ts";
 import { getFromAppInjector, hasInAppInjector } from "@/core/di/root-singleton-registry.ts";
 import { assertNotServiceProvider } from "@/core/di/service.ts";
@@ -8,6 +11,9 @@ import { assertNotServiceProvider } from "@/core/di/service.ts";
 type SingleProvider = Exclude<Provider, Provider[]>;
 
 const NOT_FOUND = Symbol("ngjs-not-found");
+
+/** Clave de jqLite `data()` donde vive el `ElementInjectorNode` de un elemento (la misma que usan los bridges). */
+export const ELEMENT_INJECTOR_DATA_KEY = "$ngjsInjector";
 
 function isTypeProvider(provider: SingleProvider): provider is Extract<SingleProvider, Function> {
   return typeof provider === "function";
@@ -19,6 +25,12 @@ function isTypeProvider(provider: SingleProvider): provider is Extract<SinglePro
  * componente/directiva que declare `providers`; el resto de los descendientes
  * reusan el del ancestro más cercano (anclaje real vía jqLite `$element.data()`,
  * en `scoped-injector-bridge.ts` — esta clase no sabe nada del DOM).
+ *
+ * `environment`: el nodo de entorno de la rama lazy (`loadChildren` → `@NgModule`)
+ * a la que pertenece el elemento — con los `providers` del módulo lazy. Como en
+ * Angular, se busca primero en toda la cadena de elementos y recién después en el
+ * environment injector (en vez del `$injector` de la app). Un nodo de entorno es
+ * un `ElementInjectorNode` más: su `parent` es el entorno de la rama lazy ancestro.
  */
 export class ElementInjectorNode {
   private readonly singles = new Map<string, SingleProvider>();
@@ -30,11 +42,25 @@ export class ElementInjectorNode {
    * `ngOnDestroy` lo maneja el `lifecycle-bridge`, no el inyector.
    */
   private readonly instances = new Map<string, unknown>();
+  /** `true` en el nodo de entorno de una rama lazy (lo crea `NgModuleScopes.createForState`). */
+  private isEnvironment = false;
+
+  /** Nodo de entorno de una rama lazy: `providers` de sus `@NgModule`, hijo del entorno ancestro. */
+  static environment(
+    providers: Provider[],
+    parent: ElementInjectorNode | undefined,
+    $injector: angular.auto.IInjectorService,
+  ): ElementInjectorNode {
+    const node = new ElementInjectorNode(providers, parent, $injector);
+    node.isEnvironment = true;
+    return node;
+  }
 
   constructor(
     providers: Provider[],
     private readonly parent: ElementInjectorNode | undefined,
     private readonly $injector: angular.auto.IInjectorService,
+    readonly environment?: ElementInjectorNode,
   ) {
     const flat = (providers as unknown[]).flat(Infinity) as SingleProvider[];
     for (const provider of flat) {
@@ -68,18 +94,33 @@ export class ElementInjectorNode {
     this.cache.clear();
   }
 
-  private resolve(name: string, flags: InjectFlags): unknown {
+  /** Resolución con un `environment` explícito — para `NodeInjector`, que conserva el de quien lo pidió. */
+  resolveIn(name: string, flags: InjectFlags, environment: ElementInjectorNode | undefined): unknown {
+    return this.resolve(name, flags, environment);
+  }
+
+  /** `environment`: el del nodo que originó la búsqueda — se mantiene al subir por los padres. */
+  private resolve(name: string, flags: InjectFlags, environment = this.environment): unknown {
+    // `Injector` dentro de una rama lazy: uno que resuelve con ESTA cadena (elemento →
+    // entorno de la rama → app), no el global — `injector.get(ServicioLazy)` funciona.
+    // Fuera de una rama se deja el comportamiento de siempre (el `Injector` de la app).
+    if (name === Injector.$name && !flags.skipSelf && (environment || this.isEnvironment)) {
+      return new NodeInjector(this, environment ?? this, this.$injector);
+    }
+
     if (!flags.skipSelf) {
       const own = this.resolveOwn(name);
       if (own !== NOT_FOUND) return own;
       if (flags.self) return this.notFound(name, flags);
     }
 
-    // `host`: no cruza el borde de este nodo hacia arriba — cae directo al $injector de la app.
+    // `host`: no cruza el borde de este nodo hacia arriba — cae directo al entorno / $injector de la app.
     if (!flags.host && this.parent) {
-      return this.parent.resolve(name, {});
+      // Hacia arriba no aplican `self`/`skipSelf`/`host` (posicionales), pero `optional` sí.
+      return this.parent.resolve(name, { optional: flags.optional }, environment);
     }
 
+    if (environment) return environment.get(name, { optional: flags.optional });
     return this.fromAppInjector(name, flags);
   }
 
@@ -132,6 +173,37 @@ export class ElementInjectorNode {
     assertNotServiceProvider(ctor);
     const names = deps ? deps.map((dep) => ReflectInjection.translate(dep as never)) : ensureInject(ctor);
     const args = names.map((name, index) => this.resolve(name, deps ? {} : getInjectFlags(ctor, index)));
-    return Reflect.construct(ctor as new (...a: unknown[]) => unknown, args);
+    // `inject()` en field initializers del provider resuelve contra ESTE nodo (y su entorno).
+    return runInInjectionContext({ get: (token, options) => this.get(token, options) }, () =>
+      Reflect.construct(ctor as new (...a: unknown[]) => unknown, args),
+    );
+  }
+}
+
+/**
+ * `Injector` público respaldado por la cadena de un `ElementInjectorNode` (Angular:
+ * `NodeInjector`/`R3Injector` de la rama). `nativeInjector` sigue siendo el
+ * `$injector` de la app, para el código del runtime que necesita la API nativa.
+ */
+export class NodeInjector extends Injector {
+  /**
+   * `node`: el nodo desde donde se resuelve. `environment`: el entorno de la rama —
+   * si `node` es él mismo el entorno, se pasa igual (así `createComponent` sabe
+   * anclar el host a esta rama).
+   */
+  constructor(
+    readonly node: ElementInjectorNode,
+    readonly environment: ElementInjectorNode,
+    readonly nativeInjector: angular.auto.IInjectorService,
+  ) {
+    super();
+  }
+
+  get<T>(token: ProviderToken<T> | string, notFoundValue?: T): T {
+    const name = ReflectInjection.translate(token);
+    const env = this.node === this.environment ? undefined : this.environment;
+    if (notFoundValue === undefined) return this.node.resolveIn(name, {}, env) as T;
+    const found = this.node.resolveIn(name, { optional: true }, env);
+    return (found ?? notFoundValue) as T;
   }
 }

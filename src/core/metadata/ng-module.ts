@@ -52,6 +52,18 @@ export function stampNgModuleDef(Clase: Function, def: NgModuleDef): Function {
   return Clase;
 }
 
+/**
+ * Nombre de DI de la **instancia** de una clase `@NgModule` (`inject(AppModule)`).
+ * Con prefijo propio, no el id pelado: el id es el nombre del `angular.module` y
+ * puede coincidir con el token de un provider (p.ej. `NgbModalModule` con id
+ * `"ngb.modal"` y el servicio `NGB_MODAL = "ngb.modal"`).
+ */
+export const NG_MODULE_TOKEN_PREFIX = "ɵmod:";
+
+export function ngModuleInjectionName(id: string): string {
+  return `${NG_MODULE_TOKEN_PREFIX}${id}`;
+}
+
 export function getNgModuleDef(Clase: Function): StampedNgModuleDef | undefined {
   return (Clase as WithNgModuleDef).ɵmod;
 }

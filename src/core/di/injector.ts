@@ -56,5 +56,8 @@ export class InjectorImpl extends Injector {
  */
 export function unwrapAngularInjector(injector: Injector): angular.auto.IInjectorService {
   if (injector instanceof InjectorImpl) return injector.nativeInjector;
+  // `NodeInjector` (runtime, rama lazy): también envuelve el `$injector` de la app.
+  const native = (injector as { nativeInjector?: angular.auto.IInjectorService }).nativeInjector;
+  if (native) return native;
   throw new Error("unwrapAngularInjector: este Injector no envuelve un $injector real de AngularJS");
 }

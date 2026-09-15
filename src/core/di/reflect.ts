@@ -2,6 +2,7 @@ import { isForwardRef, resolveForwardRef } from "@/core/di/forward-ref.ts";
 import { getInjectableId } from "@/core/di/injectable-registry.ts";
 import { InjectionToken } from "@/core/di/injection-token.ts";
 import type { ProviderToken } from "@/core/di/provider-token.ts";
+import { getNgModuleDef, ngModuleInjectionName } from "@/core/metadata/ng-module.ts";
 
 export type InjectionEntry = ProviderToken<unknown> | string;
 
@@ -28,6 +29,9 @@ export class ReflectInjection {
     if (typeof resolved === "function") {
       const id = getInjectableId(resolved);
       if (id) return id;
+      // Clase `@NgModule` como token → su instancia (no el nombre del `angular.module`, que es `$name`).
+      const moduleDef = getNgModuleDef(resolved);
+      if (moduleDef) return ngModuleInjectionName(moduleDef.id);
     }
 
     if (isNamedType(resolved)) {

@@ -27,6 +27,16 @@ export function pickRouteTitle(
   return picked;
 }
 
+/** State name del que sale el `title` que elige `pickRouteTitle` (el más profundo con `title`). */
+export function pickRouteTitleState(
+  chain: { name: string }[],
+  titles: Map<string, string | ResolveFn<string>>,
+): string | undefined {
+  let picked: string | undefined;
+  for (const node of chain) if (titles.has(node.name)) picked = node.name;
+  return picked;
+}
+
 /**
  * `data` estática efectiva del estado activo más profundo, según
  * `paramsInheritanceStrategy` (mismo nombre/semántica que `@angular/router`):

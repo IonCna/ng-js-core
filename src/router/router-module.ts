@@ -11,19 +11,28 @@ import { ViewportScroller } from "@/common/viewport-scroller.ts";
 import { ConfigProviderFactory } from "@/core/platform/config-providers.ts";
 import { Title } from "@/platform-browser/title.ts";
 import { ActivatedRoute, ActivatedRouteImpl } from "@/router/activated-route.ts";
+import { type PreloadingStrategyType, RouterPreloader } from "@/router/preloading.ts";
 import type { Data, ResolveFn, Routes } from "@/router/route.ts";
-import { mergeResolvedData, mergeStaticData, type ParamsInheritanceStrategy, pickRouteTitle } from "@/router/route-title.ts";
-import { routerRegistry } from "@/router/router-registry.ts";
+import {
+  mergeResolvedData,
+  mergeStaticData,
+  type ParamsInheritanceStrategy,
+  pickRouteTitle,
+  pickRouteTitleState,
+} from "@/router/route-title.ts";
 import { Router, RouterImpl } from "@/router/router.ts";
+import { routerRegistry } from "@/router/router-registry.ts";
 import {
   type DeactivateBinding,
   type GuardBinding,
   type MatchBinding,
-  resolveRedirect,
+  redirectTargetFor,
   routesToStates,
+  runInRouteContext,
   type TranslatedRoutes,
   wireDeactivateHook,
   wireGuardHook,
+  wireLazyRoutes,
   wireMatchHook,
 } from "@/router/state-translator.ts";
 import { DefaultTitleStrategy, TitleStrategy } from "@/router/title-strategy.ts";
@@ -52,7 +61,7 @@ const forRootInjectors = new WeakSet<object>();
  */
 function applyGlobalRedirects(translated: TranslatedRoutes): void {
   for (const { state, redirectTo, parentPath } of translated.redirects) {
-    state.redirectTo = resolveRedirect(redirectTo, parentPath, routerRegistry.pathToName);
+    state.redirectTo = redirectTargetFor(redirectTo, parentPath, routerRegistry.pathToName) as never;
   }
 }
 
@@ -87,8 +96,9 @@ export interface RouterConfigOptions {
 }
 
 interface RouterFeature {
-  readonly ɵkind: "hash-location" | "in-memory-scrolling" | "router-config";
+  readonly ɵkind: "hash-location" | "in-memory-scrolling" | "router-config" | "preloading";
   readonly options?: InMemoryScrollingOptions | RouterConfigOptions;
+  readonly strategy?: PreloadingStrategyType;
 }
 
 /**
@@ -127,7 +137,30 @@ export function withRouterConfig(options: RouterConfigOptions = {}): RouterFeatu
   return { ɵkind: "router-config", options };
 }
 
+/**
+ * Feature para `RouterModule.forRoot(routes, withPreloading(PreloadAllModules))` —
+ * mismo nombre que `@angular/router`. Después de cada navegación exitosa, la
+ * estrategia decide qué rutas `loadChildren`/`loadComponent` bajar por adelantado
+ * (ver `RouterPreloader`). La clase se instancia con DI de constructor.
+ */
+export function withPreloading(strategy: PreloadingStrategyType): RouterFeature {
+  return { ɵkind: "preloading", strategy };
+}
+
 // --- Wiring interno --------------------------------------------------------
+
+function wirePreloading(strategy: PreloadingStrategyType) {
+  const run = ($transitions: TransitionService, $injector: angular.auto.IInjectorService) => {
+    const preloader = RouterPreloader.create(strategy, $injector);
+    // Diferido a un microtask: la precarga registra estados y no tiene por qué
+    // correr dentro del hook de la transición que acaba de terminar.
+    $transitions.onSuccess({}, () => {
+      void Promise.resolve().then(() => preloader.preload());
+    });
+  };
+  run.$inject = ["$transitions", "$injector"];
+  return run;
+}
 
 function wireGuards(guards: GuardBinding[]) {
   const run = ($transitions: TransitionService) => {
@@ -175,6 +208,7 @@ function wireTitles(
       const chain = ($state.$current as unknown as { path?: { name: string; data?: Data }[] }).path ?? [];
       const picked = pickRouteTitle(chain, titles);
       if (picked === undefined) return;
+      const titleState = pickRouteTitleState(chain, titles) as string;
 
       let resolved: string | undefined;
       if (typeof picked === "function") {
@@ -182,12 +216,14 @@ function wireTitles(
         const params = { ...($state.params as Record<string, string>) };
         const staticData = mergeStaticData(chain, emptyPathStates, paramsInheritanceStrategy);
         const data = mergeResolvedData(chain, resolveKeys, staticData, transition.injector());
-        const value = await picked({
-          params,
-          data,
-          queryParams: { ...($location.search() as Record<string, string>) },
-          fragment: $location.hash() || null,
-        });
+        const value = await runInRouteContext($injector, titleState, () =>
+          picked({
+            params,
+            data,
+            queryParams: { ...($location.search() as Record<string, string>) },
+            fragment: $location.hash() || null,
+          }),
+        );
         if (typeof value === "string") resolved = value;
       } else {
         resolved = picked;
@@ -283,15 +319,17 @@ export const RouterModule = {
     routerRegistry.mergeTitles(titles);
     routerRegistry.mergeResolveKeys(resolveKeys);
     routerRegistry.mergeEmptyPathStates(translated.emptyPathStates);
+    routerRegistry.mergeLazyChildrenStates(translated.lazyChildrenStates);
+    routerRegistry.mergeRouteProviders(translated.routeProviders);
     routerRegistry.mergePathToName(translated.pathToName);
 
     const configFeature = features.find((f) => f.ɵkind === "router-config");
     const paramsInheritanceStrategy: ParamsInheritanceStrategy =
       (configFeature?.options as RouterConfigOptions | undefined)?.paramsInheritanceStrategy ?? "emptyOnly";
 
+    // La URL `/` de la raíz la asigna el traductor (hoja de la cadena `path: ""`); acá no
+    // se fuerza: un layout raíz con hijos lleva `url: ""` a propósito (ver `walk`).
     const root = states.find((state) => !state.name?.includes("."));
-    // El root (con componente o con `redirectTo`) matchea la carga inicial en `/`.
-    if (root && (root.url === "" || root.url === undefined)) root.url = "/";
     const fallbackUrl = (typeof root?.url === "string" && root.url) || "/";
 
     const useHash = hashRequested(features);
@@ -350,11 +388,21 @@ export const RouterModule = {
     // Lee el registro global (no los `Map`s locales): `forChild` y `loadChildren`
     // le agregan títulos/resolvers después, y `wireTitles` los ve en cada transición.
     mod.run(
-      wireTitles(routerRegistry.titles, routerRegistry.resolveKeys, routerRegistry.emptyPathStates, paramsInheritanceStrategy),
+      wireTitles(
+        routerRegistry.titles,
+        routerRegistry.resolveKeys,
+        routerRegistry.emptyPathStates,
+        paramsInheritanceStrategy,
+      ),
     );
 
+    if (translated.lazyRoutes.length) mod.run(wireLazyRoutes(translated.lazyRoutes));
+    const preloadingFeature = features.find((f) => f.ɵkind === "preloading");
+    if (preloadingFeature?.strategy) mod.run(wirePreloading(preloadingFeature.strategy));
+
     const scrollFeature = features.find((f) => f.ɵkind === "in-memory-scrolling");
-    if (scrollFeature) mod.run(wireRouterScroller((scrollFeature.options as InMemoryScrollingOptions | undefined) ?? {}));
+    if (scrollFeature)
+      mod.run(wireRouterScroller((scrollFeature.options as InMemoryScrollingOptions | undefined) ?? {}));
 
     mod.service(Router.$name, RouterImpl);
 
@@ -363,6 +411,7 @@ export const RouterModule = {
       $transitions: TransitionService,
       $location: ILocationService,
       $rootScope: IRootScopeService,
+      $injector: angular.auto.IInjectorService,
     ) =>
       new ActivatedRouteImpl(
         $state,
@@ -373,8 +422,9 @@ export const RouterModule = {
         routerRegistry.resolveKeys,
         routerRegistry.emptyPathStates,
         paramsInheritanceStrategy,
+        $injector,
       );
-    activatedRouteFactory.$inject = ["$state", "$transitions", "$location", "$rootScope"];
+    activatedRouteFactory.$inject = ["$state", "$transitions", "$location", "$rootScope", "$injector"];
     mod.factory(ActivatedRoute.$name, activatedRouteFactory);
 
     return mod;
@@ -395,6 +445,8 @@ export const RouterModule = {
       routerRegistry.mergeTitles(titles);
       routerRegistry.mergeResolveKeys(resolveKeys);
       routerRegistry.mergeEmptyPathStates(translated.emptyPathStates);
+      routerRegistry.mergeLazyChildrenStates(translated.lazyChildrenStates);
+      routerRegistry.mergeRouteProviders(translated.routeProviders);
       routerRegistry.mergePathToName(translated.pathToName);
     }
 
@@ -412,6 +464,7 @@ export const RouterModule = {
     if (guards.length) mod.run(wireGuards(guards));
     if (deactivateGuards.length) mod.run(wireDeactivateGuards(deactivateGuards));
     if (matchGuards.length) mod.run(wireMatchGuards(matchGuards));
+    if (translated.lazyRoutes.length) mod.run(wireLazyRoutes(translated.lazyRoutes));
 
     return mod;
   },
