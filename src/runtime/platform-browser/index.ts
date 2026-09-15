@@ -1,6 +1,7 @@
 /**
  * `ngjs-core/runtime/platform-browser` — el `angular.module` que registra los
- * servicios propios de `@angular/platform-browser`: `Title`, `Meta`, `DomSanitizer`.
+ * servicios propios de `@angular/platform-browser`: `Title`, `Meta`, `DomSanitizer`,
+ * `RendererFactory2`.
  *
  * `DOCUMENT`, `PlatformLocation` + `APP_BASE_HREF`, `Location` y `ViewportScroller`
  * son `@angular/common`: los registra `ng.js.common`, del que este módulo depende
@@ -9,7 +10,9 @@
  * carga solo.
  */
 import angular from "angular";
+import { RendererFactory2 } from "@/core/render/renderer.ts";
 import { Meta, MetaImpl } from "@/platform-browser/meta.ts";
+import { RendererFactory2Impl } from "@/platform-browser/renderer.ts";
 import { DomSanitizer, DomSanitizerImpl } from "@/platform-browser/security/index.ts";
 import { Title, TitleImpl } from "@/platform-browser/title.ts";
 import { commonModule } from "@/runtime/common/index.ts";
@@ -29,7 +32,8 @@ export function platformBrowserModule(): angular.IModule {
     .module("ng.js.platform-browser", ["ng.js.core", "ng.js.common"])
     .service(Title.$name, TitleImpl)
     .service(Meta.$name, MetaImpl)
-    .service(DomSanitizer.$name, DomSanitizerImpl);
+    .service(DomSanitizer.$name, DomSanitizerImpl)
+    .service(RendererFactory2.$name, RendererFactory2Impl);
 
   return base;
 }

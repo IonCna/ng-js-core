@@ -10,3 +10,5 @@ export { NgDisabled } from "./ng-disabled.ts";
 export * from "./platform/index.ts";
 export * from "./queries/index.ts";
 export * from "./refs/index.ts";
+// Etapa 20 — `Renderer2` / `RendererFactory2` (abstracción). Ver docs/ORDEN-DE-CONSTRUCCION.md.
+export * from "./render/index.ts";

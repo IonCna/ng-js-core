@@ -22,6 +22,7 @@ import { decorateControllerInputDefer } from "@/runtime/bridges/input-defer-brid
 import { decorateControllerLifecycle } from "@/runtime/bridges/lifecycle-bridge.ts";
 import { decorateNgDisabledDirective } from "@/runtime/bridges/ng-disabled-bridge.ts";
 import { decorateControllerViewChildQueries, decorateNgRefDirective } from "@/runtime/bridges/ng-ref-bridge.ts";
+import { decorateControllerNgValidators } from "@/runtime/bridges/ng-validators-bridge.ts";
 import { decorateControllerOutputEmitters } from "@/runtime/bridges/output-emitter-bridge.ts";
 import { decorateControllerScopedInjector } from "@/runtime/bridges/scoped-injector-bridge.ts";
 import { decorateControllerViewContainerRef } from "@/runtime/bridges/view-container-ref-bridge.ts";
@@ -87,6 +88,7 @@ export function installCoreModule(): angular.IModule {
     .decorator("$controller", decorateControllerHostBindings)
     .decorator("$controller", decorateControllerOutputEmitters)
     .decorator("$controller", decorateControllerControlValueAccessor)
+    .decorator("$controller", decorateControllerNgValidators)
     .decorator("$controller", decorateControllerLifecycle)
     // El más externo: su `$delegate` es TODA la cadena de arriba, así una
     // directiva compuesta por `hostDirectives` pasa por todos los bridges.
