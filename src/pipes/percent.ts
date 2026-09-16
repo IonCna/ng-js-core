@@ -1,3 +1,6 @@
+import { Pipe } from "@/core/metadata/pipe.ts";
+import type { PipeTransform } from "@/pipes/pipe-transform.ts";
+
 const DIGITS_INFO = /^(\d+)\.(\d+)-(\d+)$/;
 
 /** `"{minIntegerDigits}.{minFractionDigits}-{maxFractionDigits}"`, igual formato que `DecimalPipe`/`PercentPipe` reales — default `"1.0-0"`. */
@@ -10,13 +13,14 @@ function parseDigitsInfo(digitsInfo: string | undefined): { minimumFractionDigit
 }
 
 /** Sin filtro nativo en AngularJS (ver CONCEPTOS "Pipes") — `value * 100` + `"%"`, formateado con `Intl.NumberFormat`. */
-export function percentFilter(): (value: number | string | null | undefined, digitsInfo?: string) => string {
-  return (value, digitsInfo) => {
+@Pipe({ name: "percent" })
+export class PercentPipe implements PipeTransform<number | string | null | undefined, string> {
+  transform(value?: number | string | null, digitsInfo?: string): string {
     if (value == null || value === "") return "";
 
     const num = typeof value === "number" ? value : Number(value);
     if (Number.isNaN(num)) return "";
 
     return new Intl.NumberFormat(undefined, { style: "percent", ...parseDigitsInfo(digitsInfo) }).format(num);
-  };
+  }
 }

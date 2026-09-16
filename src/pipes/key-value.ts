@@ -1,3 +1,6 @@
+import { Pipe } from "@/core/metadata/pipe.ts";
+import type { PipeTransform } from "@/pipes/pipe-transform.ts";
+
 export interface KeyValue<K, V> {
   key: K;
   value: V;
@@ -32,11 +35,12 @@ type Comparator = (a: KeyValue<unknown, unknown>, b: KeyValue<unknown, unknown>)
  * un test real). Por eso memoiza: si nada cambió de verdad (mismas
  * claves/valores en el mismo orden), devuelve la MISMA referencia de antes.
  */
-export function keyValueFilter(): (input: KeyValueInput, compareFn?: Comparator) => readonly KeyValue<unknown, unknown>[] {
-  let lastResult: readonly KeyValue<unknown, unknown>[] = [];
+@Pipe({ name: "keyvalue", pure: false })
+export class KeyValuePipe implements PipeTransform<KeyValueInput, readonly KeyValue<unknown, unknown>[]> {
+  private lastResult: readonly KeyValue<unknown, unknown>[] = [];
 
-  const filterFn = (input: KeyValueInput, compareFn: Comparator = defaultCompare): readonly KeyValue<unknown, unknown>[] => {
-    if (input == null) return lastResult.length === 0 ? lastResult : (lastResult = []);
+  transform(input: KeyValueInput, compareFn: Comparator = defaultCompare): readonly KeyValue<unknown, unknown>[] {
+    if (input == null) return this.lastResult.length === 0 ? this.lastResult : (this.lastResult = []);
 
     const pairs =
       input instanceof Map
@@ -45,12 +49,9 @@ export function keyValueFilter(): (input: KeyValueInput, compareFn?: Comparator)
 
     pairs.sort(compareFn);
 
-    if (sameShape(lastResult, pairs)) return lastResult;
+    if (sameShape(this.lastResult, pairs)) return this.lastResult;
 
-    lastResult = pairs;
+    this.lastResult = pairs;
     return pairs;
-  };
-
-  (filterFn as unknown as { $stateful: boolean }).$stateful = true;
-  return filterFn;
+  }
 }

@@ -1,25 +1,26 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { titleCaseFilter } from "@/pipes/title-case.ts";
+import { createPipeFilter } from "@/pipes/pipe-transform.ts";
+import { TitleCasePipe } from "@/pipes/title-case.ts";
 
 describe("etapa 11 — titlecase (unidad, sin AngularJS)", () => {
   it("mayúscula la primera letra de cada palabra, minúscula el resto", () => {
-    const filter = titleCaseFilter();
-    expect(filter("hello world")).toBe("Hello World");
-    expect(filter("HELLO WORLD")).toBe("Hello World");
+    const pipe = new TitleCasePipe();
+    expect(pipe.transform("hello world")).toBe("Hello World");
+    expect(pipe.transform("HELLO WORLD")).toBe("Hello World");
   });
 
   it("null/undefined da string vacío", () => {
-    const filter = titleCaseFilter();
-    expect(filter(null)).toBe("");
-    expect(filter(undefined)).toBe("");
+    const pipe = new TitleCasePipe();
+    expect(pipe.transform(null)).toBe("");
+    expect(pipe.transform(undefined)).toBe("");
   });
 });
 
 describe("etapa 11 — titlecase registrado como .filter() real", () => {
   it("funciona en una expresión de template real", () => {
     const name = "titleCaseFilterTest";
-    angular.module(name, []).filter("titlecase", titleCaseFilter);
+    angular.module(name, []).filter("titlecase", createPipeFilter(TitleCasePipe));
 
     const host = document.createElement("div");
     host.innerHTML = "{{ 'hola mundo' | titlecase }}";

@@ -24,6 +24,10 @@ import {
 import { BrowserViewportScroller, ViewportScroller } from "@/common/viewport-scroller.ts";
 import { DOCUMENT } from "@/core/dom-tokens.ts";
 import { TemplateRef } from "@/core/refs/template-ref.ts";
+import { KeyValuePipe } from "@/pipes/key-value.ts";
+import { PercentPipe } from "@/pipes/percent.ts";
+import { createPipeFilter } from "@/pipes/pipe-transform.ts";
+import { TitleCasePipe } from "@/pipes/title-case.ts";
 import { NgContainer } from "@/runtime/common/ng-container.ts";
 import { NgContent } from "@/runtime/common/ng-content.ts";
 import { NgTemplateOutlet } from "@/runtime/common/ng-template-outlet.ts";
@@ -34,7 +38,10 @@ export { isPlatformBrowser, isPlatformServer } from "@/common/platform.ts";
 export { BrowserViewportScroller, ViewportScroller } from "@/common/viewport-scroller.ts";
 export { DOCUMENT } from "@/core/dom-tokens.ts";
 export { AsyncPipe } from "@/pipes/async-pipe.ts";
+export { KeyValuePipe } from "@/pipes/key-value.ts";
 export type { KeyValue } from "@/pipes/key-value.ts";
+export { PercentPipe } from "@/pipes/percent.ts";
+export { TitleCasePipe } from "@/pipes/title-case.ts";
 export { NgContainer } from "@/runtime/common/ng-container.ts";
 export { NgContent } from "@/runtime/common/ng-content.ts";
 export { NgTemplateOutlet } from "@/runtime/common/ng-template-outlet.ts";
@@ -55,6 +62,9 @@ export function commonModule(): angular.IModule {
     .directive("ngContainer", NgContainer.$factory)
     .directive("ngTemplate", TemplateRef.$factory)
     .directive("ngTemplateOutlet", NgTemplateOutlet.$factory)
+    .filter("percent", createPipeFilter(PercentPipe))
+    .filter("titlecase", createPipeFilter(TitleCasePipe))
+    .filter("keyvalue", createPipeFilter(KeyValuePipe))
     .factory(DOCUMENT.toString(), ["$document", ($document: angular.IDocumentService) => $document[0]])
     .value(APP_BASE_HREF.toString(), "/")
     .service(PlatformLocation.$name, BrowserPlatformLocation)
