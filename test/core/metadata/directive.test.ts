@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Directive, directive, getDirectiveDef } from "@/core/metadata/directive.ts";
 import { Input } from "@/core/metadata/input.ts";
-import { bindings, input, output } from "@/core/metadata/markers.ts";
 import { Output } from "@/core/metadata/output.ts";
 
 describe("etapa 4 — directive() / @Directive", () => {
@@ -49,15 +48,5 @@ describe("etapa 4 — directive() / @Directive", () => {
       outputs: [{ propName: "colorChange", bindingName: "colorChange" }],
       host: { bindings: [], listeners: [] },
     });
-  });
-
-  it("directive() junta static bindings (JS) al registrar", () => {
-    class Highlight extends bindings({ color: input(""), colorChange: output<string>() }) {}
-
-    directive(Highlight).define({ selector: "[highlight]" });
-
-    const def = getDirectiveDef(Highlight)!;
-    expect(def.inputs).toEqual([{ propName: "color", bindingName: "color", required: false }]);
-    expect(def.outputs).toEqual([{ propName: "colorChange", bindingName: "colorChange" }]);
   });
 });

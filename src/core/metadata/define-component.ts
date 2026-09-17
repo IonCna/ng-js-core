@@ -2,8 +2,8 @@ import type { ComponentDef, InputDef, OutputDef } from "@/core/metadata/def.ts";
 
 /**
  * El `def` autorado (lo que el consumidor pasa a `.define()`) no trae
- * `inputs`/`outputs` — esos se calculan solos (`@Input`/`@Output`, `bindings()`)
- * y se agregan recién acá, en el objeto que queda estampado.
+ * `inputs`/`outputs` — esos se calculan solos (`@Input`/`@Output`) y se
+ * agregan recién acá, en el objeto que queda estampado.
  */
 export type StampedComponentDef = ComponentDef & { inputs: InputDef[]; outputs: OutputDef[] };
 

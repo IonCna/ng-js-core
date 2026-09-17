@@ -1,9 +1,8 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
 import { decorateControllerHostBindings } from "@/runtime/bridges/host-binding-bridge.ts";
-import { Component, component } from "@/core/metadata/component.ts";
+import { Component } from "@/core/metadata/component.ts";
 import { HostBinding } from "@/core/metadata/host-binding.ts";
-import { hostBinding } from "@/core/metadata/markers.ts";
 
 let counter = 0;
 function uniqueName(prefix: string): string {
@@ -96,17 +95,6 @@ describe("etapa 5 — @HostBinding wiring contra el $element real", () => {
 
     const { widgetEl } = bootWidget(Widget);
     expect(widgetEl.id).toBe("my-id");
-  });
-
-  it("JS puro (hostBinding(), sin decoradores) también se cablea", () => {
-    class Widget {
-      static hostBindings = { isActive: hostBinding("class.active") };
-      isActive = true;
-    }
-    component(Widget).define({ selector: "widget" });
-
-    const { widgetEl } = bootWidget(Widget);
-    expect(widgetEl.classList.contains("active")).toBe(true);
   });
 
   it("el watch se desregistra en $destroy — no sigue reaccionando después", () => {

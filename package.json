@@ -57,11 +57,6 @@
       "import": "./dist/runtime/testing/index.js",
       "default": "./dist/runtime/testing/index.js"
     },
-    "./compat": {
-      "types": "./dist/compat/index.d.ts",
-      "import": "./dist/compat/index.js",
-      "default": "./dist/compat/index.js"
-    },
     "./animations": {
       "types": "./dist/runtime/animations/index.d.ts",
       "import": "./dist/runtime/animations/index.js",

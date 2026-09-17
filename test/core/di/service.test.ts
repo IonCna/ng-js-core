@@ -2,7 +2,7 @@ import "reflect-metadata";
 import angular from "angular";
 import { describe, expect, it } from "vitest";
 import { inject } from "@/core/di/inject.ts";
-import { Injectable } from "@/core/di/injectable.ts";
+import { Inject, Injectable } from "@/core/di/injectable.ts";
 import { Injector, InjectorImpl } from "@/core/di/injector.ts";
 import { Service } from "@/core/di/service.ts";
 import { decorateControllerInjectionContext } from "@/runtime/bridges/injection-context-bridge.ts";
@@ -64,14 +64,20 @@ describe("@Service — singleton implícito de app", () => {
     expect(injector.get(Api).config.apiUrl).toBe("https://example.test");
   });
 
-  it("constructor con parámetros: tira al decorar, no llega a runtime", () => {
-    expect(() => {
-      @Service()
-      class Broken {
-        constructor(_x: unknown) {}
-      }
-      void Broken;
-    }).toThrow(/no admite DI por constructor/);
+  it("resuelve dependencias por DI de constructor (@Inject + design:paramtypes), modo plano sin nodo jerárquico", () => {
+    @Service()
+    class Config {
+      apiUrl = "https://example.test";
+    }
+
+    @Service()
+    class Api {
+      constructor(@Inject(Config) public config: Config) {}
+    }
+
+    const injector = bootInjector(uniqueName("serviceCtorTest"));
+    expect(injector.get(Api).config).toBeInstanceOf(Config);
+    expect(injector.get(Api).config.apiUrl).toBe("https://example.test");
   });
 
   it("inject() dentro de un componente SIN providers propios resuelve un @Service (camino sin nodo jerárquico)", () => {

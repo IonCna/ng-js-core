@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Component, component } from "@/core/metadata/component.ts";
 import { getComponentDef } from "@/core/metadata/define-component.ts";
-import { HostListener } from "@/core/metadata/host-listener.ts";
 import { Input } from "@/core/metadata/input.ts";
-import { bindings, hostListener, input, model, output } from "@/core/metadata/markers.ts";
 import { Model } from "@/core/metadata/model.ts";
 import { Output } from "@/core/metadata/output.ts";
 import { EventEmitter } from "@/event-emitter.ts";
@@ -91,27 +89,7 @@ describe("etapa 4 — component() / @Component", () => {
     expect(emitted).toBe(1);
   });
 
-  it("junta static bindings (JS, input()/output()) al registrar", () => {
-    class Counter extends bindings({ count: input(0), countChange: output<number>() }) {}
-
-    component(Counter).define({ selector: "counter" });
-
-    const def = getComponentDef(Counter)!;
-    expect(def.inputs).toEqual([{ propName: "count", bindingName: "count", required: false }]);
-    expect(def.outputs).toEqual([{ propName: "countChange", bindingName: "countChange" }]);
-  });
-
-  it("model()/@Model producen un input con twoWay: true, sin output aparte", () => {
-    class WidgetJs extends bindings({ total: model(0) }) {}
-    component(WidgetJs).define({ selector: "widget-js" });
-
-    expect(getComponentDef(WidgetJs)).toEqual({
-      selector: "widget-js",
-      inputs: [{ propName: "total", bindingName: "total", required: false, twoWay: true }],
-      outputs: [],
-      host: { bindings: [], listeners: [] },
-    });
-
+  it("@Model produce un input con twoWay: true, sin output aparte", () => {
     class WidgetTs {
       @Model() total!: number;
     }
@@ -123,19 +101,6 @@ describe("etapa 4 — component() / @Component", () => {
       outputs: [],
       host: { bindings: [], listeners: [] },
     });
-  });
-
-  it("mezcla static bindings (JS) y @Input/@Output (TS) en la misma clase sin pisarse", () => {
-    class Widget extends bindings({ count: input(0) }) {
-      @Input() step!: number;
-      @Output() countChange!: unknown;
-    }
-
-    component(Widget).define({ selector: "widget" });
-
-    const def = getComponentDef(Widget)!;
-    expect(def.inputs.map((i) => i.propName).sort()).toEqual(["count", "step"]);
-    expect(def.outputs.map((o) => o.propName)).toEqual(["countChange"]);
   });
 
   it("@Model mezclado con @Input/@Output normales en la misma clase", () => {
@@ -151,21 +116,6 @@ describe("etapa 4 — component() / @Component", () => {
     expect(def.inputs).toContainEqual(expect.objectContaining({ propName: "total", twoWay: true }));
     expect(def.inputs).toContainEqual(expect.objectContaining({ propName: "label" }));
     expect(def.outputs).toEqual([{ propName: "done", bindingName: "done" }]);
-  });
-
-  it("un valor que no es InputMarker/OutputMarker/ModelMarker en static bindings se ignora en silencio", () => {
-    class Rara {
-      static bindings = { count: "no soy un marker" as unknown as ReturnType<typeof input> };
-    }
-
-    component(Rara).define({ selector: "rara" });
-
-    expect(getComponentDef(Rara)).toEqual({
-      selector: "rara",
-      inputs: [],
-      outputs: [],
-      host: { bindings: [], listeners: [] },
-    });
   });
 
   it("una subclase sin decorar hereda el ɵcmp del padre decorado (es una propiedad static)", () => {
@@ -198,32 +148,4 @@ describe("etapa 4 — component() / @Component", () => {
     });
   });
 
-  it("junta static hostListeners (JS, hostListener()) al registrar", () => {
-    class Widget {
-      static hostListeners = { onClick: hostListener("click"), onKeydown: hostListener("keydown", ["$event"]) };
-      onClick() {}
-      onKeydown() {}
-    }
-
-    component(Widget).define({ selector: "widget" });
-
-    const listeners = getComponentDef(Widget)!.host!.listeners!;
-    expect(listeners).toContainEqual({ methodName: "onClick", eventName: "click", args: undefined });
-    expect(listeners).toContainEqual({ methodName: "onKeydown", eventName: "keydown", args: ["$event"] });
-  });
-
-  it("mezcla @HostListener (TS) y static hostListeners (JS) en la misma clase sin pisarse", () => {
-    class Widget {
-      static hostListeners = { onKeydown: hostListener("keydown") };
-
-      @HostListener("click")
-      onClick() {}
-      onKeydown() {}
-    }
-
-    component(Widget).define({ selector: "widget" });
-
-    const listeners = getComponentDef(Widget)!.host!.listeners!;
-    expect(listeners.map((l) => l.eventName).sort()).toEqual(["click", "keydown"]);
-  });
 });

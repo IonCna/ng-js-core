@@ -6,10 +6,7 @@ import { type ParsedSelector, parseSelector } from "@/core/metadata/selector-nam
 
 /**
  * Único lugar donde `ComponentDef`/`DirectiveDef` se traducen a lo que AngularJS
- * espera (`.component()`/`.directive()`). Antes esta lógica estaba duplicada
- * entre `runtime/ng-module-runtime.ts` (`@NgModule`) y `compat/registry.ts`
- * (`ngjs-core/compat`) — cada una con sus propios bugs de selector/bindings. Un
- * solo lugar para arreglar y para que las dos vías se comporten igual.
+ * espera (`.component()`/`.directive()`).
  */
 
 export function computeComponentBindings(def: StampedComponentDef): Record<string, string> {

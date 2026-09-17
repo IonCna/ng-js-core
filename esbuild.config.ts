@@ -23,7 +23,6 @@ await esbuild.build({
     "src/runtime/cdk/layout/index.ts",
     "src/runtime/platform-browser/index.ts",
     "src/runtime/testing/index.ts",
-    "src/compat/index.ts",
     "src/router/index.ts",
   ],
   bundle: true,

@@ -1,20 +1,13 @@
 # Capas de `ngjs-core`
 
-`ngjs-core` se consume por una de **dos** superficies mutuamente excluyentes. La
-diferencia es **cómo se escribe** el código; en ambas el registro de AngularJS lo
-hace el **motor de runtime** al arrancar (no hay build step que traduzca).
+`ngjs-core` se consume por una única superficie: clases + decoradores Angular
+(`@Component`, `@NgModule`, `@Injectable`, …) que estampan `ɵcmp`/`ɵmod`/…. El
+registro de AngularJS lo hace el **motor de runtime** al arrancar (no hay build
+step que traduzca): `bootstrapApplication(AppModule)` camina `ɵmod` al arrancar.
 
 > El núcleo "lite" original (lo que vivía en `ngjs-core/reference/` — decoradores
 > AngularJS-flavored, menos superficie Angular, menos breaking changes) se movió a
 > su propio proyecto en `../ngjs-core-lite`. No comparte código con este `ngjs-core`.
-
-| Superficie | Para quién | Cómo se escribe | Quién registra |
-|---|---|---|---|
-| `ngjs-core` (raíz, **por defecto**) | TypeScript | clases + decoradores Angular (`@Component`, `@NgModule`, `@Injectable`, …) que estampan `ɵcmp`/`ɵmod`/… | `bootstrapApplication(AppModule)` camina `ɵmod` al arrancar |
-| `ngjs-core/compat` | **JS puro**, sin build | forma funcional (`component(Foo).define({…})`) + decoradores legacy (Babel `{ legacy: true }`) | auto-registra al llamar `.define()` — **no se puede apagar** |
-
-**No se mezclan.** Usás `ngjs-core` **o** `ngjs-core/compat`. Importar de las dos a
-la vez duplica el registro (dos `ng-content`, dos `CoreModule`, …).
 
 ### `ngjs-core/core` — sustrato, no superficie de consumo
 
@@ -22,7 +15,7 @@ la vez duplica el registro (dos `ng-content`, dos `CoreModule`, …).
 sustrato compartido (clases-token, interfaces de lifecycle). No arranca nada por
 sí solo. Sirve para dos cosas:
 
-- que el motor de runtime y `compat` compartan un único contrato de metadata;
+- que el motor de runtime tenga un único contrato de metadata;
 - ser el **punto de partida para migrar a Angular**: el código escrito contra
   `ngjs-core` (raíz) compila contra `ngjs-core/core` quitando el import del motor
   — las clases y decoradores quedan idénticos a Angular.
@@ -72,8 +65,8 @@ para decidir qué registrar. Sí depende de `angular` + `zone.js` + `rxjs` (ahí
 ## Contrato de metadata: un modelo, varios productores
 
 `ɵcmp` / `ɵdir` / `ɵpipe` / `ɵmod` tienen una **forma base idéntica** la estampe quien
-la estampe — `@Component` de `core`, `component().define()` de `compat`, o (en el
-futuro) un CLI leyendo el AST. El motor consume esa forma base igual.
+la estampe — `@Component` de `core`, o (en el futuro) un CLI leyendo el AST. El
+motor consume esa forma base igual.
 
 - Metadata de **miembro** (`@Input`/`@Output`/`@HostBinding`/…) → bucket por
   `prototype` (WeakMap), para que el merge de subclases funcione caminando la
@@ -128,7 +121,6 @@ ngjs-core/
     bridges/    decorateController* · ng-ref-bridge · ng-disabled
     core-module.ts   instala los bridges en el grafo de angular.module
     testing/    configureTestingModule({ imports:[...] })  → ngjs-core/testing
-  compat/       forma funcional + decoradores legacy, auto-registran al definir
 ```
 
 `exports` (superficie pública):
@@ -140,7 +132,6 @@ ngjs-core/
   // paquetes `@angular/*` de Angular real.
   ".":                "./dist/index.js",
   "./core":           "./dist/core/index.js",         // sustrato / migración a Angular
-  "./compat":         "./dist/compat/index.js",       // JS puro
   "./common":         "./dist/runtime/common/index.js",
   "./common/http":    "./dist/http/index.js",         // = @angular/common/http
   "./forms":          "./dist/forms/index.js",

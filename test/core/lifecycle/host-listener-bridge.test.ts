@@ -1,9 +1,8 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
 import { decorateControllerHostListeners } from "@/runtime/bridges/host-listener-bridge.ts";
-import { Component, component } from "@/core/metadata/component.ts";
+import { Component } from "@/core/metadata/component.ts";
 import { HostListener } from "@/core/metadata/host-listener.ts";
-import { hostListener } from "@/core/metadata/markers.ts";
 
 let counter = 0;
 function uniqueName(prefix: string): string {
@@ -151,35 +150,6 @@ describe("etapa 5 — @HostListener wiring contra el $element real", () => {
     widgetEl.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true }));
 
     expect(calls).toEqual(["arrowdown", "shift.tab"]);
-  });
-
-  it("JS puro (hostListener(), sin decoradores) también se cablea contra el $element real", () => {
-    const calls: string[] = [];
-
-    class Widget {
-      static hostListeners = { onClick: hostListener("click") };
-      onClick() {
-        calls.push("click");
-      }
-    }
-    component(Widget).define({ selector: "widget" });
-
-    const name = uniqueName("hostListenerTestJs");
-    angular.module(name, []).decorator("$controller", decorateControllerHostListeners).component("widget", {
-      template: "ok",
-      controller: Widget,
-    });
-
-    const host = document.createElement("div");
-    host.innerHTML = "<widget></widget>";
-    document.body.appendChild(host);
-
-    angular.bootstrap(host, [name], { strictDi: false });
-
-    const widgetEl = host.querySelector("widget") as HTMLElement;
-    widgetEl.dispatchEvent(new MouseEvent("click"));
-
-    expect(calls).toEqual(["click"]);
   });
 
 });
