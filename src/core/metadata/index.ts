@@ -7,6 +7,7 @@ export { Input } from "@/core/metadata/input.ts";
 export { NgModule } from "@/core/metadata/ng-module.ts";
 export { Output } from "@/core/metadata/output.ts";
 export { Pipe } from "@/core/metadata/pipe.ts";
+export type { PipeTransform } from "@/core/metadata/pipe.ts";
 export type {
   ComponentDef,
   DirectiveDef,

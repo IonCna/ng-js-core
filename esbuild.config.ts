@@ -38,8 +38,6 @@ await esbuild.build({
     "angular-aria",
     "rxjs",
     "rxjs/*",
-    "zone.js",
-    "zone.js/*",
     "@uirouter/angularjs",
   ],
   sourcemap: false,

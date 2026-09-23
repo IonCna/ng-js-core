@@ -1,3 +1,4 @@
+export { forwardRef, isForwardRef, resolveForwardRef } from "@/core/di/forward-ref.ts";
 export { Injectable } from "@/core/di/injectable.ts";
 export type { InjectableOptions } from "@/core/di/injectable.ts";
 export { Inject } from "@/core/di/inject.ts";

@@ -1,5 +1,9 @@
 import type { PipeDef } from "@/core/metadata/definitions.ts";
 
+export interface PipeTransform {
+  transform(value: unknown, ...args: unknown[]): unknown;
+}
+
 /**
  * Decorador de autoría para `@Pipe`.
  *
