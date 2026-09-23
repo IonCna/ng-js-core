@@ -42,11 +42,6 @@ export class ContentChildrenQuery<T> {
   }
 }
 
-/** Piel JS — `class Foo { proyectados = contentChildren(Hijo) }`. Array plano. */
-export function contentChildren<T>(locator: QueryToken<unknown>, options?: QueryOptions<T>): readonly T[] {
-  return new ContentChildrenQuery(locator, false, options) as unknown as readonly T[];
-}
-
 const decoratedQueries = new WeakMap<object, Map<PropertyKey, { locator: QueryToken<unknown>; options?: QueryOptions }>>();
 
 /** Piel TS — `@ContentChildren(Hijo) proyectados!: QueryList<Hijo>`. */

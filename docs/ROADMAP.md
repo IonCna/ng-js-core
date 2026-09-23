@@ -38,7 +38,7 @@ que usan las clases compiladas.
 - [x] hooks de contenido y vista
 - [x] `SimpleChange` y `SimpleChanges`
 - [ ] tipos de configuración de bootstrap
-- [ ] tipos de `ApplicationRef`, `NgZone` y `ErrorHandler`
+- [x] tipos básicos de `ApplicationRef`, `NgZone` y `ErrorHandler`
 - [ ] tipos de `Renderer2` y `RendererFactory2`
 
 ## Nivel 3: primitivas runtime aisladas
@@ -87,11 +87,13 @@ estado.
 
 ## Nivel 6: plataforma
 
-- [ ] `platformBrowserDynamic()` como fachada de `ɵngjsPlatform`
-- [ ] bootstrap de un `ɵmod` compilado
+- [x] `platformBrowserDynamic()` como fachada de `ɵngjsPlatform`
+- [x] bootstrap de un `ɵmod` compilado
 - [ ] providers de plataforma (`Injector`, `NgZone`, `ErrorHandler`, etc.)
-- [ ] manejo de errores y digest global
-- [ ] `ApplicationRef`
+- [x] manejo del digest global mediante el polyfill del compiler
+- [ ] wiring de `ApplicationRef` con la aplicación compilada
+- [x] `APP_INITIALIZER` y `provideAppInitializer()`; el bootstrap generado
+  ejecuta los providers y espera sus promesas
 - [ ] inicializadores de aplicación
 
 ## Nivel 7: features completas

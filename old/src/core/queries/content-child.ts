@@ -22,11 +22,6 @@ export class ContentChildQuery<T> {
   }
 }
 
-/** Piel JS — `class Foo { proyectado = contentChild(Hijo) }`. */
-export function contentChild<T>(locator: QueryToken<unknown>, options?: QueryOptions<T>): T | undefined {
-  return new ContentChildQuery(locator, options) as unknown as T | undefined;
-}
-
 const decoratedQueries = new WeakMap<object, Map<PropertyKey, { locator: QueryToken<unknown>; options?: QueryOptions }>>();
 
 /** Piel TS — decorador de propiedad, mismo patrón por-prototipo que `@ViewChild`. */

@@ -1,28 +1,15 @@
 import type angular from "angular";
 import type { IRootScopeService } from "angular";
-import {
-    defer,
-    distinctUntilChanged,
-    filter,
-    firstValueFrom,
-    map,
-    merge,
-    type Observable,
-} from "rxjs";
-import { AfterRenderEventManager } from "@/core/lifecycle/after-render-event-manager.ts";
+import { of, type Observable } from "rxjs";
 import { claimView, getViewOwner, releaseView, type ViewOwner } from "@/core/refs/view-owner.ts";
 import type { ViewRef } from "@/core/refs/view-ref.ts";
-import { NgZone } from "@/core/platform/ng-zone";
 
 /**
- * Servicio de aplicación: cablea el {@link NgZone} al digest de AngularJS y
- * expone el estado de estabilidad. `bootstrap` / `attachView` / `detachView` /
- * `components` → etapa 6 (necesitan `ComponentRef` / `ViewRef`); ver
- * `reference/src/core/abstractions/application-ref.ts` para la forma final.
+ * Servicio de aplicación sobre AngularJS. El compiler ya conecta el trabajo
+ * async con `$apply()`, así que no necesita `NgZone` ni una suscripción propia
+ * a microtasks. `tick()` ejecuta el digest global cuando se solicita.
  */
 export abstract class ApplicationRef {
-    static readonly $name = "ApplicationRef";
-
     abstract readonly isStable: Observable<boolean>;
     abstract readonly destroyed: boolean;
     abstract readonly injector: angular.auto.IInjectorService;
@@ -36,8 +23,6 @@ export abstract class ApplicationRef {
 }
 
 export class ApplicationRefImpl extends ApplicationRef implements ViewOwner {
-    static readonly $inject = ["$rootScope", "$injector", NgZone.$name, AfterRenderEventManager.$name] as const;
-
     readonly viewOwnerKind = "application" as const;
 
     readonly isStable: Observable<boolean>;
@@ -50,19 +35,9 @@ export class ApplicationRefImpl extends ApplicationRef implements ViewOwner {
     constructor(
         private readonly $rootScope: IRootScopeService,
         public readonly injector: angular.auto.IInjectorService,
-        private readonly ngZone: NgZone,
-        private readonly afterRenderEventManager: AfterRenderEventManager,
     ) {
         super();
-
-        this.isStable = merge(
-            defer(() => [this.ngZone.isStable]),
-            this.ngZone.onUnstable.pipe(map(() => false)),
-            this.ngZone.onStable.pipe(map(() => true)),
-        ).pipe(distinctUntilChanged());
-
-        // el cable: cola de microtasks vacía → un digest guardado
-        this.ngZone.onMicrotaskEmpty.subscribe(() => this.tick());
+        this.isStable = of(true);
     }
 
     get destroyed(): boolean {
@@ -76,21 +51,10 @@ export class ApplicationRefImpl extends ApplicationRef implements ViewOwner {
     tick(): void {
         if (this._destroyed || this.$rootScope.$$phase) return;
         this.$rootScope.$digest();
-        // Los render hooks corren FUERA de la zona — como en Angular. Si un
-        // callback agenda trabajo async (ej. `popperInstance.update()` de Popper,
-        // que devuelve una Promise debounced), su microtask NO tiene que contar
-        // para `onMicrotaskEmpty`; si no, cada `tick()` agenda el siguiente y el
-        // navegador se cuelga.
-        this.ngZone.runOutsideAngular(() => this.afterRenderEventManager.notify());
     }
 
     whenStable(): Promise<void> {
-        return firstValueFrom(
-            this.isStable.pipe(
-                filter((stable) => stable),
-                map(() => undefined),
-            ),
-        );
+        return Promise.resolve();
     }
 
     attachView(viewRef: ViewRef): void {
