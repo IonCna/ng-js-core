@@ -1,0 +1,22 @@
+{
+  "version": "1",
+  "root": ".",
+  "projectType": "library",
+  "sourceRoot": "src",
+  "prefix": "app",
+  "architect": {
+    "build": {
+      "options": {
+        "entryPoints": {
+          "index": "src/index.ts"
+        },
+        "outputPath": "dist"
+      },
+      "configurations": {
+        "production": {
+          "fileReplacements": []
+        }
+      }
+    }
+  }
+}

@@ -24,7 +24,8 @@
     "jsdom": "^30.0.1",
     "tsc-alias": "^1.9.1",
     "typescript": "~6.0.3",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.0",
+    "ng-js-cli": "link:ng-js-cli"
   },
   "exports": {
     ".": {
@@ -114,7 +115,7 @@
   "private": true,
   "scripts": {
     "build": "bun run build:js && bun run build:types",
-    "build:js": "bun esbuild.config.ts",
+    "build:js": "ngjs build",
     "build:types": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json && bun scripts/fix-dts-imports.ts",
     "test": "vitest run",
     "test:watch": "vitest",

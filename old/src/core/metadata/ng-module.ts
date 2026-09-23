@@ -38,43 +38,22 @@ class ModuleNameRegistry {
 const moduleNames = new ModuleNameRegistry();
 
 export function stampNgModuleDef(Clase: Function, def: NgModuleDef): Function {
-  const id = def.id ?? moduleNames.nameFor(Clase);
-  const target = Clase as WithNgModuleDef;
-  target.ɵmod = {
-    id,
-    declarations: def.declarations ?? [],
-    imports: def.imports ?? [],
-    providers: def.providers ?? [],
-    bootstrap: def.bootstrap ?? [],
-    controllerAs: def.controllerAs,
-  };
-  target.$name = id;
+  // const id = def.id ?? moduleNames.nameFor(Clase);
+  // const target = Clase as WithNgModuleDef;
+  // target.ɵmod = {
+  //   id,
+  //   declarations: def.declarations ?? [],
+  //   imports: def.imports ?? [],
+  //   providers: def.providers ?? [],
+  //   bootstrap: def.bootstrap ?? [],
+  //   controllerAs: def.controllerAs,
+  // };
+  // target.$name = id;
   return Clase;
-}
-
-/**
- * Nombre de DI de la **instancia** de una clase `@NgModule` (`inject(AppModule)`).
- * Con prefijo propio, no el id pelado: el id es el nombre del `angular.module` y
- * puede coincidir con el token de un provider (p.ej. `NgbModalModule` con id
- * `"ngb.modal"` y el servicio `NGB_MODAL = "ngb.modal"`).
- */
-export const NG_MODULE_TOKEN_PREFIX = "ɵmod:";
-
-export function ngModuleInjectionName(id: string): string {
-  return `${NG_MODULE_TOKEN_PREFIX}${id}`;
 }
 
 export function getNgModuleDef(Clase: Function): StampedNgModuleDef | undefined {
   return (Clase as WithNgModuleDef).ɵmod;
-}
-
-/** Piel JS: `ngModule(Clase).define(def)`. */
-export function ngModule(Clase: Function): { define(def: NgModuleDef): Function } {
-  return {
-    define(def: NgModuleDef): Function {
-      return stampNgModuleDef(Clase, def);
-    },
-  };
 }
 
 /** Piel TS: `@NgModule(def)`. */
