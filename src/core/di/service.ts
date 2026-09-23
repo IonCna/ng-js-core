@@ -1,5 +1,5 @@
 import { applyConstructorInject } from "@/core/di/ctor-inject.ts";
-import { inject } from "@/core/di/inject.ts";
+import { flatInject } from "@/core/di/inject.ts";
 import { getInjectFlags } from "@/core/di/inject-flags.ts";
 import { type InjectableOptions, stampInjectableName } from "@/core/di/injectable.ts";
 import { RootSingletonRegistry } from "@/core/di/root-singleton-registry.ts";
@@ -33,7 +33,7 @@ export function Service(options?: ServiceOptions): ClassDecorator {
     const name = (Clase as unknown as { $name: string }).$name;
     RootSingletonRegistry.register(name, () => {
       const deps = (Clase as unknown as { $inject?: readonly string[] }).$inject ?? [];
-      const args = deps.map((dep, index) => inject(dep, getInjectFlags(Clase, index)));
+      const args = deps.map((dep, index) => flatInject(dep, getInjectFlags(Clase, index)));
       return Reflect.construct(Clase as new (...args: unknown[]) => object, args);
     });
   };

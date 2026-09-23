@@ -1,4 +1,5 @@
 import angular from "angular";
+import { getInjectableId, setInjectableId } from "@/core/di/injectable-registry.ts";
 import type { Provider, TypeProvider } from "@/core/di/provider.ts";
 import { ensureInject, ReflectInjection } from "@/core/di/reflect.ts";
 import { assertNotServiceProvider } from "@/core/di/service.ts";
@@ -9,9 +10,11 @@ import {
   buildComponentOptions,
   buildDirectiveDefinition,
 } from "@/core/metadata/directive-definition.ts";
+import { exportAsRegistry } from "@/core/metadata/export-as-registry.ts";
 import { getNgModuleDef, ngModuleInjectionName } from "@/core/metadata/ng-module.ts";
 import { getPipeDef } from "@/core/metadata/pipe.ts";
-import { parseSelector } from "@/core/metadata/selector-name.ts";
+import { parseSelector, type ParsedSelector } from "@/core/metadata/selector-name.ts";
+import { SelectorRegistry } from "@/core/metadata/selector-registry.ts";
 import { createPipeFilter } from "@/pipes/pipe-transform.ts";
 import { routerRegistry } from "@/router/router-registry.ts";
 import { markNgModuleId, ngModuleScopes } from "@/runtime/ng-module-instances.ts";
@@ -100,11 +103,28 @@ function isAngularModule(value: unknown): value is angular.IModule {
   return typeof value === "object" && value !== null && typeof (value as angular.IModule).name === "string";
 }
 
+/**
+ * Identidad DI + registro de `exportAs`/tag de un componente o directiva —
+ * antes vivía en el decorador (`component()`/`directive()` en `core/metadata`,
+ * corría una sola vez al declarar la clase). Movido acá porque en modo CLI
+ * (`ng-js-cli`) los decoradores se sacan del bundle en build time — la clase
+ * llega con `ɵcmp`/`ɵdir` ya estampado como dato plano, pero sin que nada haya
+ * corrido este lado. Registrar acá, al leer la metadata (sea quien sea que la
+ * haya estampado — decorador o CLI), lo vuelve a dejar en un único lugar.
+ */
+function registerDiIdentity(declaration: Function, parsed: ParsedSelector, exportAs: string | undefined): void {
+  if (!getInjectableId(declaration) && !Object.hasOwn(declaration, "$name")) {
+    setInjectableId(declaration, parsed.registrationName);
+  }
+  exportAsRegistry.register(exportAs, parsed.registrationName);
+}
+
 function registerDeclaration(module: angular.IModule, declaration: Function, moduleControllerAs?: string): void {
   const componentDef = getComponentDef(declaration);
   if (componentDef) {
     ensureInject(declaration);
     const parsed = parseSelector(componentDef.selector);
+    registerDiIdentity(declaration, parsed, componentDef.exportAs);
     if (parsed.restrict === "A") {
       // Selector de atributo/compuesto (`[ngbNavOutlet]`, `button[ngbNavLink]`):
       // `.component()` SIEMPRE registra como elemento — no hay forma de pedirle
@@ -115,6 +135,10 @@ function registerDeclaration(module: angular.IModule, declaration: Function, mod
       );
       return;
     }
+    // `SelectorRegistry` solo hace falta para selector de elemento — es lo que
+    // `$element[0].tagName` puede dar (ver `selector-registry.ts`); un selector
+    // de atributo ya volvió arriba.
+    SelectorRegistry.register(componentDef.selector, declaration);
     module.component(parsed.registrationName, buildComponentOptions(declaration, componentDef, moduleControllerAs));
     return;
   }
@@ -122,8 +146,9 @@ function registerDeclaration(module: angular.IModule, declaration: Function, mod
   const directiveDef = getDirectiveDef(declaration);
   if (directiveDef) {
     ensureInject(declaration);
-    const factory = (declaration as { $factory?: () => angular.IDirective }).$factory;
     const parsed = parseSelector(directiveDef.selector);
+    registerDiIdentity(declaration, parsed, directiveDef.exportAs);
+    const factory = (declaration as { $factory?: () => angular.IDirective }).$factory;
     module.directive(
       parsed.registrationName,
       factory ?? (() => buildDirectiveDefinition(declaration, directiveDef, moduleControllerAs)),

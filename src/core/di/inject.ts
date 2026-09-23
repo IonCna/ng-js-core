@@ -18,7 +18,21 @@ export function inject(token: ProviderToken<unknown> | string, options: InjectOp
   // `host`/`optional`. Fuera: el `Injector` global (plano — solo `optional` aplica).
   const resolver = currentInjectionResolver();
   if (resolver) return resolver.get(token as never, options);
+  return flatInject(token, options);
+}
 
+/**
+ * El camino "plano" de `inject()` (`Injector` global de la app — sin nodo
+ * jerárquico, solo `optional` aplica) SIN mirar `currentInjectionResolver()`.
+ * Para código que necesita esa garantía siempre, no solo cuando el llamador
+ * resulta no estar anidado dentro de una construcción jerárquica en este
+ * instante — como `Service()`, cuyas deps de constructor deben resolver igual
+ * sin importar si el singleton lazy se construye por primera vez porque lo
+ * pidió una llamada de nivel app o porque lo disparó el `inject()` de un
+ * componente en medio de su propia construcción (`currentInjectionResolver()`
+ * quedaría con el resolver de ESE componente, ajeno al `@Service`).
+ */
+export function flatInject(token: ProviderToken<unknown> | string, options: InjectOptions = {}) {
   const injector = InjectorImpl.current;
   if (!injector) {
     throw new Error("inject() se llamó antes de que la app bootstrapee (todavía no hay Injector)");

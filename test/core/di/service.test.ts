@@ -2,6 +2,7 @@ import "reflect-metadata";
 import angular from "angular";
 import { describe, expect, it } from "vitest";
 import { inject } from "@/core/di/inject.ts";
+import { Self } from "@/core/di/inject-flags.ts";
 import { Inject, Injectable } from "@/core/di/injectable.ts";
 import { Injector, InjectorImpl } from "@/core/di/injector.ts";
 import { Service } from "@/core/di/service.ts";
@@ -78,6 +79,51 @@ describe("@Service — singleton implícito de app", () => {
     const injector = bootInjector(uniqueName("serviceCtorTest"));
     expect(injector.get(Api).config).toBeInstanceOf(Config);
     expect(injector.get(Api).config.apiUrl).toBe("https://example.test");
+  });
+
+  it("las deps de constructor de un @Service resuelven plano aunque el singleton se construya por primera vez desde dentro de un componente con nodo jerárquico propio (@Self no debe latir el resolver ambiente)", () => {
+    @Service()
+    class AppDep {
+      value = "app-level";
+    }
+
+    @Service()
+    class NeedsSelf {
+      constructor(@Self() @Inject(AppDep) public dep: AppDep) {}
+    }
+
+    @Injectable()
+    class LocalOnly {
+      static readonly $name = "ServiceFlatCtorTestLocalOnly";
+    }
+
+    @Injectable()
+    class Widget {
+      local = inject(LocalOnly);
+      // Primera resolución de `NeedsSelf` en todo el proceso — dispara la
+      // construcción lazy del `@Service` desde ACÁ, con el resolver
+      // jerárquico de este componente activo (`providers: [LocalOnly]`, que
+      // NO tiene `AppDep`). Si `@Self()` del ctor de `NeedsSelf` llegara a
+      // latir ese resolver ambiente, esto tiraría en vez de resolver plano.
+      needsSelf = inject(NeedsSelf);
+    }
+    component(Widget).define({ selector: "widget", providers: [LocalOnly] });
+
+    const name = uniqueName("serviceFlatCtorTest");
+    angular
+      .module(name, [])
+      .decorator("$controller", decorateControllerInjectionContext)
+      .decorator("$controller", decorateControllerScopedInjector)
+      .component("widget", { template: "ok", controller: Widget });
+
+    const host = document.createElement("div");
+    host.innerHTML = "<widget></widget>";
+    document.body.appendChild(host);
+    angular.bootstrap(host, [name], { strictDi: false });
+
+    const ctrl = angular.element(host.querySelector("widget") as Element).controller("widget") as Widget;
+    expect(ctrl.needsSelf.dep).toBeInstanceOf(AppDep);
+    expect(ctrl.needsSelf.dep.value).toBe("app-level");
   });
 
   it("inject() dentro de un componente SIN providers propios resuelve un @Service (camino sin nodo jerárquico)", () => {
