@@ -38,9 +38,9 @@
       "default": "./dist/core/index.js"
     },
     "./common": {
-      "types": "./dist/runtime/common/index.d.ts",
-      "import": "./dist/runtime/common/index.js",
-      "default": "./dist/runtime/common/index.js"
+      "types": "./dist/common/index.d.ts",
+      "import": "./dist/common/index.js",
+      "default": "./dist/common/index.js"
     },
     "./common/http": {
       "types": "./dist/http/index.d.ts",
@@ -58,9 +58,9 @@
       "default": "./dist/runtime/testing/index.js"
     },
     "./animations": {
-      "types": "./dist/runtime/animations/index.d.ts",
-      "import": "./dist/runtime/animations/index.js",
-      "default": "./dist/runtime/animations/index.js"
+      "types": "./dist/animations/index.d.ts",
+      "import": "./dist/animations/index.js",
+      "default": "./dist/animations/index.js"
     },
     "./cdk/a11y": {
       "types": "./dist/runtime/cdk/a11y/index.d.ts",
@@ -93,9 +93,9 @@
       "default": "./dist/core/platform/index.js"
     },
     "./platform-browser": {
-      "types": "./dist/runtime/platform-browser/index.d.ts",
-      "import": "./dist/runtime/platform-browser/index.js",
-      "default": "./dist/runtime/platform-browser/index.js"
+      "types": "./dist/platform-browser/index.d.ts",
+      "import": "./dist/platform-browser/index.js",
+      "default": "./dist/platform-browser/index.js"
     },
     "./rxjs-interop": {
       "types": "./dist/rxjs-interop/index.d.ts",

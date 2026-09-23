@@ -1,0 +1,15 @@
+export { decorateControllerAsyncPipe } from "./async-pipe-bridge.ts";
+export { decorateControllerChangeDetectorRef } from "./change-detector-ref-bridge.ts";
+export { decorateControllerContentProjection } from "./content-projection-bridge.ts";
+export { decorateControllerControlValueAccessor } from "./control-value-accessor-bridge.ts";
+export { decorateControllerDestroyRef } from "./destroy-ref-bridge.ts";
+export { decorateControllerElementRef } from "./element-ref-bridge.ts";
+export { decorateControllerHostDirectives } from "./host-directives-bridge.ts";
+export { decorateControllerInjectionContext } from "./injection-context-bridge.ts";
+export { decorateControllerInputDefer } from "./input-defer-bridge.ts";
+export { decorateNgDisabledDirective } from "./ng-disabled-bridge.ts";
+export { decorateControllerViewChildQueries, decorateNgRefDirective } from "./ng-ref-bridge.ts";
+export { decorateControllerNgValidators } from "./ng-validators-bridge.ts";
+export { decorateControllerOutputEmitters } from "./output-emitter-bridge.ts";
+export { decorateControllerViewContainerRef } from "./view-container-ref-bridge.ts";
+export { decorateFormGroupDirective } from "./forms-bridge.ts";

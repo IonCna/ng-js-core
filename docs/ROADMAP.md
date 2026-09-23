@@ -28,6 +28,9 @@ las elimina y genera el comportamiento correspondiente.
 `Service` queda fuera del target. El target es Angular 14/16 y la API de
 servicios es `Injectable`.
 
+`afterRender`, `afterNextRender` y `afterEveryRender` también quedan fuera:
+son APIs posteriores a Angular 16 y no forman parte del target.
+
 ## Nivel 2: contratos de tipos
 
 Estas piezas no necesitan implementación de AngularJS, pero completan la API
@@ -48,7 +51,7 @@ construir todavía toda la plataforma.
 
 - [x] `EventEmitter` sobre `rxjs.Subject`
 - [ ] `DestroyRef` conectado al `$scope.$on("$destroy")`
-- [ ] `Injector` como fachada del `$injector` AngularJS
+- [x] `Injector` como fachada del `$injector` AngularJS
 - [ ] `ElementRef` como envoltura del elemento jqLite/DOM
 - [x] `ChangeDetectorRef` como fachada de digest; `markForCheck()` agenda un
   digest con `$evalAsync()` y `detectChanges()` ejecuta un digest local
@@ -68,7 +71,7 @@ compilador.
 - [ ] `hostDirectives` usando `ɵcmp.hostDirectives`
 - [ ] proyección de contenido usando `ɵcmp` y `ng-content`
 - [ ] resolución de `exportAs` y referencias `ng-ref`
-- [ ] `inject()` fuera de la construcción, usando el injector activo
+- [x] `inject()` fuera de la construcción, usando el injector compilado activo
 
 ## Nivel 5: queries y vistas
 
@@ -92,8 +95,9 @@ estado.
 - [ ] providers de plataforma (`Injector`, `NgZone`, `ErrorHandler`, etc.)
 - [x] manejo del digest global mediante el polyfill del compiler
 - [ ] wiring de `ApplicationRef` con la aplicación compilada
-- [x] `APP_INITIALIZER` y `provideAppInitializer()`; el bootstrap generado
-  ejecuta los providers y espera sus promesas
+- [ ] `APP_INITIALIZER` completo; actualmente `provideAppInitializer()` solo
+  registra callbacks globales que `PlatformCode` ejecuta antes de resolver el
+  bootstrap, pero todavía no se resuelven providers `multi` de Angular
 - [ ] inicializadores de aplicación
 
 ## Nivel 7: features completas

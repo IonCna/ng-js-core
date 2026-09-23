@@ -9,8 +9,8 @@
 
 // --- @angular/core --------------------------------------------------------
 export * from "./core/index.ts";
-export { EventEmitter } from "./event-emitter.ts";
-export type { PipeTransform } from "./pipes/pipe-transform.ts";
+export { EventEmitter } from "@/core/event-emitter.ts";
+export type { PipeTransform } from "../../src/pipes/pipe-transform.ts";
 
 // --- Motor del modo runtime (el modo por defecto de `ngjs-core`) ----------
 // Camina el `ɵmod` de las clases `@NgModule` y hace el registro de AngularJS al
