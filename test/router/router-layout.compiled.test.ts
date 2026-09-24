@@ -120,6 +120,29 @@ export class AppModule {}
       expect(counters()).toMatchObject({ admin: 1, nested: 1, deep: 1, page: 1 });
     });
 
+    it("un ui-sref URL a un módulo lazy precargado navega aunque haya `**` (no queda atado al comodín)", async () => {
+      // El link se linkea en el bootstrap (template inline), con la rama lazy aún como future state. Al precargar,
+      // `admin.**` sale antes de que entre `admin`: en ese hueco `/admin` solo matchea el `**`.
+      app = await boot(`
+@Component({ selector: "pl-home", template: "<h1>home</h1>" })
+export class PlHome {}
+@Component({ selector: "pl-root", template: "<a id='to-admin' ui-sref='/admin'>admin</a><ui-view></ui-view>" })
+export class PlRoot {}
+const routes: Routes = [
+  { path: "", component: PlHome },
+  { path: "admin", loadChildren: () => import("./lazy-admin.module").then((m) => m.AdminModule) },
+  { path: "**", redirectTo: "" },
+];
+@NgModule({ imports: [CommonModule, RouterModule.forRoot(routes, withPreloading(PreloadAllModules))], declarations: [AppRoot, PlRoot, PlHome], bootstrap: [PlRoot] })
+export class AppModule {}
+`);
+      await app.settle();
+      const MouseEvent = (app.app.window as unknown as { MouseEvent: typeof globalThis.MouseEvent }).MouseEvent;
+      app.query("#to-admin")?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+      await app.settle();
+      expect(app.text).toContain("hola admin");
+    });
+
     it("navegar a un chunk mientras se precarga no lo registra dos veces", async () => {
       // El preload arranca en un microtask después de la primera navegación: el boot (que asienta) ya lo disparó; se
       // navega a /admin con el chunk recién pedido.

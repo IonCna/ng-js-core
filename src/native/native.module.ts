@@ -16,6 +16,7 @@ import {
   decorateExceptionHandler,
   decorateNgDisabledDirective,
   decorateNgRefDirective,
+  SanitizeBridge,
 } from "@/native/bridges/index.ts";
 
 /**
@@ -42,6 +43,8 @@ export const NativeModule: angular.IModule = angular
   .decorator("ngDisabledDirective", decorateNgDisabledDirective)
   .decorator("ngRefDirective", decorateNgRefDirective)
   .decorator("$exceptionHandler", decorateExceptionHandler)
+  // `ng-bind-html` sin `ngSanitize`: el sanitizador de `DomSanitizer` (ver `SanitizeBridge`).
+  .factory("$sanitize", SanitizeBridge.factory)
   .directive("ngTemplate", TemplateRefImpl.directive)
   .directive("ngContent", NgContent.directive)
   .directive("ngContainer", NgContainer.directive)

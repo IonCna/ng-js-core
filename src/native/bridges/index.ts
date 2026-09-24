@@ -9,3 +9,4 @@ export { decorateNgDisabledDirective } from "./ng-disabled-bridge.ts";
 export { decorateControllerViewChildQueries, decorateNgRefDirective } from "./ng-ref-bridge.ts";
 export { decorateControllerNgValidators } from "./ng-validators-bridge.ts";
 export { decorateControllerOutputEmitters } from "./output-emitter-bridge.ts";
+export { SanitizeBridge } from "./sanitize-bridge.ts";

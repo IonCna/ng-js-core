@@ -264,10 +264,24 @@ class LazyUrlLink {
 
   /** `true` si la URL matchea un future state (rama lazy sin cargar). */
   static targetsUnloadedBranch(uiRouter: UiRouterLike, url: string): boolean {
+    const matched = LazyUrlLink.match(uiRouter, url);
+    return Boolean(matched?.rule.type === "STATE" && matched.rule.state?.name.endsWith(".**"));
+  }
+
+  /**
+   * `true` si la URL solo la atrapa una ruta `**` (su param `ngjsCatchAll`, ver `state-translator.ts`). Al cargar
+   * la rama, `lazyLoadChildrenFor` quita el future state (`admin.**`) ANTES de registrar el real (`admin`), y
+   * UI-Router avisa `onStatesChanged` en ese hueco: ahí la URL cae en el `**`, que no es su destino.
+   */
+  private static matchesCatchAll(uiRouter: UiRouterLike, url: string): boolean {
+    const matched = LazyUrlLink.match(uiRouter, url);
+    return Boolean(matched?.match && "ngjsCatchAll" in matched.match);
+  }
+
+  private static match(uiRouter: UiRouterLike, url: string): UrlMatchResult | undefined {
     const [beforeHash, hash = ""] = url.trim().split("#");
     const [path, search] = beforeHash.split("?");
-    const matched = uiRouter.urlService.match({ path, search: parseSearch(search), hash });
-    return Boolean(matched?.rule.type === "STATE" && matched.rule.state?.name.endsWith(".**"));
+    return uiRouter.urlService.match({ path, search: parseSearch(search), hash });
   }
 
   start(): void {
@@ -309,6 +323,8 @@ class LazyUrlLink {
   /** Cuando la URL ya resuelve a un estado real: se entrega al `ui-sref` nativo. */
   private promoteIfResolvable(): void {
     if (this.promoted) return;
+    // Promover al `**` lo dejaría fijo ahí (`uiSref` no re-traduce): se espera el próximo cambio de estados.
+    if (LazyUrlLink.matchesCatchAll(this.uiRouter, this.url)) return;
     const translated = urlToStateRef(this.uiRouter, this.url);
     if (translated === this.url) return;
 
