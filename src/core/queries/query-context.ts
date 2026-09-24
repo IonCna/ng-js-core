@@ -22,6 +22,19 @@ export class QueryContext {
     return QueryContext.registriesByScope.get(scope) ?? [];
   }
 
+  /**
+   * `scope` y los scopes de los que hereda por prototipo (`ng-repeat`, `ng-if`, …): el mismo template, como las
+   * variables de un template de Angular. Corta en un scope aislado (el template de otro componente): su prototipo ya
+   * no es un scope.
+   */
+  static lexicalScopes(scope: IScope): IScope[] {
+    const scopes: IScope[] = [];
+    for (let current: IScope | null = scope; current && Object.hasOwn(current, "$id"); current = Object.getPrototypeOf(current)) {
+      scopes.push(current);
+    }
+    return scopes;
+  }
+
   static ancestorRegistries(scope: IScope): ViewQueryRegistry[] {
     const registries: ViewQueryRegistry[] = [];
     for (let current = scope.$parent; current; current = current.$parent) {

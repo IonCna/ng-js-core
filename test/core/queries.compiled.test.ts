@@ -180,6 +180,26 @@ export class FwItem { tag = "item"; }`,
       expect(host.items.length).toBe(2);
       expect(host.first.tag).toBe("item");
     });
+
+    it("light DOM de una @Directive: también los hijos de un ng-repeat/ng-if (otro scope del mismo template), no los de la vista de un componente", async () => {
+      await boot(
+        `@Directive({ selector: "[lhHost]" })
+export class LhHost { @ContentChildren(LhItem, { descendants: true }) items!: QueryList<LhItem>; }
+@Directive({ selector: "[lhItem]" })
+export class LhItem { @Input("lhItem") name = ""; }
+@Component({ selector: "lh-inner", template: "<i lh-item='\\"inner\\"'></i>" })
+export class LhInner {}
+@Component({
+  selector: "lh-root",
+  template: "<div lh-host><span ng-repeat='n in $ctrl.names' lh-item='n'></span><b ng-if='true' lh-item='\\"if\\"'></b><lh-inner></lh-inner></div>",
+})
+export class LhRoot { names = ["a", "b"]; }`,
+        "LhRoot, LhHost, LhItem, LhInner",
+        "<lh-root></lh-root>",
+      );
+      const host = ctrl<{ items: { map<T>(fn: (item: { name: string }) => T): T[] } }>("[lh-host]", "lhHost");
+      expect(host.items.map((item) => item.name).sort()).toEqual(["a", "b", "if"]);
+    });
   });
 
   describe("ng-ref (#ref) y read", () => {
@@ -201,6 +221,22 @@ export class Widget {
 
       (app!.angular.element(app!.document.querySelector("widget")!).isolateScope() as unknown as { $destroy(): void }).$destroy();
       expect(widget.captured).toBeNull();
+    });
+
+    it("en el elemento de un ng-repeat asigna en el scope de cada iteración (con ng-ref-read de un exportAs)", async () => {
+      await boot(
+        `@Directive({ selector: "[rowDir]", exportAs: "row" })
+export class RowDir { @Input("rowDir") label = ""; }
+@Component({
+  selector: "rep-root",
+  template: "<div ng-repeat='x in $ctrl.items' row-dir='x' ng-ref='r' ng-ref-read='row'><span>{{ r.label }}</span></div>",
+})
+export class Root { items = ["a", "b"]; }`,
+        "Root, RowDir",
+        "<rep-root></rep-root>",
+      );
+      const texts = Array.from(app!.document.querySelectorAll("rep-root span")).map((span) => span.textContent);
+      expect(texts).toEqual(["a", "b"]);
     });
 
     it('ng-ref-read="ElementRef" da el ElementRef; un exportAs da la instancia; "TemplateRef" sobre <ng-template> da el TemplateRef', async () => {

@@ -133,20 +133,22 @@ class CandidatePublisher {
       owner.registerContentCandidate(tokens, instance, node);
       published.push(owner);
     }
+    // Una directiva en el template de un componente comparte su scope: es de su vista.
     for (const registry of QueryContext.scopeRegistries($scope)) {
-      if (registry === own) continue;
-      // Una directiva en el template de un componente comparte su scope: es de su vista.
-      if (registry.containsViewNode(node)) {
-        registry.registerCandidate(tokens, instance, node);
-        published.push(registry);
-        continue;
-      }
-      // Light DOM: una `@Directive` sin template comparte `$scope` con lo que tiene adentro — se publica como
-      // contenido en los registries del MISMO scope cuyo host contenga este nodo.
-      if (!registry.hostNode || !registry.hasContentQueries) continue;
-      if (registry.containsLightDomNode(node)) {
-        registry.registerContentCandidate(tokens, instance, node);
-        published.push(registry);
+      if (registry === own || !registry.containsViewNode(node)) continue;
+      registry.registerCandidate(tokens, instance, node);
+      published.push(registry);
+    }
+    // Light DOM: una `@Directive` sin template comparte `$scope` con lo que tiene adentro — se publica como contenido
+    // en los registries de ese template (el mismo scope, o uno del que hereda: los hijos de un `ng-repeat`/`ng-if`
+    // adentro del host) cuyo host contenga este nodo.
+    for (const scope of QueryContext.lexicalScopes($scope)) {
+      for (const registry of QueryContext.scopeRegistries(scope)) {
+        if (registry === own || !registry.hostNode || !registry.hasContentQueries) continue;
+        if (registry.containsLightDomNode(node)) {
+          registry.registerContentCandidate(tokens, instance, node);
+          published.push(registry);
+        }
       }
     }
 
@@ -182,14 +184,21 @@ interface NgRefRequires {
  * comportamiento (asignación al scope + limpieza en `$destroy`) y además se publica como candidato de queries.
  */
 export function decorateNgRefDirective(
-  _$delegate: angular.IDirective[],
+  $delegate: angular.IDirective[],
   $parse: angular.IParseService,
   $injector: angular.auto.IInjectorService,
 ): angular.IDirective[] {
+  // Lo que `$compileProvider` normalizó al registrar la nativa (`name`, `index`, …) se conserva: un objeto sin
+  // `priority` queda afuera cuando se compila con un tope (el clon de un `ng-repeat`, prioridad 1000: `1000 > undefined`
+  // es falso), y el `ng-ref` de cada iteración no asignaba nada.
+  const [native] = $delegate;
   return [
     {
+      ...native,
+      priority: 0,
       restrict: "A",
       require: { ngTemplate: "?ngTemplate" },
+      link: undefined,
       compile: (_element, attrs) => {
         const getter = $parse(attrs.ngRef);
         const setter = getter.assign;

@@ -310,36 +310,137 @@ export class AppModule {}`,
     expect(app!.controller<{ got: number[] }>("out-root", "outRoot").got).toEqual([5]);
   });
 
-  describe("configureTestingModule (ngjs-core/testing)", () => {
-    it("arma un módulo con las declaraciones/imports del test y respeta el override de providers; proyecta <ng-content>", async () => {
-      await boot(
-        `import angular from "angular";
-import { configureTestingModule } from "ngjs-core/testing";
+  describe("TestBed (ngjs-core/testing)", () => {
+    const TESTBED = `import { inject as testingInject, TestBed } from "ngjs-core/testing";
 @Injectable()
 export class Greeter { greet(): string { return "real"; } }
-@Component({ selector: "tb-widget", template: "<span>{{ $ctrl.msg }}</span>" })
-export class Widget { msg: string; constructor(g: Greeter) { this.msg = g.greet(); } }
+export const TOKEN = new InjectionToken<string>("TOKEN");
+@Component({ selector: "tb-widget", template: "<span>{{ $ctrl.msg }} {{ $ctrl.label }}</span>" })
+export class Widget { @Input() label = ""; msg: string; constructor(g: Greeter) { this.msg = g.greet(); } }
 @Component({ selector: "tb-card", template: "<header><ng-content></ng-content></header>" })
 export class Card {}
+@Component({ selector: "tb-host", template: "<tb-card>proyectado</tb-card>" })
+export class Host {}
+@Component({ selector: "tb-loose", template: "" })
+export class Loose { name = "loose"; }
 @NgModule({ declarations: [Widget, Card], providers: [Greeter] })
 export class FeatureModule {}
 @NgModule({})
 export class AppModule {}
-(globalThis as any).fixture = {
-  run(html: string, override: boolean): string {
-    const name = configureTestingModule({ imports: [CommonModule, FeatureModule], providers: override ? [{ provide: Greeter, useValue: { greet: () => "fake" } }] : [] });
-    const $injector = angular.injector(["ng", name]);
-    const scope = $injector.get<any>("$rootScope").$new();
-    const element = $injector.get<any>("$compile")(html)(scope);
-    scope.$digest();
-    return element[0].textContent.trim();
-  },
-};`,
-      );
-      const { run } = app!.global<{ run(html: string, override: boolean): string }>("fixture");
-      expect(run("<tb-widget></tb-widget>", true)).toBe("fake");
-      expect(run("<tb-widget></tb-widget>", false)).toBe("real");
-      expect(run("<tb-card>proyectado</tb-card>", false)).toBe("proyectado");
+(globalThis as any).TestBed = TestBed;
+(globalThis as any).types = { Greeter, TOKEN, Widget, Host, Loose, FeatureModule, CommonModule };
+(globalThis as any).testingInject = testingInject;
+(globalThis as any).injectIn = (token: unknown) => TestBed.runInInjectionContext(() => inject(token as any));
+`;
+
+    type TB = {
+      configureTestingModule(def: object): TB;
+      overrideProvider(token: unknown, provider: object): TB;
+      overrideComponent(type: unknown, override: object): TB;
+      overrideTemplate(type: unknown, template: string): TB;
+      inject<T>(token: unknown, notFound?: unknown, options?: object): T;
+      createComponent<T>(type: unknown): Fixture<T>;
+      resetTestingModule(): TB;
+    };
+    type Fixture<T> = {
+      componentInstance: T;
+      nativeElement: HTMLElement;
+      componentRef: { setInput(name: string, value: unknown): void };
+      detectChanges(): void;
+      autoDetectChanges(auto?: boolean): void;
+      whenStable(): Promise<boolean>;
+      destroy(): void;
+    };
+    type Types = Record<"Greeter" | "TOKEN" | "Widget" | "Host" | "Loose" | "FeatureModule" | "CommonModule", unknown>;
+
+    async function testBed(): Promise<{ TestBed: TB; types: Types }> {
+      await boot(TESTBED);
+      return { TestBed: app!.global<TB>("TestBed"), types: app!.global<Types>("types") };
+    }
+
+    it("inject(): resuelve del módulo configurado; providers y overrideProvider ganan; notFoundValue/optional; injector perezoso", async () => {
+      const { TestBed, types } = await testBed();
+      TestBed.configureTestingModule({ imports: [types.FeatureModule] });
+      expect(TestBed.inject<{ greet(): string }>(types.Greeter).greet()).toBe("real");
+      expect(() => TestBed.configureTestingModule({})).toThrow(/ya se instanció/);
+      expect(() => TestBed.overrideProvider(types.Greeter, { useValue: {} })).toThrow(/ya se instanció/);
+      expect(TestBed.inject(types.TOKEN, "def")).toBe("def");
+      expect(TestBed.inject(types.TOKEN, null, { optional: true })).toBeNull();
+      expect(() => TestBed.inject(types.TOKEN)).toThrow();
+
+      TestBed.resetTestingModule()
+        .configureTestingModule({ imports: [types.FeatureModule], providers: [{ provide: types.TOKEN, useValue: "v" }] })
+        .overrideProvider(types.Greeter, { useValue: { greet: () => "override" } });
+      expect(TestBed.inject<{ greet(): string }>(types.Greeter).greet()).toBe("override");
+      expect(TestBed.inject(types.TOKEN)).toBe("v");
+      expect(app!.global<(token: unknown) => unknown>("injectIn")(types.TOKEN)).toBe("v");
+    });
+
+    it("createComponent(): ComponentFixture que renderiza con detectChanges(), setInput, autoDetectChanges y proyecta <ng-content>", async () => {
+      const { TestBed, types } = await testBed();
+      TestBed.configureTestingModule({
+        imports: [types.CommonModule, types.FeatureModule],
+        declarations: [types.Host],
+        providers: [{ provide: types.Greeter, useValue: { greet: () => "fake" } }],
+      });
+      const fixture = TestBed.createComponent<{ msg: string }>(types.Widget);
+      expect(fixture.componentInstance.msg).toBe("fake");
+      expect(fixture.nativeElement.localName).toBe("tb-widget");
+      expect(fixture.nativeElement.parentElement?.id).toBe("root0");
+      expect(fixture.nativeElement.textContent).not.toContain("fake");
+
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent?.trim()).toBe("fake");
+      fixture.componentRef.setInput("label", "L");
+      expect(fixture.nativeElement.textContent?.trim()).toBe("fake");
+      fixture.detectChanges();
+      expect(fixture.nativeElement.textContent?.trim()).toBe("fake L");
+
+      fixture.autoDetectChanges();
+      fixture.componentRef.setInput("label", "M");
+      TestBed.inject<{ $digest(): void }>("$rootScope").$digest();
+      expect(fixture.nativeElement.textContent?.trim()).toBe("fake M");
+      await expect(fixture.whenStable()).resolves.toBeTypeOf("boolean");
+
+      const host = TestBed.createComponent(types.Host);
+      host.detectChanges();
+      expect(host.nativeElement.textContent?.trim()).toBe("proyectado");
+      expect(host.nativeElement.parentElement?.id).toBe("root1");
+
+      TestBed.resetTestingModule();
+      expect(app!.document.querySelector("[ngjs-test-root]")).toBeNull();
+      expect(fixture.nativeElement.isConnected).toBe(false);
+    });
+
+    it("overrideComponent()/overrideTemplate(): pisa el template de uno declarado y registra uno suelto (con <ng-content>)", async () => {
+      const { TestBed, types } = await testBed();
+      TestBed.configureTestingModule({ imports: [types.FeatureModule] })
+        .overrideTemplate(types.Widget, "<b>{{ $ctrl.msg }}!</b>")
+        .overrideComponent(types.Loose, { set: { template: "<tb-card>{{ $ctrl.name }}</tb-card><i><ng-content></ng-content></i>" } });
+
+      const widget = TestBed.createComponent(types.Widget);
+      widget.detectChanges();
+      expect(widget.nativeElement.innerHTML).toContain("<b");
+      expect(widget.nativeElement.textContent?.trim()).toBe("real!");
+
+      const loose = TestBed.createComponent(types.Loose);
+      loose.detectChanges();
+      expect(loose.nativeElement.querySelector("tb-card header")?.textContent?.trim()).toBe("loose");
+
+      TestBed.resetTestingModule();
+      expect(() => TestBed.overrideComponent(types.Loose, { add: { template: "x" } })).toThrow(/solo se soporta/);
+      expect(() => TestBed.overrideComponent(types.Greeter, { set: { template: "x" } })).toThrow(/no es un @Component/);
+    });
+
+    it("inject([...], fn) de testing: resuelve los tokens con TestBed.inject y conserva this", async () => {
+      const { TestBed, types } = await testBed();
+      TestBed.configureTestingModule({ imports: [types.FeatureModule], providers: [{ provide: types.TOKEN, useValue: "v" }] });
+      const testingInject = app!.global<(tokens: unknown[], fn: Function) => () => unknown>("testingInject");
+      const context = { seen: [] as unknown[] };
+      testingInject([types.Greeter, types.TOKEN], function (this: typeof context, greeter: { greet(): string }, value: string) {
+        this.seen.push(greeter.greet(), value);
+      }).call(context);
+      expect(context.seen).toEqual(["real", "v"]);
     });
   });
 });

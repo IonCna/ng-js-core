@@ -71,7 +71,7 @@ portaron: eso ahora es el compilador y tiene sus propios tests.
 - [x] i18n (`TranslateModule` sobre `angular-translate`, `TranslateService`, `registerLocaleData`)
 - [x] CDK: `a11y` (`A11yModule`, `LiveAnnouncer`, `FocusTrap`, `FocusMonitor`) y `layout` (`BreakpointObserver`)
 - [x] `platform-browser` (`Title`, `Meta`, `DomSanitizer`, renderer)
-- [x] `testing`: `configureTestingModule()` arma un módulo de `angular.mock` con clases compiladas
+- [x] `testing`: `TestBed` (configureTestingModule, inject, runInInjectionContext, overrideProvider, createComponent → `ComponentFixture`, initTestEnvironment) sobre un `angular.injector` propio, sin `angular.mock`
 
 Limitaciones de AngularJS (un solo injector): los `providers` de una ruta o de un `@NgModule` cargado lazy quedan
 para toda la app, no para su rama (sin override por rama, sin `inject(Injector)` de la rama, sin `ngOnDestroy` por
