@@ -7,5 +7,6 @@ export * from "@/core/metadata/index.ts";
 export * from "@/core/platform/index.ts";
 export * from "@/core/queries/index.ts";
 export * from "@/core/refs/index.ts";
+export { DOCUMENT } from "@/core/dom-tokens"
 export * from "@/core/render/index.ts";
 export { NativeModule } from "@/native/native.module.ts";
