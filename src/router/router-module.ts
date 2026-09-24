@@ -351,7 +351,6 @@ export const RouterModule = {
     // `Location`. `LocationStrategy` la fija acá abajo.
     const commonId = (CommonModule as unknown as { ɵmod: { id: string } }).ɵmod.id;
     const mod = angular.module(nextModuleName("ngjs.router"), ["ui.router", commonId]);
-    routerRegistry.registerModuleName(mod.name);
 
     // `@angular/common` no da un `LocationStrategy` por default — lo elige el router según `withHashLocation()`.
     const Strategy = useHash ? HashLocationStrategy : PathLocationStrategy;
@@ -473,7 +472,6 @@ export const RouterModule = {
     }
 
     const mod = angular.module(nextModuleName("ngjs.router.child"), ["ui.router"]);
-    routerRegistry.registerModuleName(mod.name);
     routerRegistry.registerChildRoutes(mod.name, routes);
 
     const config = ($stateProvider: StateProvider) => {

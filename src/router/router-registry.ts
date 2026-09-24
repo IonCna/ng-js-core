@@ -15,9 +15,6 @@ import type { ResolveFn, Routes } from "@/router/route.ts";
  * - `pathToName`: path absoluto → nombre de estado UI-Router, de **todos** los
  *   árboles. Permite resolver un `redirectTo` que cruza árboles (una ruta de
  *   `forChild` que apunta a un path registrado por `forRoot`, o viceversa).
- * - `moduleNames`: los `angular.module` de cada `forRoot`/`forChild`. (El
- *   `controllerAs` de los componentes de `loadComponent` sale del `@NgModule`
- *   raíz, ver `ComponentRegistrar.rootControllerAs`.)
  *
  * Todos los `forRoot`/`forChild` corren en fase de import (antes del
  * `angular.bootstrap`), así que el registro está completo cuando corren los
@@ -34,7 +31,6 @@ class RouterRegistry {
   /** `Route.providers` por state name (todas las ramas). */
   readonly routeProviders = new Map<string, Provider[]>();
   readonly pathToName = new Map<string, string>();
-  private readonly moduleNames = new Set<string>();
   /**
    * `Routes` de cada `RouterModule.forChild` por nombre de `angular.module` — un
    * `@NgModule` lazy (`loadChildren` → clase) las junta de sus `imports` y las
@@ -66,15 +62,6 @@ class RouterRegistry {
     for (const [key, value] of pathToName) this.pathToName.set(key, value);
   }
 
-  /** `RouterModule.forRoot`/`forChild` registran acá el nombre de su `angular.module`. */
-  registerModuleName(name: string): void {
-    this.moduleNames.add(name);
-  }
-
-  hasModuleName(name: string): boolean {
-    return this.moduleNames.has(name);
-  }
-
   registerChildRoutes(moduleName: string, routes: Routes): void {
     this.childRoutes.set(moduleName, routes);
   }
@@ -91,7 +78,6 @@ class RouterRegistry {
     this.lazyChildrenStates.clear();
     this.routeProviders.clear();
     this.pathToName.clear();
-    this.moduleNames.clear();
   }
 }
 

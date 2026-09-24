@@ -77,14 +77,17 @@ Limitaciones de AngularJS (un solo injector): los `providers` de una ruta o de u
 para toda la app, no para su rama (sin override por rama, sin `inject(Injector)` de la rama, sin `ngOnDestroy` por
 rama). Las `declarations` también son globales: un componente lazy con un selector ya registrado es error.
 
+Un `InjectionToken` con `factory` (default `providedIn: "root"`) acepta providers `multi` de los módulos: reemplazan
+al default, como en Angular (la plataforma marca los defaults de raíz en `ɵrootDefaults`). Un no-multi de un módulo
+mezclado con multi sigue siendo error.
+
 Un componente de `loadComponent` (fuera de todo `@NgModule`) hereda el `controllerAs` del `@NgModule` raíz
 (`ɵmod.controllerAs`, constante `ɵngjsRootControllerAs` de la app).
 
-## Pendiente
+## Hecho recién
 
-- [ ] `InjectionToken` con `factory` de raíz + `multi` desde un módulo: `MultiProvidersRuntime` lo rechaza como
-  "mezcla multi y no-multi" (hoy resuelto solo para `HTTP_INTERCEPTORS`, que no lleva `factory`).
-- [ ] `ngjs build` real del core (con el `dist/` del compilador y el CLI reconstruidos).
+- [x] `ngjs build` real del core (2026-09-23): `dist/` con los 16 entries de `ngjs.json` (ESM + CJS) y los `.d.ts`
+  de `build:types`. Requiere el `dist/` de `ng-js-compiler` y de `ng-js-vite` (el CLI importa `ng-js-vite/esbuild`).
 
 ## Regla de implementación
 

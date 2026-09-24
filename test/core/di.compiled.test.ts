@@ -46,4 +46,34 @@ export class AppModule {}
     expect(a.b.tag).toBe("b");
     expect(app.inject<{ child: unknown }>("Parent", "test-app").child).toBe(app.inject("Child", "test-app"));
   });
+
+  it("InjectionToken con factory de raíz: los providers multi de los módulos reemplazan al default, como en Angular", async () => {
+    app = await CompiledApp.bootstrap({
+      "app.module.ts": `
+import { Component, Inject, InjectionToken, NgModule } from "ngjs-core";
+
+export const HOOKS = new InjectionToken<string[]>("HOOKS", { factory: () => ["default"] });
+export const LABELS = new InjectionToken<string[]>("LABELS", { factory: () => ["solo-default"] });
+
+@NgModule({ providers: [{ provide: HOOKS, useValue: "feature", multi: true }] })
+export class FeatureModule {}
+
+@Component({ selector: "app-root", template: "" })
+export class AppComponent {
+  constructor(@Inject(HOOKS) readonly hooks: string[], @Inject(LABELS) readonly labels: string[]) {}
+}
+
+@NgModule({
+  imports: [FeatureModule],
+  declarations: [AppComponent],
+  providers: [{ provide: HOOKS, useValue: "own", multi: true }],
+  bootstrap: [AppComponent],
+})
+export class AppModule {}
+`,
+    });
+    const root = app.controller<{ hooks: string[]; labels: string[] }>("app-root", "appRoot");
+    expect(root.hooks).toEqual(["feature", "own"]);
+    expect(root.labels).toEqual(["solo-default"]);
+  });
 });
