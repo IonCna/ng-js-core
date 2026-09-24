@@ -4,6 +4,7 @@ export * from "@/core/di/index.ts";
 export { EventEmitter } from "@/core/event-emitter.ts";
 export * from "@/core/lifecycle/index.ts";
 export * from "@/core/metadata/index.ts";
+export { NgDisabled } from "@/core/ng-disabled.ts";
 export * from "@/core/platform/index.ts";
 export * from "@/core/queries/index.ts";
 export * from "@/core/refs/index.ts";
