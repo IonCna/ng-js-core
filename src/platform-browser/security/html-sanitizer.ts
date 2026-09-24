@@ -40,12 +40,7 @@ const INLINE_ELEMENTS = merge(
   ),
 );
 
-const VALID_ELEMENTS = merge(
-  VOID_ELEMENTS,
-  BLOCK_ELEMENTS,
-  INLINE_ELEMENTS,
-  OPTIONAL_END_TAG_ELEMENTS,
-);
+const VALID_ELEMENTS = merge(VOID_ELEMENTS, BLOCK_ELEMENTS, INLINE_ELEMENTS, OPTIONAL_END_TAG_ELEMENTS);
 
 // Atributos-URI (se sanean con `sanitizeUrl`).
 const URI_ATTRS = tagSet("background,cite,href,itemtype,longdesc,poster,src,xlink:href");
@@ -91,8 +86,7 @@ function encodeEntities(value: string): string {
 function assertNotClobbered(node: Node, next: Node | null): Node | null {
   if (
     next &&
-    (node.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_CONTAINED_BY) ===
-      Node.DOCUMENT_POSITION_CONTAINED_BY
+    (node.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_CONTAINED_BY) === Node.DOCUMENT_POSITION_CONTAINED_BY
   ) {
     throw new Error("Failed to sanitize html because the element is clobbered");
   }

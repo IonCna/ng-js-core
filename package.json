@@ -53,9 +53,9 @@
       "default": "./dist/forms/index.js"
     },
     "./testing": {
-      "types": "./dist/runtime/testing/index.d.ts",
-      "import": "./dist/runtime/testing/index.js",
-      "default": "./dist/runtime/testing/index.js"
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js",
+      "default": "./dist/testing/index.js"
     },
     "./animations": {
       "types": "./dist/animations/index.d.ts",
@@ -63,19 +63,19 @@
       "default": "./dist/animations/index.js"
     },
     "./cdk/a11y": {
-      "types": "./dist/runtime/cdk/a11y/index.d.ts",
-      "import": "./dist/runtime/cdk/a11y/index.js",
-      "default": "./dist/runtime/cdk/a11y/index.js"
+      "types": "./dist/cdk/a11y/index.d.ts",
+      "import": "./dist/cdk/a11y/index.js",
+      "default": "./dist/cdk/a11y/index.js"
     },
     "./cdk/layout": {
-      "types": "./dist/runtime/cdk/layout/index.d.ts",
-      "import": "./dist/runtime/cdk/layout/index.js",
-      "default": "./dist/runtime/cdk/layout/index.js"
+      "types": "./dist/cdk/layout/index.d.ts",
+      "import": "./dist/cdk/layout/index.js",
+      "default": "./dist/cdk/layout/index.js"
     },
     "./i18n": {
-      "types": "./dist/runtime/i18n/index.d.ts",
-      "import": "./dist/runtime/i18n/index.js",
-      "default": "./dist/runtime/i18n/index.js"
+      "types": "./dist/i18n/index.d.ts",
+      "import": "./dist/i18n/index.js",
+      "default": "./dist/i18n/index.js"
     },
     "./i18n/locales/*": {
       "types": "./dist/i18n/locales/*.d.ts",

@@ -8,9 +8,35 @@
     "build": {
       "options": {
         "entryPoints": {
-          "index": "src/index.ts"
+          "index": "src/index.ts",
+          "core/index": "src/core/index.ts",
+          "common/index": "src/common/index.ts",
+          "http/index": "src/http/index.ts",
+          "forms/index": "src/forms/index.ts",
+          "animations/index": "src/animations/index.ts",
+          "platform-browser/index": "src/platform-browser/index.ts",
+          "rxjs-interop/index": "src/rxjs-interop/index.ts",
+          "cdk/a11y/index": "src/cdk/a11y/index.ts",
+          "cdk/layout/index": "src/cdk/layout/index.ts",
+          "i18n/index": "src/i18n/index.ts",
+          "i18n/locales/en": "src/i18n/locales/en.ts",
+          "i18n/locales/es-MX": "src/i18n/locales/es-MX.ts",
+          "router/index": "src/router/index.ts",
+          "testing/index": "src/testing/index.ts",
+          "core/platform/index": "src/core/platform/index.ts"
         },
-        "outputPath": "dist"
+        "outputPath": "dist",
+        "external": [
+          "angular",
+          "angular-animate",
+          "angular-aria",
+          "angular-messages",
+          "angular-sanitize",
+          "angular-translate",
+          "@uirouter/angularjs",
+          "rxjs",
+          "rxjs/*"
+        ]
       },
       "configurations": {
         "production": {

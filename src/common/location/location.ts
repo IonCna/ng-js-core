@@ -1,9 +1,9 @@
 import type { Subscription } from "rxjs";
-import { Injectable } from "@/core/di/injectable.ts";
-import { EventEmitter } from "@/core/event-emitter.ts";
-import { LocationStrategy } from "@/common/location/location-strategy.ts";
+import type { LocationStrategy } from "@/common/location/location-strategy.ts";
 import type { LocationChangeEvent } from "@/common/location/platform-location.ts";
 import { joinWithSlash, normalizeQueryParams, stripTrailingSlash } from "@/common/location/util.ts";
+import { Injectable } from "@/core/di/injectable.ts";
+import { EventEmitter } from "@/core/event-emitter.ts";
 
 /** Payload de `Location.subscribe` — igual que el `PopStateEvent` (deprecado) de `@angular/common`. */
 export interface LocationEvent {
@@ -40,9 +40,8 @@ function stripOrigin(baseHref: string): string {
  * `RouterModule.forRoot`). `subscribe()` emite en back/forward del navegador;
  * `onUrlChange()` además en `go()`/`replaceState()` de esta instancia.
  */
+@Injectable()
 export abstract class Location {
-  static readonly $name = "Location";
-
   abstract path(includeHash?: boolean): string;
   abstract getState(): unknown;
   abstract isCurrentPathEqualTo(path: string, query?: string): boolean;
@@ -67,8 +66,6 @@ export abstract class Location {
 
 @Injectable()
 export class LocationImpl extends Location {
-  static readonly $inject = [LocationStrategy.$name];
-
   private readonly subject = new EventEmitter<LocationEvent>();
   private readonly basePath: string;
   private readonly urlChangeListeners: ((url: string, state: unknown) => void)[] = [];

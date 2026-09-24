@@ -1,0 +1,17 @@
+{
+  // Los tests corren en Node (compilan fixtures con `ng-js-compiler` y los ejecutan en jsdom): tipos de Node/jsdom
+  // del compilador y su `dist/` (el mismo que usa `ngjs build`; ver `vitest.config.ts`).
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "typeRoots": ["../../plugins/ng-js-compiler/node_modules/@types"],
+    "types": ["node", "jsdom"],
+    "paths": {
+      "@/*": ["../src/*"],
+      "jsdom": ["../../plugins/ng-js-compiler/node_modules/@types/jsdom/index.d.ts"],
+      "ng-js-compiler": ["../../plugins/ng-js-compiler/dist/index.d.ts"],
+      "ng-js-compiler/esbuild": ["../../plugins/ng-js-compiler/dist/esbuild.d.ts"]
+    }
+  },
+  "include": ["."]
+}

@@ -1,12 +1,8 @@
 import angular from "angular";
 import "angular-animate";
+import { AnimationBuilder, BrowserAnimationBuilder, NoopAnimationBuilder } from "@/animations/animation-builder.ts";
 import type { Provider } from "@/core/di/provider.ts";
 import { NgModule } from "@/core/metadata/ng-module.ts";
-import {
-  AnimationBuilder,
-  BrowserAnimationBuilder,
-  NoopAnimationBuilder,
-} from "@/animations/animation-builder.ts";
 
 const NgAnimateModule = angular.module("ngAnimate");
 
@@ -16,8 +12,14 @@ const NgAnimateModule = angular.module("ngAnimate");
 })
 export class BrowserAnimationsModule {}
 
+/** Como en Angular, `NoopAnimationsModule` apaga las animaciones: también las de `ngAnimate` (`$animate`). */
+const NoopAnimateModule = angular.module("ng.js.animations.noop", ["ngAnimate"]).run([
+  "$animate",
+  ($animate: { enabled(value: boolean): void }) => $animate.enabled(false),
+]);
+
 @NgModule({
-  imports: [NgAnimateModule],
+  imports: [NoopAnimateModule],
   providers: [{ provide: AnimationBuilder, useClass: NoopAnimationBuilder }],
 })
 export class NoopAnimationsModule {}

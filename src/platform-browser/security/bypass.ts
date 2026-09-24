@@ -18,7 +18,7 @@ export interface SafeUrl extends SafeValue {}
 // biome-ignore lint/suspicious/noEmptyInterface: idem
 export interface SafeResourceUrl extends SafeValue {}
 
-export const enum BypassType {
+export enum BypassType {
   Url = "URL",
   Html = "HTML",
   ResourceUrl = "ResourceURL",

@@ -1,19 +1,25 @@
 import type { IController, IDirective, IDirectiveCompileFn, IScope, ITranscludeFunction } from "angular";
-import { Directive } from "@/core/metadata/directive.ts";
-import type { ContextObject, EmbeddedViewHost } from "@/core/refs/embedded-view-ref.ts";
+import { Injectable } from "@/core/di/injectable.ts";
+import type { ContextObject, EmbeddedViewHost, EmbeddedViewRef } from "@/core/refs/embedded-view-ref.ts";
 import { EmbeddedViewRefImpl } from "@/core/refs/embedded-view-ref.ts";
 
 const DECLARATION_PREFIX = "let";
 
 /**
- * `@Directive` acá es solo metadata (igual que en el resto del framework —
- * ver CONCEPTOS "Un modelo de datos, varios frentes"): NO registra nada en
- * AngularJS por su cuenta. El registro real es `TemplateRef.$factory()`,
- * llamado a mano (`module.directive('ngTemplate', TemplateRef.$factory)`),
- * igual que cualquier otro componente/directiva de este proyecto.
+ * Un `<ng-template>`: contenido que no se muestra solo, se instancia con `createEmbeddedView()` (lo hace
+ * `ViewContainerRef`, `NgTemplateOutlet`, o quien lo reciba por una query). Token de DI (`@Injectable()`, nombre
+ * compilado en `ɵprov`); la implementación es el controller de la directiva nativa `ngTemplate` (`TemplateRefImpl`).
  */
-@Directive({ selector: "ng-template" })
-export class TemplateRef<C = ContextObject> implements IController {
+@Injectable()
+export abstract class TemplateRef<C = ContextObject> {
+  abstract createEmbeddedView(context: C, scope?: IScope, host?: EmbeddedViewHost): EmbeddedViewRef<C>;
+}
+
+/**
+ * Controller de la directiva `ngTemplate` — se registra a mano en `NativeModule` (`TemplateRefImpl.directive`):
+ * necesita `transclude: "element"` y un `compile` para los `let-*`, que un `@Directive` compilado no expresa.
+ */
+export class TemplateRefImpl<C = ContextObject> extends TemplateRef<C> implements IController {
   static readonly $inject = ["$transclude", "$scope"];
 
   private declarations = new Map<string, string>();
@@ -21,7 +27,9 @@ export class TemplateRef<C = ContextObject> implements IController {
   constructor(
     private readonly $transclude: ITranscludeFunction,
     private readonly $scope: IScope,
-  ) {}
+  ) {
+    super();
+  }
 
   /** Llamado por `compileNgTemplate` (el `pre`-link) al parsear los atributos `let-*` — nadie más lo llama. */
   registerDeclarations(declarations: ReadonlyMap<string, string>): void {
@@ -52,9 +60,9 @@ export class TemplateRef<C = ContextObject> implements IController {
     return new EmbeddedViewRefImpl(context, targetScope, this.$transclude, host);
   }
 
-  static $factory(): IDirective {
+  static directive(): IDirective {
     return {
-      controller: TemplateRef,
+      controller: TemplateRefImpl,
       bindToController: true,
       restrict: "E",
       compile: compileNgTemplate,
@@ -80,7 +88,7 @@ const compileNgTemplate: IDirectiveCompileFn = (_element, attrs) => {
 
   return {
     pre: (_scope, _element, _attrs, ctrl) => {
-      (ctrl as TemplateRef<unknown>).registerDeclarations(declarations);
+      (ctrl as TemplateRefImpl<unknown>).registerDeclarations(declarations);
     },
   };
 };

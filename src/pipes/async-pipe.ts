@@ -1,11 +1,14 @@
 import type angular from "angular";
+import { Injectable } from "@/core/di/injectable.ts";
 import type { PipeTransform } from "@/pipes/pipe-transform.ts";
 
 interface Unsubscribable {
   unsubscribe(): void;
 }
 
-function isSubscribable(value: object): value is { subscribe(observer: (value: unknown) => void): Unsubscribable | (() => void) } {
+function isSubscribable(
+  value: object,
+): value is { subscribe(observer: (value: unknown) => void): Unsubscribable | (() => void) } {
   return typeof (value as { subscribe?: unknown }).subscribe === "function";
 }
 
@@ -31,10 +34,15 @@ interface CacheEntry {
  * construirse, no hay que pasarlo a mano en cada `.transform()`. Uso:
  * `constructor(private async: AsyncPipe) {}` + `{{ $ctrl.async.transform(value$) }}`.
  */
+@Injectable()
 export abstract class AsyncPipe implements PipeTransform<unknown, unknown> {
-  static readonly $name = "AsyncPipe";
-
-  abstract transform<T>(input: PromiseLike<T> | { subscribe(observer: (value: T) => void): Unsubscribable | (() => void) } | null | undefined): T | null;
+  abstract transform<T>(
+    input:
+      | PromiseLike<T>
+      | { subscribe(observer: (value: T) => void): Unsubscribable | (() => void) }
+      | null
+      | undefined,
+  ): T | null;
 }
 
 export class AsyncPipeImpl extends AsyncPipe {

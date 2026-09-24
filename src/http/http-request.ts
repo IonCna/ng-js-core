@@ -43,12 +43,17 @@ export class HttpRequest<T = unknown> {
   }
 
   clone(update: Partial<HttpRequestInit & { method: HttpMethod; url: string; body: T | null }> = {}): HttpRequest<T> {
-    return new HttpRequest(update.method ?? this.method, update.url ?? this.url, "body" in update ? (update.body ?? null) : this.body, {
-      headers: update.headers ?? this.headers,
-      params: update.params ?? this.params,
-      withCredentials: update.withCredentials ?? this.withCredentials,
-      responseType: update.responseType ?? this.responseType,
-      timeout: update.timeout ?? this.timeout,
-    });
+    return new HttpRequest(
+      update.method ?? this.method,
+      update.url ?? this.url,
+      "body" in update ? (update.body ?? null) : this.body,
+      {
+        headers: update.headers ?? this.headers,
+        params: update.params ?? this.params,
+        withCredentials: update.withCredentials ?? this.withCredentials,
+        responseType: update.responseType ?? this.responseType,
+        timeout: update.timeout ?? this.timeout,
+      },
+    );
   }
 }

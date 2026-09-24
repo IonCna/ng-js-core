@@ -1,36 +1,19 @@
 import type angular from "angular";
-import { getInjectableId } from "@/core/di/injectable-registry.ts";
-import { getComponentDef } from "@/core/metadata/define-component.ts";
-import { getDirectiveDef } from "@/core/metadata/directive.ts";
-import { exportAsRegistry } from "@/core/metadata/export-as-registry.ts";
-import { SelectorRegistry } from "@/core/metadata/selector-registry.ts";
-import { ContentChildQuery, createDecoratedContentChildQueries } from "@/core/queries/content-child.ts";
-import { ContentChildrenQuery, createDecoratedContentChildrenQueries } from "@/core/queries/content-children.ts";
-import { getControllerTokens } from "@/core/queries/controller-tokens.ts";
-import {
-  getAncestorQueryRegistries,
-  getContentQueryOwners,
-  getScopeViewQueryRegistries,
-  registerScopeQueryRegistry,
-} from "@/core/queries/query-context.ts";
-import { createDecoratedViewChildQueries, ViewChildQuery } from "@/core/queries/view-child.ts";
-import { createDecoratedViewChildrenQueries, ViewChildrenQuery } from "@/core/queries/view-children.ts";
+import { CompiledType } from "@/core/metadata/compiled-type.ts";
+import { Query } from "@/core/queries/query.ts";
+import { QueryContext } from "@/core/queries/query-context.ts";
 import { ViewQueryRegistry } from "@/core/queries/view-query-registry.ts";
 import { ElementRefImpl } from "@/core/refs/element-ref.ts";
 import type { TemplateRef } from "@/core/refs/template-ref.ts";
+import { ElementTokens } from "@/native/bridges/element-tokens-bridge.ts";
 import { decorateControllerWith, prependInstanceMethod } from "@/native/bridges/shared.ts";
 
-const controllerNodes = new WeakMap<object, Node>();
-
 /**
- * Por cada controller instanciado: arma su propio `ViewQueryRegistry`,
- * "instala" sus queries (`viewChild()`/`@ViewChild`/`contentChild()`/
- * `@ContentChild` y sus plurales, reemplaza el campo por un getter que lee
- * `.value`), se publica como candidato — de vista en el registry del padre
- * más cercano (por su cadena de clases, automático vía `$scope.$parent`), y
- * de contenido en los "dueños" que haya bindeado `<ng-content>` (vacío hasta
- * que esa pieza exista, ver `query-context.ts`) — y engancha `resolve()` a
- * `$postLink`, cuando ya está garantizado que todos los hijos se publicaron.
+ * Por cada controller instanciado: arma su `ViewQueryRegistry` con las queries de su definición compilada
+ * (`ɵcmp`/`ɵdir.queries`/`viewQueries`) — el campo pasa a ser un getter del resultado; una query sobre un setter
+ * recibe cada resultado por el setter —, se publica como candidato (de vista en los registries de los scopes
+ * ancestros; de contenido en los dueños que bindeó la proyección) y engancha `resolve()` al `$postLink`, cuando
+ * ya se publicaron todos los hijos.
  */
 export function decorateControllerViewChildQueries(
   $delegate: angular.IControllerService,
@@ -43,173 +26,148 @@ export function decorateControllerViewChildQueries(
       const $scope = locals?.$scope as angular.IScope | undefined;
       const $element = locals?.$element as angular.IAugmentedJQuery | undefined;
       const node = $element?.[0] as Node | undefined;
+      const type = CompiledType.ofInstance(instance);
       const registry = new ViewQueryRegistry();
       registry.injector = $injector;
-      if (node) {
-        controllerNodes.set(instance, node);
-        // Una `@Directive` SIN template (no `@Component`) proyecta light DOM:
-        // sus `@ContentChild`/`@ContentChildren` matchean descendientes del host
-        // sin `<ng-content>` de por medio. Un `@Component` NO — su contenido va
-        // por `<ng-content>` (que llama `bindContentQueryOwners`).
-        const Clase = (instance as { constructor: Function }).constructor;
-        if (!getComponentDef(Clase) && getDirectiveDef(Clase)) registry.hostNode = node;
-      }
+      // Una `@Directive` (no `@Component`) proyecta light DOM: sus queries de contenido matchean descendientes del
+      // host sin `<ng-content>` de por medio. Un `@Component` no: su contenido va por `<ng-content>`.
+      if (node && !CompiledType.isComponent(type) && CompiledType.def(type)) registry.hostNode = node;
+      if (node && CompiledType.isComponent(type)) registry.componentNode = node;
 
-      installOwnQueries(instance, registry);
+      const setterQueries = QueryInstaller.install(instance, CompiledType.def(type), registry);
+      const resolve = () => {
+        registry.resolve();
+        for (const { propertyName, query } of setterQueries)
+          (instance as Record<string, unknown>)[propertyName] = query.value;
+      };
 
       if ($scope) {
-        registerScopeQueryRegistry($scope, registry);
-        // Re-resolver (vía `$evalAsync`, coalescido dentro del digest) cuando el
-        // contenido proyectado cambia después del primer `resolve()` — así el
-        // `QueryList` de `@ContentChildren` emite en `.changes`.
+        QueryContext.registerScopeRegistry($scope, registry);
+        // Re-resolver (coalescido dentro del digest) cuando el contenido cambia después del primer `resolve()` —
+        // así el `QueryList` emite en `.changes`.
         let pending = false;
         registry.onDynamicChange = () => {
           if (pending) return;
           pending = true;
           $scope.$evalAsync(() => {
             pending = false;
-            registry.resolve();
+            resolve();
           });
         };
-        publishToOwners(instance, $scope, registry);
+        CandidatePublisher.publish(instance, $scope, node, registry);
         $scope.$on("$destroy", () => registry.destroy());
       }
 
-      // Antes del `$postLink` del autor: las queries leídas ahí (incluidas las
-      // `{ static: true }`) tienen que estar resueltas, como en Angular.
-      prependInstanceMethod(instance, "$postLink", () => registry.resolve());
+      // Antes del `$postLink` del autor (donde corren `ngAfterContentInit`/`ngAfterViewInit`): las queries ya
+      // resueltas, como en Angular.
+      prependInstanceMethod(instance, "$postLink", resolve);
     },
   });
 }
 decorateControllerViewChildQueries.$inject = ["$delegate", "$injector"];
 
-function installOwnQueries(instance: object, registry: ViewQueryRegistry): void {
-  for (const key of Reflect.ownKeys(instance)) {
-    const descriptor = Object.getOwnPropertyDescriptor(instance, key);
-    if (!descriptor) continue;
+class QueryInstaller {
+  /** Instala las queries de `def` en `instance`; devuelve las que van por setter (se asignan en cada resolve). */
+  static install(
+    instance: object,
+    def: ReturnType<typeof CompiledType.def>,
+    registry: ViewQueryRegistry,
+  ): { propertyName: string; query: Query }[] {
+    const setterQueries: { propertyName: string; query: Query }[] = [];
+    const register = (queryDef: NonNullable<typeof def>["queries"], content: boolean) => {
+      for (const definition of queryDef ?? []) {
+        const query = Query.from(definition);
+        if (content) registry.registerContentQuery(query);
+        else registry.registerViewQuery(query);
 
-    if (descriptor.value instanceof ViewChildQuery) {
-      install(
-        instance,
-        key,
-        descriptor.enumerable ?? true,
-        () => descriptor.value.value,
-        () => registry.registerQuery(descriptor.value),
-      );
-    } else if (descriptor.value instanceof ViewChildrenQuery) {
-      install(
-        instance,
-        key,
-        descriptor.enumerable ?? true,
-        () => descriptor.value.value,
-        () => registry.registerChildrenQuery(descriptor.value),
-      );
-    } else if (descriptor.value instanceof ContentChildQuery) {
-      install(
-        instance,
-        key,
-        descriptor.enumerable ?? true,
-        () => descriptor.value.value,
-        () => registry.registerContentQuery(descriptor.value),
-      );
-    } else if (descriptor.value instanceof ContentChildrenQuery) {
-      install(
-        instance,
-        key,
-        descriptor.enumerable ?? true,
-        () => descriptor.value.value,
-        () => registry.registerContentChildrenQuery(descriptor.value),
-      );
+        const { propertyName } = definition;
+        if (QueryInstaller.hasSetter(instance, propertyName)) {
+          setterQueries.push({ propertyName, query });
+          continue;
+        }
+        Object.defineProperty(instance, propertyName, { configurable: true, enumerable: true, get: () => query.value });
+      }
+    };
+    register(def?.queries, true);
+    register(def?.viewQueries, false);
+    return setterQueries;
+  }
+
+  private static hasSetter(instance: object, propertyName: string): boolean {
+    for (
+      let proto = Object.getPrototypeOf(instance);
+      proto && proto !== Object.prototype;
+      proto = Object.getPrototypeOf(proto)
+    ) {
+      const descriptor = Object.getOwnPropertyDescriptor(proto, propertyName);
+      if (descriptor) return typeof descriptor.set === "function";
     }
-  }
-
-  for (const { propertyKey, query } of createDecoratedViewChildQueries(instance)) {
-    install(
-      instance,
-      propertyKey,
-      true,
-      () => query.value,
-      () => registry.registerQuery(query),
-    );
-  }
-  for (const { propertyKey, query } of createDecoratedViewChildrenQueries(instance)) {
-    install(
-      instance,
-      propertyKey,
-      true,
-      () => query.value,
-      () => registry.registerChildrenQuery(query),
-    );
-  }
-  for (const { propertyKey, query } of createDecoratedContentChildQueries(instance)) {
-    install(
-      instance,
-      propertyKey,
-      true,
-      () => query.value,
-      () => registry.registerContentQuery(query),
-    );
-  }
-  for (const { propertyKey, query } of createDecoratedContentChildrenQueries(instance)) {
-    install(
-      instance,
-      propertyKey,
-      true,
-      () => query.value,
-      () => registry.registerContentChildrenQuery(query),
-    );
+    return false;
   }
 }
 
-function install(
-  instance: object,
-  key: PropertyKey,
-  enumerable: boolean,
-  getValue: () => unknown,
-  register: () => void,
-): void {
-  register();
-  Object.defineProperty(instance, key, {
-    configurable: true,
-    enumerable,
-    get: getValue,
-  });
-}
-
-function publishToOwners(instance: object, $scope: angular.IScope, ownRegistry?: ViewQueryRegistry): void {
-  const tokens = getControllerTokens(instance);
-  if (tokens.length === 0) return;
-  const node = controllerNodes.get(instance);
-
-  const published: ViewQueryRegistry[] = [];
-  for (const registry of getAncestorQueryRegistries($scope)) {
-    registry.registerCandidate(tokens, instance, node);
-    published.push(registry);
-  }
-  for (const owner of getContentQueryOwners($scope)) {
-    owner.registerContentCandidate(tokens, instance, node);
-    published.push(owner);
+class CandidatePublisher {
+  /** Las clases de la cadena de `instance` (la propia y sus bases): una query por cualquiera de ellas la encuentra. */
+  private static tokensOf(instance: object): Function[] {
+    const tokens: Function[] = [];
+    for (
+      let proto = Object.getPrototypeOf(instance);
+      proto && proto !== Object.prototype;
+      proto = Object.getPrototypeOf(proto)
+    ) {
+      const ctor = proto.constructor as Function | undefined;
+      if (ctor && !tokens.includes(ctor)) tokens.push(ctor);
+    }
+    return tokens;
   }
 
-  // Light DOM: `@ContentChild`/`@ContentChildren` sobre una `@Directive` sin
-  // template comparte `$scope` con este controller, así que no aparece en
-  // `getAncestorQueryRegistries` ni en `getContentQueryOwners`. Se publica como
-  // candidato de contenido a las registries del MISMO scope marcadas como
-  // light-DOM (host sin template) cuyo host contenga este nodo.
-  for (const registry of getScopeViewQueryRegistries($scope)) {
-    if (registry === ownRegistry || !registry.hostNode || !registry.hasContentQueries) continue;
-    if (registry.containsLightDomNode(node)) {
-      registry.registerContentCandidate(tokens, instance, node);
+  static publish(instance: object, $scope: angular.IScope, node: Node | undefined, own: ViewQueryRegistry): void {
+    const tokens = CandidatePublisher.tokensOf(instance);
+    const published: ViewQueryRegistry[] = [];
+
+    for (const registry of QueryContext.ancestorRegistries($scope)) {
+      registry.registerCandidate(tokens, instance, node);
       published.push(registry);
     }
+    for (const owner of QueryContext.contentOwners($scope)) {
+      owner.registerContentCandidate(tokens, instance, node);
+      published.push(owner);
+    }
+    for (const registry of QueryContext.scopeRegistries($scope)) {
+      if (registry === own) continue;
+      // Una directiva en el template de un componente comparte su scope: es de su vista.
+      if (registry.containsViewNode(node)) {
+        registry.registerCandidate(tokens, instance, node);
+        published.push(registry);
+        continue;
+      }
+      // Light DOM: una `@Directive` sin template comparte `$scope` con lo que tiene adentro — se publica como
+      // contenido en los registries del MISMO scope cuyo host contenga este nodo.
+      if (!registry.hostNode || !registry.hasContentQueries) continue;
+      if (registry.containsLightDomNode(node)) {
+        registry.registerContentCandidate(tokens, instance, node);
+        published.push(registry);
+      }
+    }
+
+    // Si el controller se destruye (`ng-if`/`ng-repeat`), sale de donde se publicó y se re-resuelve.
+    if (published.length > 0) {
+      $scope.$on("$destroy", () => {
+        for (const registry of published) registry.removeCandidate(instance);
+      });
+    }
   }
 
-  // Cuando este controller proyectado se destruye (`ng-if`/`ng-repeat` lo saca),
-  // hay que quitar su candidato de los registries donde lo publicó y re-resolver.
-  if (published.length > 0) {
-    $scope.$on("$destroy", () => {
-      for (const registry of published) registry.removeCandidate(instance);
-    });
+  /** Un `ng-ref="nombre"` (el `#nombre` de Angular) como candidato con nombre, de vista y de contenido. */
+  static publishNamed(scope: angular.IScope, locator: string, value: unknown): void {
+    const nativeElement =
+      value && typeof value === "object" ? (value as { nativeElement?: unknown }).nativeElement : undefined;
+    const node = nativeElement instanceof Node ? nativeElement : undefined;
+
+    for (const registry of [...QueryContext.scopeRegistries(scope), ...QueryContext.ancestorRegistries(scope)]) {
+      registry.registerNamedCandidate(locator, value, node);
+    }
+    for (const owner of QueryContext.contentOwners(scope)) owner.registerNamedContentCandidate(locator, value, node);
   }
 }
 
@@ -218,136 +176,109 @@ interface NgRefRequires {
 }
 
 /**
- * Reemplaza la directiva `ngRef` NATIVA de AngularJS por completo — no
- * alcanza con agregar la nuestra al lado (`$delegate.unshift(...)`, como
- * hace `reference/`): la nativa tiene `priority: -1` (la más baja posible,
- * a propósito, ver su código fuente), así que su `pre`-link SIEMPRE corre
- * DESPUÉS de cualquier directiva agregada con prioridad más alta — pisaría
- * el valor que resolvimos acá. Peor: para `ng-ref-read="ngTemplate"` la
- * nativa intenta su propio `$element.data('$ngTemplateController')`, que
- * confirmamos (`template-ref.test.ts`) que NO funciona para
- * `transclude:'element'` — y ahí directamente tira un error. Reimplementamos
- * su comportamiento entero (asignación al scope + limpieza en `$destroy`)
- * para no dejarla correr en absoluto.
+ * Reemplaza la directiva `ngRef` NATIVA de AngularJS por completo: la nativa tiene `priority: -1` (su `pre`-link
+ * corre después de cualquier otra y pisaría el valor), y para `ng-ref-read="ngTemplate"` busca
+ * `$element.data('$ngTemplateController')`, que con `transclude: 'element'` no existe y tira. Se reimplementa su
+ * comportamiento (asignación al scope + limpieza en `$destroy`) y además se publica como candidato de queries.
  */
 export function decorateNgRefDirective(
   _$delegate: angular.IDirective[],
   $parse: angular.IParseService,
+  $injector: angular.auto.IInjectorService,
 ): angular.IDirective[] {
   return [
     {
       restrict: "A",
       require: { ngTemplate: "?ngTemplate" },
-      compile: compileNgRef($parse),
+      compile: (_element, attrs) => {
+        const getter = $parse(attrs.ngRef);
+        const setter = getter.assign;
+        if (!setter) throw new Error(`ngRef: la expresión "${attrs.ngRef}" no es asignable`);
+
+        return {
+          pre: (scope, linkedElement, linkedAttrs, controllers) => {
+            const [linkedNative] = Array.from(linkedElement) as Element[];
+            const elementRef = new ElementRefImpl(linkedNative!);
+            const templateRef = (controllers as NgRefRequires | undefined)?.ngTemplate;
+            const value = NgRefValue.resolve(linkedAttrs.ngRefRead, linkedElement, elementRef, templateRef, $injector);
+
+            CandidatePublisher.publishNamed(scope, linkedAttrs.ngRef, value);
+            scope.$on("$destroy", () => {
+              if (getter(scope) === value) setter(scope, null);
+            });
+            setter(scope, value);
+          },
+        };
+      },
     },
   ];
 }
-decorateNgRefDirective.$inject = ["$delegate", "$parse"];
-
-function compileNgRef($parse: angular.IParseService): angular.IDirectiveCompileFn {
-  return (_element, attrs) => {
-    const getter = $parse(attrs.ngRef);
-    const setter = getter.assign;
-    if (!setter) {
-      throw new Error(`ngRef: la expresión "${attrs.ngRef}" no es asignable`);
-    }
-
-    return {
-      pre: (scope, linkedElement, linkedAttrs, controllers) => {
-        const [linkedNative] = Array.from(linkedElement) as Element[];
-        const elementRef = new ElementRefImpl(linkedNative);
-        const templateRef = (controllers as NgRefRequires | undefined)?.ngTemplate;
-        const value = resolveNgRefValue(linkedAttrs.ngRefRead, linkedElement, elementRef, templateRef);
-
-        publishNgRefCandidate(scope, linkedAttrs.ngRef, value);
-
-        scope.$on("$destroy", () => {
-          if (getter(scope) !== value) return;
-          setter(scope, null);
-        });
-
-        setter(scope, value);
-      },
-    };
-  };
-}
-
-/** Nombres string aceptados por `ng-ref-read` para los tokens sintéticos de Angular. */
-const SYNTHETIC_READ = new Map<string, "ElementRef" | "TemplateRef" | "ViewContainerRef">([
-  ["ElementRef", "ElementRef"],
-  ["elementRef", "ElementRef"],
-  ["TemplateRef", "TemplateRef"],
-  ["templateRef", "TemplateRef"],
-  ["ViewContainerRef", "ViewContainerRef"],
-  ["viewContainerRef", "ViewContainerRef"],
-]);
-
-let warnedLegacyRead = false;
+decorateNgRefDirective.$inject = ["$delegate", "$parse", "$injector"];
 
 /**
- * `ng-ref-read` = el `read` de un `@ViewChild`/`@ContentChild` de Angular unido
- * con el `exportAs` de `#ref="exportAsName"`, resuelto en el orden de Angular:
- *
- * 1. **sin `read`** → instancia del componente del elemento · si es `<ng-template>`
- *    el `TemplateRef` · si no el `ElementRef`.
- * 2. token sintético por nombre: `ElementRef` / `TemplateRef` / `ViewContainerRef`
- *    (acepta también camelCase). `$element` / `ngTemplate` son alias deprecados.
- * 3. un `exportAs` conocido → la **instancia** de esa directiva.
- * 4. (fallback) `$<read>Controller` — el controller de una directiva registrada
- *    con ese nombre en el elemento.
+ * `ng-ref-read` = el `read` de una query unido con el `exportAs` de `#ref="exportAsName"`, en el orden de Angular:
+ * 1. sin `read` → el componente del elemento · si es `<ng-template>` el `TemplateRef` · si no el `ElementRef`;
+ * 2. `ElementRef`/`TemplateRef`/`ViewContainerRef` por nombre (también en camelCase; `$element`/`ngTemplate` son
+ *    alias deprecados);
+ * 3. un `exportAs` de una directiva del elemento → su instancia;
+ * 4. `$<read>Controller` — una directiva registrada con ese nombre en el elemento.
  */
-function resolveNgRefValue(
-  read: string | undefined,
-  linkedElement: angular.IAugmentedJQuery,
-  elementRef: ElementRefImpl,
-  templateRef: TemplateRef | undefined,
-): unknown {
-  if (!read) return componentInstanceOn(linkedElement) ?? templateRef ?? elementRef;
+class NgRefValue {
+  private static readonly SYNTHETIC = new Map<string, "ElementRef" | "TemplateRef" | "ViewContainerRef">([
+    ["ElementRef", "ElementRef"],
+    ["elementRef", "ElementRef"],
+    ["TemplateRef", "TemplateRef"],
+    ["templateRef", "TemplateRef"],
+    ["ViewContainerRef", "ViewContainerRef"],
+    ["viewContainerRef", "ViewContainerRef"],
+  ]);
 
-  if (read === "$element" || read === "ngTemplate") {
-    if (!warnedLegacyRead) {
-      warnedLegacyRead = true;
-      console.warn(
-        `ng-ref-read="${read}" está deprecado; usá "${read === "$element" ? "ElementRef" : "TemplateRef"}".`,
-      );
+  static resolve(
+    read: string | undefined,
+    element: angular.IAugmentedJQuery,
+    elementRef: ElementRefImpl<Element>,
+    templateRef: TemplateRef | undefined,
+    $injector: angular.auto.IInjectorService,
+  ): unknown {
+    if (!read) return NgRefValue.componentOn(element) ?? templateRef ?? elementRef;
+
+    // Alias viejos (antes de los nombres de token de Angular): se aceptan, con aviso.
+    if (read === "$element" || read === "ngTemplate") {
+      NgRefValue.warnLegacy(read);
+      return read === "$element" ? elementRef : (templateRef ?? null);
     }
-    return read === "$element" ? elementRef : (templateRef ?? null);
+
+    const synthetic = NgRefValue.SYNTHETIC.get(read);
+    if (synthetic === "ElementRef") return elementRef;
+    if (synthetic === "TemplateRef") return templateRef ?? null;
+    if (synthetic === "ViewContainerRef") return ElementTokens.viewContainerRefOf(element, $injector);
+
+    const byExportAs = NgRefValue.controllersOn(element).find((controller) =>
+      CompiledType.def(CompiledType.ofInstance(controller))?.exportAs?.includes(read),
+    );
+    if (byExportAs) return byExportAs;
+    return element.data(`$${read}Controller`) ?? null;
   }
 
-  const synthetic = SYNTHETIC_READ.get(read);
-  if (synthetic === "ElementRef") return elementRef;
-  if (synthetic === "TemplateRef") return templateRef ?? null;
-  if (synthetic === "ViewContainerRef") return linkedElement.data("$viewContainerRefController") ?? null;
+  private static warnedLegacy = false;
 
-  const byExportAs = exportAsRegistry.registrationNameFor(read);
-  if (byExportAs) return linkedElement.data(`$${byExportAs}Controller`) ?? null;
-
-  return linkedElement.data(`$${read}Controller`) ?? null;
-}
-
-/** Instancia del componente de selector de elemento sobre `linkedElement`, si hay. */
-function componentInstanceOn(linkedElement: angular.IAugmentedJQuery): unknown {
-  const tagName = (Array.from(linkedElement)[0] as Element | undefined)?.tagName;
-  if (!tagName) return undefined;
-  const Clase = SelectorRegistry.getClass(tagName);
-  const registrationName = Clase && getInjectableId(Clase);
-  return registrationName ? linkedElement.data(`$${registrationName}Controller`) : undefined;
-}
-
-function publishNgRefCandidate(scope: angular.IScope, locator: string, value: unknown): void {
-  const node = getValueNode(value);
-
-  for (const registry of [...getScopeViewQueryRegistries(scope), ...getAncestorQueryRegistries(scope)]) {
-    registry.registerNamedCandidate(locator, value, node);
+  private static warnLegacy(read: string): void {
+    if (NgRefValue.warnedLegacy) return;
+    NgRefValue.warnedLegacy = true;
+    console.warn(`ng-ref-read="${read}" está deprecado; usá "${read === "$element" ? "ElementRef" : "TemplateRef"}".`);
   }
 
-  for (const owner of getContentQueryOwners(scope)) {
-    owner.registerNamedContentCandidate(locator, value, node);
+  /** Los controllers que AngularJS guardó en el elemento (`$<nombre>Controller`). */
+  private static controllersOn(element: angular.IAugmentedJQuery): object[] {
+    const data = (element.data() ?? {}) as Record<string, unknown>;
+    return Object.entries(data)
+      .filter(([key, value]) => /^\$.+Controller$/.test(key) && value && typeof value === "object")
+      .map(([, value]) => value as object);
   }
-}
 
-function getValueNode(value: unknown): Node | undefined {
-  if (!value || typeof value !== "object") return undefined;
-  const nativeElement = (value as { nativeElement?: unknown }).nativeElement;
-  return nativeElement instanceof Node ? nativeElement : undefined;
+  private static componentOn(element: angular.IAugmentedJQuery): unknown {
+    return NgRefValue.controllersOn(element).find((controller) =>
+      CompiledType.isComponent(CompiledType.ofInstance(controller)),
+    );
+  }
 }

@@ -1,8 +1,6 @@
 import type angular from "angular";
-import { resolveForwardRef } from "@/core/di/forward-ref.ts";
-import type { Provider } from "@/core/di/provider.ts";
-import { getComponentDef } from "@/core/metadata/define-component.ts";
-import { getDirectiveDef } from "@/core/metadata/directive.ts";
+import { injectionTokenName } from "@/core/di/injector.ts";
+import { CompiledType } from "@/core/metadata/compiled-type.ts";
 import type { ControlValueAccessor } from "@/forms/control-value-accessor.ts";
 import { NG_VALUE_ACCESSOR } from "@/forms/ng-value-accessor.ts";
 import { chainInstanceMethod, decorateControllerWith } from "@/native/bridges/shared.ts";
@@ -29,13 +27,9 @@ const NATIVE_INPUT_SYNC_EVENTS = "input change compositionstart compositionend c
 
 const NATIVE_FORM_CONTROL_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
 
-/** `providers` (aplanado) declara un provider para `NG_VALUE_ACCESSOR`. Es el opt-in. */
-function declaresNgValueAccessor(providers: Provider[] | undefined): boolean {
-  if (!providers) return false;
-  const flat = (providers as unknown[]).flat(Infinity) as Array<{ provide?: unknown }>;
-  return flat.some(
-    (entry) => typeof entry === "object" && entry !== null && resolveForwardRef(entry.provide) === NG_VALUE_ACCESSOR,
-  );
+/** Sus `providers` (los que dejó el compilador en `ɵfac.ɵproviders`) proveen `NG_VALUE_ACCESSOR`. Es el opt-in. */
+function declaresNgValueAccessor(type: Function | undefined): boolean {
+  return CompiledType.providerTokens(type).includes(injectionTokenName(NG_VALUE_ACCESSOR));
 }
 
 function isControlValueAccessor(value: unknown): value is ControlValueAccessor {
@@ -83,9 +77,7 @@ export function decorateControllerControlValueAccessor(
     onInstance: (instance, locals) => {
       if (!isControlValueAccessor(instance)) return;
 
-      const Clase = (instance as { constructor: Function }).constructor;
-      const def = getComponentDef(Clase) ?? getDirectiveDef(Clase);
-      if (!declaresNgValueAccessor(def?.providers)) return;
+      if (!declaresNgValueAccessor(CompiledType.ofInstance(instance))) return;
 
       const $element = locals?.$element as angular.IAugmentedJQuery | undefined;
       const $scope = locals?.$scope as angular.IScope | undefined;

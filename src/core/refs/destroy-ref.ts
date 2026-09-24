@@ -1,16 +1,14 @@
 import type angular from "angular";
 import { Subject } from "rxjs";
+import { Injectable } from "@/core/di/injectable.ts";
 
 /**
- * Se inyecta por-instancia (mismo mecanismo que `ElementRef`/`AsyncPipe`, ver
- * `destroy-ref-bridge.ts`) — no hay contexto de inyección ambiental acá como
- * en Angular real (`inject(DestroyRef)` sin argumentos no existe), así que
- * `takeUntilDestroyed()` recibe el `DestroyRef` siempre explícito, nunca lo
- * resuelve solo.
+ * Se inyecta por-instancia (mismo mecanismo que `ElementRef`/`AsyncPipe`, ver `destroy-ref-bridge.ts`). Un
+ * `inject(DestroyRef)` durante la construcción lo reemplaza el compilador por el valor de los `locals` del
+ * controller, así que `takeUntilDestroyed()` sin argumento funciona en un inicializador de campo, como en Angular.
  */
+@Injectable()
 export abstract class DestroyRef {
-  static readonly $name = "DestroyRef";
-
   abstract onDestroy(callback: () => void): () => void;
 }
 

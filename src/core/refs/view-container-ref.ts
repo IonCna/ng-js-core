@@ -1,17 +1,17 @@
 import type angular from "angular";
 import type { IPromise, IQService } from "angular";
+import { Injectable } from "@/core/di/injectable.ts";
 import type { Injector } from "@/core/di/injector.ts";
 import type { ComponentRef } from "@/core/refs/component-ref.ts";
+import { createComponent } from "@/core/refs/create-component.ts";
 import type { ElementRefImpl } from "@/core/refs/element-ref.ts";
-import type { EmbeddedViewRefImpl } from "@/core/refs/embedded-view-ref.ts";
+import type { EmbeddedViewRef } from "@/core/refs/embedded-view-ref.ts";
 import type { TemplateRef } from "@/core/refs/template-ref.ts";
 import { claimView, getViewOwner, releaseView, type ViewOwner } from "@/core/refs/view-owner.ts";
 import type { ViewRef, ViewRefImpl } from "@/core/refs/view-ref.ts";
-import { createComponent } from "@/runtime/create-component.ts";
 
+@Injectable()
 export abstract class ViewContainerRef {
-  static readonly $name = "ViewContainerRef";
-
   abstract readonly element: ElementRefImpl;
   abstract clear(): void;
   abstract get(index: number): ViewRef | null;
@@ -20,8 +20,8 @@ export abstract class ViewContainerRef {
     templateRef: TemplateRef<C>,
     context?: C,
     options?: { index?: number },
-  ): EmbeddedViewRefImpl<C>;
-  abstract createEmbeddedView<C>(templateRef: TemplateRef<C>, context?: C, index?: number): EmbeddedViewRefImpl<C>;
+  ): EmbeddedViewRef<C>;
+  abstract createEmbeddedView<C>(templateRef: TemplateRef<C>, context?: C, index?: number): EmbeddedViewRef<C>;
   abstract insert(viewRef: ViewRef, index?: number): ViewRef;
   abstract move(viewRef: ViewRef, currentIndex: number): ViewRef;
   abstract indexOf(viewRef: ViewRef): number;
@@ -83,7 +83,7 @@ export class ViewContainerRefImpl extends ViewContainerRef implements ViewOwner 
       projectableNodes: options?.projectableNodes,
       directives: options?.directives,
       bindings: options?.bindings,
-    }).then((componentRef) => {
+    }).then((componentRef: ComponentRef<C>) => {
       try {
         this.insert(componentRef.hostView, options?.index);
         return componentRef;
@@ -98,7 +98,7 @@ export class ViewContainerRefImpl extends ViewContainerRef implements ViewOwner 
     templateRef: TemplateRef<C>,
     context?: C,
     optionsOrIndex?: { index?: number } | number,
-  ): EmbeddedViewRefImpl<C> {
+  ): EmbeddedViewRef<C> {
     const viewRef = templateRef.createEmbeddedView(context ?? ({} as C));
     const index = typeof optionsOrIndex === "number" ? optionsOrIndex : optionsOrIndex?.index;
 

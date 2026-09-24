@@ -1,6 +1,5 @@
 import type angular from "angular";
-import { getComponentDef } from "@/core/metadata/define-component.ts";
-import { getDirectiveDef } from "@/core/metadata/directive.ts";
+import { CompiledType } from "@/core/metadata/compiled-type.ts";
 import { chainInstanceMethod, decorateControllerWith } from "@/native/bridges/shared.ts";
 
 interface EmitterLike {
@@ -18,9 +17,9 @@ function isEmitterLike(value: unknown): value is EmitterLike {
   return !!value && typeof value === "object" && typeof (value as EmitterLike).subscribe === "function";
 }
 
-function outputDefsOf(instance: object): { propName: string }[] {
-  const ctor = instance.constructor as Function;
-  return getComponentDef(ctor)?.outputs ?? getDirectiveDef(ctor)?.outputs ?? [];
+/** Propiedades `@Output` de la clase (`ɵcmp`/`ɵdir.outputs`: nombre público → propiedad). */
+function outputPropsOf(instance: object): string[] {
+  return Object.values(CompiledType.def(CompiledType.ofInstance(instance))?.outputs ?? {});
 }
 
 /**
@@ -45,14 +44,14 @@ export function decorateControllerOutputEmitters($delegate: angular.IControllerS
     onInstance: (instance) => {
       if (!instance || typeof instance !== "object") return;
 
-      const outputs = outputDefsOf(instance).filter((output) =>
-        isEmitterLike((instance as Record<string, unknown>)[output.propName]),
+      const outputs = outputPropsOf(instance).filter((propName) =>
+        isEmitterLike((instance as Record<string, unknown>)[propName]),
       );
       if (outputs.length === 0) return;
 
       const activeSubs = new Map<string, { unsubscribe(): void }>();
 
-      for (const { propName } of outputs) {
+      for (const propName of outputs) {
         const emitter = (instance as Record<string, unknown>)[propName] as EmitterLike;
         let boundFn: unknown;
 

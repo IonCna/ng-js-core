@@ -1,10 +1,6 @@
 import type angular from "angular";
-import { getComponentDef } from "@/core/metadata/define-component.ts";
-import {
-  bindContentQueryOwners,
-  getScopeViewQueryRegistries,
-  runWithContentQueryOwners,
-} from "@/core/queries/query-context.ts";
+import { CompiledType } from "@/core/metadata/compiled-type.ts";
+import { QueryContext } from "@/core/queries/query-context.ts";
 import { chainInstanceMethod, decorateControllerWith } from "@/native/bridges/shared.ts";
 
 /**
@@ -42,8 +38,8 @@ export function decorateControllerContentProjection($delegate: angular.IControll
     onInstance: (instance, locals) => {
       if (!instance || typeof instance !== "object") return;
 
-      const Clase = (instance as { constructor: Function }).constructor;
-      if (!getComponentDef(Clase)) return; // solo `@Component` (una `@Directive` sin template usa light DOM)
+      // Solo `@Component` (una `@Directive` sin template usa light DOM).
+      if (!CompiledType.isComponent(CompiledType.ofInstance(instance))) return;
 
       const $transclude = locals?.$transclude as angular.ITranscludeFunction | undefined;
       const $element = locals?.$element as angular.IAugmentedJQuery | undefined;
@@ -58,7 +54,7 @@ export function decorateControllerContentProjection($delegate: angular.IControll
       // linkearía el contenido detached (regresión con directivas que miden el DOM
       // al linkear, ej. `NgbProgressbarStacked`). `ng-ref-bridge` (registrado
       // antes) ya instaló las queries, así que `hasContentQueries` es fiable acá.
-      const hasContentQueries = getScopeViewQueryRegistries($scope).some((registry) => registry.hasContentQueries);
+      const hasContentQueries = QueryContext.scopeRegistries($scope).some((registry) => registry.hasContentQueries);
       if (!hasContentQueries) return;
 
       const projection: ContentProjection = { consumed: false };
@@ -73,14 +69,14 @@ export function decorateControllerContentProjection($delegate: angular.IControll
         // componente de afuera — como en Angular, donde `@ContentChildren` no ve
         // el contenido de un componente hijo (la re-proyección real por
         // `<ng-content>` sigue en `ng-content.ts` vía `getContentQueryOwners`).
-        const owners = getScopeViewQueryRegistries($scope).filter((registry) => registry.hasContentQueries);
+        const owners = QueryContext.scopeRegistries($scope).filter((registry) => registry.hasContentQueries);
 
-        runWithContentQueryOwners(owners, () => {
+        QueryContext.runWithContentOwners(owners, () => {
           $transclude((clone, transcludedScope) => {
             projection.clone = clone as angular.IAugmentedJQuery | undefined;
             const rootNodes = clone ? (Array.from(clone) as Node[]) : [];
             for (const owner of owners) owner.registerContentRoots(rootNodes);
-            if (transcludedScope) bindContentQueryOwners(transcludedScope, owners);
+            if (transcludedScope) QueryContext.bindContentOwners(transcludedScope, owners);
           });
         });
       });

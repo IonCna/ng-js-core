@@ -1,18 +1,18 @@
-/**
- * Embudo único y reemplazable para los errores de la app. El runtime puede
- * conectarlo a `$exceptionHandler` de AngularJS; los errores async ya no pasan
- * por un objeto `NgZone` porque el compiler usa su propio polyfill.
- */
-export abstract class ErrorHandler {
-    static readonly $name = "ErrorHandler";
+import { forwardRef } from "@/core/di/forward-ref.ts";
+import { Injectable } from "@/core/di/injectable.ts";
 
-    abstract handleError(error: unknown): void;
+/**
+ * Embudo único y reemplazable para los errores de la app: `ngjs-core` le pasa lo que llega a `$exceptionHandler`
+ * de AngularJS (ver `NativeModule`). Se provee solo en la raíz; `{ provide: ErrorHandler, useClass: Propio }` en un
+ * `@NgModule` lo reemplaza, como en Angular.
+ */
+@Injectable({ providedIn: "root", useClass: forwardRef(() => ErrorHandlerImpl) })
+export abstract class ErrorHandler {
+  abstract handleError(error: unknown): void;
 }
 
 export class ErrorHandlerImpl extends ErrorHandler {
-    static readonly $inject = [] as const;
-
-    handleError(error: unknown): void {
-        console.error(error);
-    }
+  handleError(error: unknown): void {
+    console.error(error);
+  }
 }

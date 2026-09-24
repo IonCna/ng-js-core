@@ -1,14 +1,14 @@
-import { DOCUMENT } from "@/core/dom-tokens.ts";
+import { Inject } from "@/core/di/inject.ts";
 import { Injectable } from "@/core/di/injectable.ts";
+import { DOCUMENT } from "@/core/dom-tokens.ts";
 
 /**
  * `ViewportScroller` — control imperativo del scroll del viewport. Mismo servicio
  * y API que `@angular/common`. Todo DOM sobre `$window` + `DOCUMENT`. Sin
  * integración con el router (eso es `withInMemoryScrolling`, aparte).
  */
+@Injectable()
 export abstract class ViewportScroller {
-  static readonly $name = "ViewportScroller";
-
   /** Offset fijo (o función que lo calcula) que se resta al hacer scroll a un ancla — p.ej. un header fixed. */
   abstract setOffset(offset: [number, number] | (() => [number, number])): void;
   abstract getScrollPosition(): [number, number];
@@ -24,11 +24,7 @@ function findAnchor(doc: Document, target: string): HTMLElement | null {
   if (found) return found as HTMLElement;
 
   // `getElementById`/`getElementsByName` no atraviesan shadow DOM — recorrer a mano.
-  if (
-    typeof doc.createTreeWalker === "function" &&
-    doc.body &&
-    typeof doc.body.attachShadow === "function"
-  ) {
+  if (typeof doc.createTreeWalker === "function" && doc.body && typeof doc.body.attachShadow === "function") {
     const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT);
     let node = walker.currentNode as HTMLElement | null;
     while (node) {
@@ -45,13 +41,11 @@ function findAnchor(doc: Document, target: string): HTMLElement | null {
 
 @Injectable()
 export class BrowserViewportScroller extends ViewportScroller {
-  static readonly $inject = ["$window", DOCUMENT.toString()];
-
   private offset: () => [number, number] = () => [0, 0];
 
   constructor(
-    private readonly win: Window,
-    private readonly doc: Document,
+    @Inject("$window") private readonly win: Window,
+    @Inject(DOCUMENT) private readonly doc: Document,
   ) {
     super();
   }

@@ -4,7 +4,10 @@ import type { PipeTransform } from "@/pipes/pipe-transform.ts";
 const DIGITS_INFO = /^(\d+)\.(\d+)-(\d+)$/;
 
 /** `"{minIntegerDigits}.{minFractionDigits}-{maxFractionDigits}"`, igual formato que `DecimalPipe`/`PercentPipe` reales — default `"1.0-0"`. */
-function parseDigitsInfo(digitsInfo: string | undefined): { minimumFractionDigits: number; maximumFractionDigits: number } {
+function parseDigitsInfo(digitsInfo: string | undefined): {
+  minimumFractionDigits: number;
+  maximumFractionDigits: number;
+} {
   const match = DIGITS_INFO.exec(digitsInfo ?? "1.0-0");
   if (!match) return { minimumFractionDigits: 0, maximumFractionDigits: 0 };
 

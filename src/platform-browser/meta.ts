@@ -1,5 +1,6 @@
-import { DOCUMENT } from "@/core/dom-tokens.ts";
+import { Inject } from "@/core/di/inject.ts";
 import { Injectable } from "@/core/di/injectable.ts";
+import { DOCUMENT } from "@/core/dom-tokens.ts";
 
 /**
  * Forma de una `<meta>` a crear/actualizar. Las claves son los atributos tal
@@ -27,8 +28,8 @@ const META_KEYS_MAP: Record<string, string> = { httpEquiv: "http-equiv" };
  * "MetaStrategy"): el meta por ruta se setea a mano desde un componente / guard /
  * resolver.
  */
+@Injectable()
 export abstract class Meta {
-  static readonly $name = "Meta";
   abstract addTag(tag: MetaDefinition, forceCreation?: boolean): HTMLMetaElement | null;
   abstract addTags(tags: MetaDefinition[], forceCreation?: boolean): HTMLMetaElement[];
   abstract getTag(attrSelector: string): HTMLMetaElement | null;
@@ -40,9 +41,7 @@ export abstract class Meta {
 
 @Injectable()
 export class MetaImpl extends Meta {
-  static readonly $inject = [DOCUMENT.toString()];
-
-  constructor(private readonly doc: Document) {
+  constructor(@Inject(DOCUMENT) private readonly doc: Document) {
     super();
   }
 

@@ -1,6 +1,5 @@
 import type angular from "angular";
-import { getComponentDef } from "@/core/metadata/define-component.ts";
-import { getDirectiveDef } from "@/core/metadata/directive.ts";
+import { CompiledType } from "@/core/metadata/compiled-type.ts";
 import { decorateControllerWith, prependInstanceMethod } from "@/native/bridges/shared.ts";
 
 const PATCHED = Symbol("ngjsInputDeferPatched");
@@ -32,17 +31,14 @@ export function decorateControllerInputDefer($delegate: angular.IControllerServi
   return decorateControllerWith($delegate, {
     onInstance: (instance) => {
       if (!instance) return;
-      const Clase = (instance as { constructor: Function }).constructor;
+      const Clase = CompiledType.ofInstance(instance)!;
       // Solo `@Directive` puro: un `@Component` tiene otro ciclo de queries y no
       // hubo casos que lo necesiten.
-      if (getComponentDef(Clase)) return;
-      const def = getDirectiveDef(Clase);
-      if (!def || def.inputs.length === 0) return;
+      if (CompiledType.isComponent(Clase)) return;
+      const inputs = Object.values(CompiledType.def(Clase)?.inputs ?? {});
+      if (inputs.length === 0) return;
 
-      patchInputSetters(
-        Clase,
-        def.inputs.map((input) => input.propName),
-      );
+      patchInputSetters(Clase, inputs);
 
       prependInstanceMethod(instance as object, "$postLink", () => {
         const state = instance as DeferState & Record<string, unknown>;

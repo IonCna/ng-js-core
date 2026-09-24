@@ -1,25 +1,24 @@
 import type angular from "angular";
 import { Observable } from "rxjs";
+import { Inject } from "@/core/di/inject.ts";
 import { Injectable } from "@/core/di/injectable.ts";
 import { HttpHeaders } from "@/http/http-headers.ts";
 import type { HttpRequest } from "@/http/http-request.ts";
-import { type HttpEvent, HttpErrorResponse, HttpResponse } from "@/http/http-response.ts";
+import { HttpErrorResponse, type HttpEvent, HttpResponse } from "@/http/http-response.ts";
 
 /**
  * Handler final de la cadena de interceptors — el único que de verdad pega
  * contra la red, vía `$httpBackend` (NO `$http`: sin su propio pipeline de
  * transformRequest/transformResponse/interceptors, lo armamos nosotros).
  */
+@Injectable()
 export abstract class HttpBackend {
-  static readonly $name = "HttpBackend";
   abstract handle(req: HttpRequest<unknown>): Observable<HttpEvent<unknown>>;
 }
 
 @Injectable()
 export class HttpBackendImpl extends HttpBackend {
-  static readonly $inject = ["$httpBackend"];
-
-  constructor(private readonly $httpBackend: angular.IHttpBackendService) {
+  constructor(@Inject("$httpBackend") private readonly $httpBackend: angular.IHttpBackendService) {
     super();
   }
 

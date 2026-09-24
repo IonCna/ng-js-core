@@ -1,5 +1,6 @@
-import { DOCUMENT } from "@/core/dom-tokens.ts";
+import { Inject } from "@/core/di/inject.ts";
 import { Injectable } from "@/core/di/injectable.ts";
+import { DOCUMENT } from "@/core/dom-tokens.ts";
 
 export interface LocationChangeEvent {
   type: string;
@@ -12,9 +13,8 @@ export type LocationChangeListener = (event: LocationChangeEvent) => void;
  * sobre `window.location` + `window.history`. Existe para que `LocationStrategy`
  * no toque `window` directo (testeable / SSR). Acá se apoya en `$window`.
  */
+@Injectable()
 export abstract class PlatformLocation {
-  static readonly $name = "PlatformLocation";
-
   abstract get href(): string;
   abstract get protocol(): string;
   abstract get hostname(): string;
@@ -38,11 +38,9 @@ export abstract class PlatformLocation {
 
 @Injectable()
 export class BrowserPlatformLocation extends PlatformLocation {
-  static readonly $inject = ["$window", DOCUMENT.toString()];
-
   constructor(
-    private readonly win: Window,
-    private readonly doc: Document,
+    @Inject("$window") private readonly win: Window,
+    @Inject(DOCUMENT) private readonly doc: Document,
   ) {
     super();
   }

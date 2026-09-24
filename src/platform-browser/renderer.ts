@@ -1,5 +1,6 @@
-import { DOCUMENT } from "@/core/dom-tokens.ts";
+import { Inject } from "@/core/di/inject.ts";
 import { Injectable } from "@/core/di/injectable.ts";
+import { DOCUMENT } from "@/core/dom-tokens.ts";
 import { Renderer2, RendererFactory2, RendererStyleFlags2, type RendererType2 } from "@/core/render/renderer.ts";
 
 /**
@@ -112,11 +113,9 @@ export class DefaultDomRenderer2 extends Renderer2 {
 /** Siempre devuelve la misma instancia — no hay pipeline de render propio donde diferenciar por host/type. */
 @Injectable()
 export class RendererFactory2Impl extends RendererFactory2 {
-  static readonly $inject = [DOCUMENT.toString()];
-
   private readonly renderer: DefaultDomRenderer2;
 
-  constructor(doc: Document) {
+  constructor(@Inject(DOCUMENT) doc: Document) {
     super();
     this.renderer = new DefaultDomRenderer2(doc);
   }

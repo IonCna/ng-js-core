@@ -1,5 +1,5 @@
 import type angular from "angular";
-import { ChangeDetectorRef } from "@/core/change-detection/change-detector-ref.ts";
+import type { ChangeDetectorRef } from "@/core/change-detection/change-detector-ref.ts";
 import type { ElementRef } from "@/core/refs/element-ref.ts";
 import type { ViewRef } from "@/core/refs/view-ref.ts";
 

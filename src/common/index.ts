@@ -1,12 +1,12 @@
+export { TemplateRef } from "@/core/refs/template-ref.ts";
+export { AsyncPipe } from "@/pipes/async-pipe.ts";
+export { type KeyValue, KeyValuePipe } from "@/pipes/key-value.ts";
+export { PercentPipe } from "@/pipes/percent.ts";
+export { TitleCasePipe } from "@/pipes/title-case.ts";
 export { CommonModule } from "./common.module.ts";
+export * from "./location/index.ts";
 export { NgContainer } from "./ng-container.ts";
 export { NgContent } from "./ng-content.ts";
 export { NgTemplateOutlet } from "./ng-template-outlet.ts";
-export { TemplateRef } from "@/core/refs/template-ref.ts";
 export { isPlatformBrowser, isPlatformServer } from "./platform.ts";
 export { BrowserViewportScroller, ViewportScroller } from "./viewport-scroller.ts";
-export * from "./location/index.ts";
-export { AsyncPipe } from "@/pipes/async-pipe.ts";
-export { KeyValuePipe, type KeyValue } from "@/pipes/key-value.ts";
-export { PercentPipe } from "@/pipes/percent.ts";
-export { TitleCasePipe } from "@/pipes/title-case.ts";

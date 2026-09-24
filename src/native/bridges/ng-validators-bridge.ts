@@ -1,9 +1,7 @@
 import type angular from "angular";
 import { firstValueFrom, isObservable, type Observable } from "rxjs";
-import { resolveForwardRef } from "@/core/di/forward-ref.ts";
-import type { Provider } from "@/core/di/provider.ts";
-import { getComponentDef } from "@/core/metadata/define-component.ts";
-import { getDirectiveDef } from "@/core/metadata/directive.ts";
+import { injectionTokenName } from "@/core/di/injector.ts";
+import { CompiledType } from "@/core/metadata/compiled-type.ts";
 import type { AbstractControl } from "@/forms/abstract-control.ts";
 import { NG_ASYNC_VALIDATORS, NG_VALIDATORS } from "@/forms/ng-validators.ts";
 import type { ValidationErrors } from "@/forms/types.ts";
@@ -25,13 +23,9 @@ interface NgModelController {
 const SYNC_KEY = "ngjsValidators";
 const ASYNC_KEY = "ngjsAsyncValidators";
 
-/** `providers` (aplanado) declara un provider para `token`. Mismo opt-in que `NG_VALUE_ACCESSOR`. */
-function declaresProvider(providers: Provider[] | undefined, token: unknown): boolean {
-  if (!providers) return false;
-  const flat = (providers as unknown[]).flat(Number.POSITIVE_INFINITY) as Array<{ provide?: unknown }>;
-  return flat.some(
-    (entry) => typeof entry === "object" && entry !== null && resolveForwardRef(entry.provide) === token,
-  );
+/** Sus `providers` (`ɵfac.ɵproviders`) proveen `token`. Mismo opt-in que `NG_VALUE_ACCESSOR`. */
+function declaresProvider(type: Function | undefined, token: Parameters<typeof injectionTokenName>[0]): boolean {
+  return CompiledType.providerTokens(type).includes(injectionTokenName(token));
 }
 
 function hasValidateMethod(value: unknown): value is { validate: (control: AbstractControl) => unknown } {
@@ -161,10 +155,9 @@ export function decorateControllerNgValidators($delegate: angular.IControllerSer
     onInstance: (instance, locals) => {
       if (!hasValidateMethod(instance)) return;
 
-      const Clase = (instance as { constructor: Function }).constructor;
-      const def = getComponentDef(Clase) ?? getDirectiveDef(Clase);
-      const isSyncValidator = declaresProvider(def?.providers, NG_VALIDATORS);
-      const isAsyncValidator = declaresProvider(def?.providers, NG_ASYNC_VALIDATORS);
+      const Clase = CompiledType.ofInstance(instance);
+      const isSyncValidator = declaresProvider(Clase, NG_VALIDATORS);
+      const isAsyncValidator = declaresProvider(Clase, NG_ASYNC_VALIDATORS);
       if (!isSyncValidator && !isAsyncValidator) return;
 
       const $element = locals?.$element as angular.IAugmentedJQuery | undefined;

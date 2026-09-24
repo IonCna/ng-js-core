@@ -1,122 +1,93 @@
 # Roadmap de `ngjs-core`
 
-El compilador es responsable de leer decoradores, resolver metadata y generar
-el código AngularJS. `ngjs-core` conserva la API que usa el código fuente y el
-comportamiento que ocurre durante la ejecución de la aplicación.
+El compilador (`ng-js-compiler`, vía `ngjs build`) lee decoradores, resuelve metadata y genera el código AngularJS
+(`ɵfac`, `ɵprov`, `ɵcmp`/`ɵdir`/`ɵpipe`, `ɵmod`, la registración de módulos, el injector por elemento). `ngjs-core`
+conserva la API que usa el código fuente y el comportamiento que ocurre durante la ejecución: toda la metadata que
+el runtime necesita la lee de lo que estampó el compilador (`CompiledType`), nunca de registros propios.
+
+El modo runtime anterior (`old/`) ya no existe: su código quedó migrado y sus tests portados a `test/` — lógica pura
+en el proyecto `unit` (jsdom + `angular-mocks`) e integración en `compiled` (`*.compiled.test.ts`: cada fixture se
+compila con `ng-js-compiler` junto con `src/`, ver `test/compiled-app.ts` y `test/router/router-app.ts`). Los tests
+que probaban el motor de runtime (registro de módulos, store de metadata, nombres de selector, `reflect`) no se
+portaron: eso ahora es el compilador y tiene sus propios tests.
 
 ## Nivel 1: APIs declarativas sin runtime
 
-Estas piezas solo necesitan tipos y funciones inertes. El compilador las lee,
-las elimina y genera el comportamiento correspondiente.
+- [x] `Component`, `Directive`, `Pipe`, `NgModule`, `Injectable`
+- [x] `Input` (alias, `binding: "@"`), `Output` (alias), `HostBinding`, `HostListener` (también `window:`/`document:`
+  y filtros de tecla)
+- [x] `Attribute`, `Inject`, `Optional`, `Self`, `SkipSelf`, `Host`, `forwardRef`
+- [x] `InjectionToken` (con `factory`), providers y `ProviderToken`
+- [x] `ViewChild`, `ViewChildren`, `ContentChild`, `ContentChildren` (definición en `ɵcmp.queries`/`viewQueries`)
 
-- [x] `Component`
-- [x] `Directive`
-- [x] `Pipe`
-- [x] `NgModule`
-- [x] `Injectable`
-- [x] `Input`
-- [x] `Output`
-- [x] `HostBinding`
-- [x] `HostListener`
-- [x] `Attribute`
-- [x] `Inject`
-- [x] `Optional`, `Self`, `SkipSelf`, `Host`
-- [x] `forwardRef`
-- [x] `InjectionToken`
-- [x] providers y `ProviderToken`
-
-`Service` queda fuera del target. El target es Angular 14/16 y la API de
-servicios es `Injectable`.
-
-`afterRender`, `afterNextRender` y `afterEveryRender` también quedan fuera:
-son APIs posteriores a Angular 16 y no forman parte del target.
+`Service` queda fuera del target (Angular 14/16 usa `Injectable`). `afterRender`/`afterNextRender` también.
 
 ## Nivel 2: contratos de tipos
 
-Estas piezas no necesitan implementación de AngularJS, pero completan la API
-que usan las clases compiladas.
+- [x] `PipeTransform`, hooks de ciclo de vida, `SimpleChange`/`SimpleChanges`
+- [x] `ApplicationRef`, `NgZone`, `ErrorHandler`, `Renderer2`/`RendererFactory2`
 
-- [x] `PipeTransform`
-- [x] hooks: `OnChanges`, `OnInit`, `DoCheck`, `OnDestroy`
-- [x] hooks de contenido y vista
-- [x] `SimpleChange` y `SimpleChanges`
-- [ ] tipos de configuración de bootstrap
-- [x] tipos básicos de `ApplicationRef`, `NgZone` y `ErrorHandler`
-- [ ] tipos de `Renderer2` y `RendererFactory2`
-
-## Nivel 3: primitivas runtime aisladas
-
-Estas piezas tienen comportamiento propio, pero pueden implementarse sin
-construir todavía toda la plataforma.
+## Nivel 3: primitivas runtime
 
 - [x] `EventEmitter` sobre `rxjs.Subject`
-- [ ] `DestroyRef` conectado al `$scope.$on("$destroy")`
-- [x] `Injector` como fachada del `$injector` AngularJS
-- [ ] `ElementRef` como envoltura del elemento jqLite/DOM
-- [x] `ChangeDetectorRef` como fachada de digest; `markForCheck()` agenda un
-  digest con `$evalAsync()` y `detectChanges()` ejecuta un digest local
-- [ ] `DOCUMENT`
-- [ ] `Renderer2` sobre DOM/jqLite
+- [x] `Injector` (se provee solo en la raíz) e `inject()` de runtime (contexto de construcción o app)
+- [x] `ElementRef`, `ChangeDetectorRef`, `DestroyRef`, `ViewContainerRef`, `TemplateRef`, `AsyncPipe`: tokens por
+  elemento, agregados a los `locals` de `$controller` bajo su nombre compilado (`ElementTokens`)
+- [x] `DOCUMENT`, `PLATFORM_ID`, `LOCALE_ID` (tokens con `factory`)
+- [x] `NgZone`, `ApplicationRef`, `ErrorHandler` (`providedIn: "root"`; `ErrorHandler` recibe `$exceptionHandler`)
 
-`zone.js` queda fuera del runtime nuevo. El polyfill generado por
-`ng-js-compiler` cubre las entradas async que necesitan iniciar un digest.
+`zone.js` queda fuera del runtime: los parches de `ng-js-compiler` cubren las entradas async que inician un digest.
 
 ## Nivel 4: wiring de componentes
 
-Estas piezas conectan objetos del runtime con componentes ya generados por el
-compilador.
-
-- [ ] conectar `EventEmitter` con `ɵcmp.outputs` y bindings `&`
-- [ ] aplicar `DestroyRef` y limpiar subscripciones
-- [ ] `hostDirectives` usando `ɵcmp.hostDirectives`
-- [ ] proyección de contenido usando `ɵcmp` y `ng-content`
-- [ ] resolución de `exportAs` y referencias `ng-ref`
-- [x] `inject()` fuera de la construcción, usando el injector compilado activo
+- [x] `@Output` con `EventEmitter` y bindings `&`
+- [x] `hostDirectives` (instancia la directiva compuesta antes del host; sin reenvío de `inputs`/`outputs`)
+- [x] proyección de contenido (`<ng-content>`, `transclude` lo emite el compilador) y proyección eager
+- [x] `exportAs` y referencias `ng-ref` / `ng-ref-read`
+- [x] `ControlValueAccessor` y validadores (`NG_VALUE_ACCESSOR`/`NG_VALIDATORS` en `ɵfac.ɵproviders`)
 
 ## Nivel 5: queries y vistas
 
-El compilador ya deja las definiciones en `ɵcmp.queries` y
-`ɵcmp.viewQueries`; el runtime debe resolverlas contra el DOM y mantener su
-estado.
-
-- [ ] `QueryList`
-- [ ] `ViewChild` y `ViewChildren`
-- [ ] `ContentChild` y `ContentChildren`
-- [ ] `TemplateRef`
-- [ ] `ViewContainerRef`
-- [ ] `EmbeddedViewRef`
-- [ ] `ComponentRef`
-- [ ] creación dinámica de componentes
+- [x] `QueryList`, `@ViewChild(ren)`, `@ContentChild(ren)` (resueltas antes de `ngAfterViewInit`/`ngAfterContentInit`)
+- [x] `TemplateRef` (directiva nativa `ngTemplate`), `ViewContainerRef`, `EmbeddedViewRef`, `ComponentRef`
+- [x] `createComponent()` / `ViewContainerRef.createComponent()` (componente declarado en un módulo cargado)
+- [ ] `ngTemplateOutlet`: el test de contexto `let-x` falla — pendiente de revisar en la etapa de tests
+- Limitación: lo que un `ng-if` agrega aparece por `QueryList.changes`, no en `ngAfterViewInit`
 
 ## Nivel 6: plataforma
 
-- [x] `platformBrowserDynamic()` como fachada de `ɵngjsPlatform`
-- [x] bootstrap de un `ɵmod` compilado
-- [ ] providers de plataforma (`Injector`, `NgZone`, `ErrorHandler`, etc.)
-- [x] manejo del digest global mediante el polyfill del compiler
-- [ ] wiring de `ApplicationRef` con la aplicación compilada
-- [ ] `APP_INITIALIZER` completo; actualmente `provideAppInitializer()` solo
-  registra callbacks globales que `PlatformCode` ejecuta antes de resolver el
-  bootstrap, pero todavía no se resuelven providers `multi` de Angular
-- [ ] inicializadores de aplicación
+- [x] `platformBrowserDynamic()` sobre `ɵngjsPlatform`; agrega `NativeModule` (los bridges) al módulo raíz
+- [x] `bootstrapApplication(AppModule)` como atajo (resuelve con el `ApplicationRef`)
+- [x] `APP_INITIALIZER` (multi) y `provideAppInitializer()`: `bootstrapModule()` espera sus promesas
+- [x] `BrowserModule` (= `CoreModule` + `CommonModule` + servicios del navegador)
 
-## Nivel 7: features completas
+## Nivel 7: features
 
-Estas áreas tienen varios bridges y deben hacerse después de las primitivas
-anteriores.
+- [x] forms (reactive directives, `ControlValueAccessor`, validadores, `ngDisabled`)
+- [x] async pipe (por instancia)
+- [x] router sobre UI-Router (`RouterModule.forRoot/forChild`, guards, resolvers, títulos, `loadComponent`,
+  `loadChildren` con `@NgModule` compilado, preloading, scroll)
+- [x] animaciones (`AnimationBuilder` sobre `$animateCss`)
+- [x] i18n (`TranslateModule` sobre `angular-translate`, `TranslateService`, `registerLocaleData`)
+- [x] CDK: `a11y` (`A11yModule`, `LiveAnnouncer`, `FocusTrap`, `FocusMonitor`) y `layout` (`BreakpointObserver`)
+- [x] `platform-browser` (`Title`, `Meta`, `DomSanitizer`, renderer)
+- [x] `testing`: `configureTestingModule()` arma un módulo de `angular.mock` con clases compiladas
 
-- [ ] forms y `ControlValueAccessor`
-- [ ] validadores y `ngModel`/`disabled`
-- [ ] async pipe
-- [ ] router y módulos lazy
-- [ ] animaciones
-- [ ] i18n
-- [ ] CDK y accesibilidad
-- [ ] sanitización y `platform-browser`
+Limitaciones de AngularJS (un solo injector): los `providers` de una ruta o de un `@NgModule` cargado lazy quedan
+para toda la app, no para su rama (sin override por rama, sin `inject(Injector)` de la rama, sin `ngOnDestroy` por
+rama). Las `declarations` también son globales: un componente lazy con un selector ya registrado es error.
+
+Un componente de `loadComponent` (fuera de todo `@NgModule`) hereda el `controllerAs` del `@NgModule` raíz
+(`ɵmod.controllerAs`, constante `ɵngjsRootControllerAs` de la app).
+
+## Pendiente
+
+- [ ] `InjectionToken` con `factory` de raíz + `multi` desde un módulo: `MultiProvidersRuntime` lo rechaza como
+  "mezcla multi y no-multi" (hoy resuelto solo para `HTTP_INTERCEPTORS`, que no lleva `factory`).
+- [ ] `ngjs build` real del core (con el `dist/` del compilador y el CLI reconstruidos).
 
 ## Regla de implementación
 
-Si una API solo sirve para que el compilador reconozca sintaxis, debe ser un
-tipo o decorador inerte. Si necesita observar scopes, DOM, digest, injector,
-subscripciones o creación de vistas, pertenece al runtime y debe entrar en el
-nivel correspondiente antes de publicarse como funcional.
+Si una API solo sirve para que el compilador reconozca sintaxis, debe ser un tipo o decorador inerte. Si necesita
+observar scopes, DOM, digest, injector, subscripciones o creación de vistas, pertenece al runtime (`src/native` para
+lo imperativo de AngularJS) y lee la metadata compilada con `CompiledType`.

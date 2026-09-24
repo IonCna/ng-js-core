@@ -1,9 +1,9 @@
 import type angular from "angular";
-import type { ValidationErrors } from "@/forms/types.ts";
 import { Inject } from "@/core/di/inject.ts";
 import { Directive } from "@/core/metadata/directive.ts";
 import { Input } from "@/core/metadata/input.ts";
 import { findAncestorControl } from "@/forms/control-container.ts";
+import type { ValidationErrors } from "@/forms/types.ts";
 
 interface NgModelController {
   $modelValue: unknown;
@@ -54,7 +54,8 @@ function applyErrorKeys(ngModel: NgModelController, errors: ValidationErrors | n
  */
 @Directive({ selector: "[formControlName]" })
 export class FormControlNameDirective {
-  @Input() formControlName!: string;
+  /** Un nombre (o índice) estático, como en Angular: `form-control-name="email"`. */
+  @Input({ binding: "@" }) formControlName!: string;
 
   constructor(
     @Inject("$element") private readonly $element: angular.IAugmentedJQuery,
@@ -101,5 +102,4 @@ export class FormControlNameDirective {
       control.markAsTouched();
     };
   }
-
 }

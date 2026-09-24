@@ -1,10 +1,9 @@
-import { InjectionToken } from "@/core/di/injection-token.ts";
-import { Injectable } from "@/core/di/injectable.ts";
-import {
-  type LocationChangeListener,
-  PlatformLocation,
-} from "@/common/location/platform-location.ts";
+import type { LocationChangeListener, PlatformLocation } from "@/common/location/platform-location.ts";
 import { joinWithSlash, normalizeQueryParams } from "@/common/location/util.ts";
+import { Inject } from "@/core/di/inject.ts";
+import { Optional } from "@/core/di/inject-flags.ts";
+import { Injectable } from "@/core/di/injectable.ts";
+import { InjectionToken } from "@/core/di/injection-token.ts";
 
 /**
  * `APP_BASE_HREF` — base href por código, en vez de `<base href>` en el HTML.
@@ -20,9 +19,8 @@ export const APP_BASE_HREF = new InjectionToken<string>("APP_BASE_HREF");
  * `PlatformLocation`. Cuál queda activa lo elige `RouterModule.forRoot`
  * (`withHashLocation()` → `HashLocationStrategy`).
  */
+@Injectable()
 export abstract class LocationStrategy {
-  static readonly $name = "LocationStrategy";
-
   abstract path(includeHash?: boolean): string;
   abstract prepareExternalUrl(internal: string): string;
   abstract getState(): unknown;
@@ -38,13 +36,11 @@ export abstract class LocationStrategy {
 /** `/users/42` — History API. Necesita un base href (`<base>` o `APP_BASE_HREF`). */
 @Injectable()
 export class PathLocationStrategy extends LocationStrategy {
-  static readonly $inject = [PlatformLocation.$name, APP_BASE_HREF.toString()];
-
   private readonly baseHref: string;
 
   constructor(
     private readonly platformLocation: PlatformLocation,
-    href?: string,
+    @Optional() @Inject(APP_BASE_HREF) href?: string,
   ) {
     super();
     this.baseHref = href ?? platformLocation.getBaseHrefFromDOM() ?? "";
@@ -97,13 +93,11 @@ export class PathLocationStrategy extends LocationStrategy {
 /** `/#/users/42` — el path va después del `#`. Anda sin config del server. */
 @Injectable()
 export class HashLocationStrategy extends LocationStrategy {
-  static readonly $inject = [PlatformLocation.$name, APP_BASE_HREF.toString()];
-
   private readonly baseHref: string;
 
   constructor(
     private readonly platformLocation: PlatformLocation,
-    href?: string,
+    @Optional() @Inject(APP_BASE_HREF) href?: string,
   ) {
     super();
     this.baseHref = href ?? "";

@@ -6,7 +6,7 @@
 
 // Permite: cualquier esquema `nombre:` que no sea `javascript:`, o paths
 // relativos / scheme-relative. Igual que Angular.
-const SAFE_URL_PATTERN = /^(?!javascript:)(?:[a-z0-9+.\-]+:|[^&:/?#]*(?:[/?#]|$))/i;
+const SAFE_URL_PATTERN = /^(?!javascript:)(?:[a-z0-9+.-]+:|[^&:/?#]*(?:[/?#]|$))/i;
 
 export function sanitizeUrl(url: string): string {
   const u = String(url);

@@ -1,22 +1,21 @@
-import { DOCUMENT } from "@/core/dom-tokens.ts";
+import { Inject } from "@/core/di/inject.ts";
 import { Injectable } from "@/core/di/injectable.ts";
+import { DOCUMENT } from "@/core/dom-tokens.ts";
 
 /**
  * `Title` — mismo servicio que `@angular/platform-browser`. Lee y escribe
  * `document.title` y nada más. Qué título corresponde a cada ruta lo decide el
  * router (`TitleStrategy`), no acá.
  */
+@Injectable()
 export abstract class Title {
-  static readonly $name = "Title";
   abstract getTitle(): string;
   abstract setTitle(value: string): void;
 }
 
 @Injectable()
 export class TitleImpl extends Title {
-  static readonly $inject = [DOCUMENT.toString()];
-
-  constructor(private readonly doc: Document) {
+  constructor(@Inject(DOCUMENT) private readonly doc: Document) {
     super();
   }
 

@@ -1,3 +1,4 @@
+import { Injectable } from "@/core/di/injectable.ts";
 /**
  * Etapa 20 — `Renderer2` / `RendererFactory2` (abstracción, `@angular/core`).
  *
@@ -18,9 +19,8 @@ export interface RendererType2 {
   data?: { [kind: string]: unknown };
 }
 
+@Injectable()
 export abstract class Renderer2 {
-  static readonly $name = "Renderer2";
-
   /** Bolsa libre para que el implementador cuelgue lo que necesite. */
   abstract data: { [key: string]: unknown };
 
@@ -46,9 +46,8 @@ export abstract class Renderer2 {
   abstract listen(target: unknown, eventName: string, callback: (event: unknown) => boolean | undefined): () => void;
 }
 
+@Injectable()
 export abstract class RendererFactory2 {
-  static readonly $name = "RendererFactory2";
-
   abstract createRenderer(hostElement: unknown, type: RendererType2 | null): Renderer2;
   /** No-op acá: sin pipeline de render propio donde enganchar begin/end. */
   begin?(): void;

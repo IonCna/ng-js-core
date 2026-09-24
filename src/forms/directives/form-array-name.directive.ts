@@ -15,7 +15,7 @@ import { findAncestorControl, publishControlContainer } from "@/forms/control-co
  */
 @Directive({ selector: "[formArrayName]" })
 export class FormArrayNameDirective {
-  @Input() formArrayName!: string;
+  @Input({ binding: "@" }) formArrayName!: string;
 
   constructor(@Inject("$element") private readonly $element: angular.IAugmentedJQuery) {}
 
@@ -30,5 +30,4 @@ export class FormArrayNameDirective {
     }
     publishControlContainer(this.$element, control);
   }
-
 }

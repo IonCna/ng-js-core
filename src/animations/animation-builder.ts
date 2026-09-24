@@ -14,6 +14,7 @@ import type {
   AnimationStyleMetadata,
   ɵStyleData,
 } from "@/animations/dsl.ts";
+import { Inject } from "@/core/di/inject.ts";
 
 /**
  * API **imperativa** de animación — el par `AnimationBuilder` / `AnimationFactory`
@@ -63,8 +64,8 @@ export abstract class AnimationFactory {
  * Token DI (`$name`). El modo runtime lo bindea a `BrowserAnimationBuilder`
  * (con `ngAnimate`) o a un builder no-op (`NoopAnimationsModule`).
  */
+@Injectable()
 export abstract class AnimationBuilder {
-  static readonly $name = "AnimationBuilder";
   abstract build(animation: AnimationMetadata | AnimationMetadata[]): AnimationFactory;
 }
 
@@ -401,9 +402,7 @@ class BrowserAnimationFactory extends AnimationFactory {
  */
 @Injectable()
 export class BrowserAnimationBuilder extends AnimationBuilder {
-  static readonly $inject = ["$animateCss"] as const;
-
-  constructor(private readonly $animateCss: IAnimateCssService) {
+  constructor(@Inject("$animateCss") private readonly $animateCss: IAnimateCssService) {
     super();
   }
 

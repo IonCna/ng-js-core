@@ -1,5 +1,6 @@
-import { DOCUMENT } from "@/core/dom-tokens.ts";
+import { Inject } from "@/core/di/inject.ts";
 import { Injectable } from "@/core/di/injectable.ts";
+import { DOCUMENT } from "@/core/dom-tokens.ts";
 import {
   allowSanitizationBypassAndThrow,
   BypassType,
@@ -38,9 +39,8 @@ export enum SecurityContext {
  * en la v10). `sanitize(SCRIPT | RESOURCE_URL, string)` **tira** — solo aceptan
  * valores bypasseados, igual que Angular.
  */
+@Injectable()
 export abstract class DomSanitizer {
-  static readonly $name = "DomSanitizer";
-
   abstract sanitize(context: SecurityContext, value: SafeValue | string | null): string | null;
   abstract bypassSecurityTrustHtml(value: string): SafeHtml;
   abstract bypassSecurityTrustStyle(value: string): SafeStyle;
@@ -51,9 +51,7 @@ export abstract class DomSanitizer {
 
 @Injectable()
 export class DomSanitizerImpl extends DomSanitizer {
-  static readonly $inject = [DOCUMENT.toString()];
-
-  constructor(private readonly doc: Document) {
+  constructor(@Inject(DOCUMENT) private readonly doc: Document) {
     super();
   }
 
@@ -77,9 +75,7 @@ export class DomSanitizerImpl extends DomSanitizer {
         return sanitizeUrl(String(value));
       case SecurityContext.RESOURCE_URL:
         if (allowSanitizationBypassAndThrow(value, BypassType.ResourceUrl)) return unwrapSafeValue(value);
-        throw new Error(
-          "unsafe value used in a resource URL context (see https://g.co/ng/security#xss)",
-        );
+        throw new Error("unsafe value used in a resource URL context (see https://g.co/ng/security#xss)");
       default:
         throw new Error(`Unexpected SecurityContext ${context} (see https://g.co/ng/security#xss)`);
     }

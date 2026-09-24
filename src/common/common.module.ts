@@ -1,16 +1,20 @@
-import { NgContainer } from "@/common/ng-container.ts";
-import { NgContent } from "@/common/ng-content.ts";
+import {
+  APP_BASE_HREF,
+  BrowserPlatformLocation,
+  Location,
+  LocationImpl,
+  PlatformLocation,
+} from "@/common/location/index.ts";
 import { NgTemplateOutlet } from "@/common/ng-template-outlet.ts";
-import { NgModule } from "@/core/metadata/ng-module.ts";
-import { TemplateRef } from "@/core/refs/template-ref.ts";
 import { BrowserViewportScroller, ViewportScroller } from "@/common/viewport-scroller.ts";
-import { APP_BASE_HREF, BrowserPlatformLocation, Location, LocationImpl, PlatformLocation } from "@/common/location/index.ts";
+import { NgModule } from "@/core/metadata/ng-module.ts";
 import { KeyValuePipe } from "@/pipes/key-value.ts";
 import { PercentPipe } from "@/pipes/percent.ts";
 import { TitleCasePipe } from "@/pipes/title-case.ts";
 
 @NgModule({
-  declarations: [NgContent, NgContainer, NgTemplateOutlet, TemplateRef, KeyValuePipe, PercentPipe, TitleCasePipe],
+  // `ng-content`/`ng-container`/`ng-template` son directivas nativas de `NativeModule` (las trae la plataforma).
+  declarations: [NgTemplateOutlet, KeyValuePipe, PercentPipe, TitleCasePipe],
   providers: [
     { provide: APP_BASE_HREF, useValue: "/" },
     { provide: PlatformLocation, useClass: BrowserPlatformLocation },

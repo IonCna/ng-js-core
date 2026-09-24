@@ -1,4 +1,5 @@
 import type { IScope } from "angular";
+import { Injectable } from "@/core/di/injectable.ts";
 
 /**
  * Fachada de la detección de cambios de AngularJS.
@@ -8,6 +9,7 @@ import type { IScope } from "angular";
  * `$evalAsync()` para iniciar un digest cuando el cambio ocurre fuera de esos
  * puntos de entrada.
  */
+@Injectable()
 export abstract class ChangeDetectorRef {
   abstract markForCheck(): void;
   abstract detach(): void;

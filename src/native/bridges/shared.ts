@@ -104,8 +104,8 @@ export function decorateControllerWith(
  * `$onDestroy`, ...) SIN pisar lo que ya hubiera ahí — ni del autor, ni de
  * otro bridge nuestro que se haya enganchado antes. Lo que ya estaba corre
  * primero, `addition` después. Necesario desde que hay más de un bridge de
-   * distintos bridges queriendo el mismo hook (por ejemplo, `ng-ref-bridge.ts`
-   * y otros bridges nativos) — este helper conserva la cadena sin pisar métodos.
+ * distintos bridges queriendo el mismo hook (por ejemplo, `ng-ref-bridge.ts`
+ * y otros bridges nativos) — este helper conserva la cadena sin pisar métodos.
  * "si no existe, lo pongo", y el segundo bridge en pisarlo se quedaba afuera.
  */
 export function chainInstanceMethod(instance: object, methodName: string, addition: () => void): void {
