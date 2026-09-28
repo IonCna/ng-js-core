@@ -272,10 +272,13 @@ class LazyUrlLink {
    * `true` si la URL solo la atrapa una ruta `**` (su param `ngjsCatchAll`, ver `state-translator.ts`). Al cargar
    * la rama, `lazyLoadChildrenFor` quita el future state (`admin.**`) ANTES de registrar el real (`admin`), y
    * UI-Router avisa `onStatesChanged` en ese hueco: ahí la URL cae en el `**`, que no es su destino.
+   * Sin `**` cae en la regla `otherwise`, cuyo `match` es `true` (no un objeto): un `in` sobre eso tira dentro del
+   * listener y aborta la carga lazy — por eso se chequea que sea una regla de estado con params.
    */
   private static matchesCatchAll(uiRouter: UiRouterLike, url: string): boolean {
     const matched = LazyUrlLink.match(uiRouter, url);
-    return Boolean(matched?.match && "ngjsCatchAll" in matched.match);
+    if (matched?.rule.type !== "STATE" || typeof matched.match !== "object" || matched.match === null) return false;
+    return "ngjsCatchAll" in matched.match;
   }
 
   private static match(uiRouter: UiRouterLike, url: string): UrlMatchResult | undefined {
