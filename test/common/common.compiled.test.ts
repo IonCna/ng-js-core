@@ -57,6 +57,27 @@ export class AppModule {}
       expect(html().querySelector("div > span")?.textContent).toBe("hola");
     });
 
+    it("su contenido se linkea: bindings y un ng-repeat de adentro andan (y siguen la colección)", async () => {
+      await boot(
+        '<div><ng-container><b>{{$ctrl.title}}</b><span ng-repeat="x in $ctrl.items">{{x}}</span></ng-container></div>',
+        '  title = "T"; items = [1, 2];',
+      );
+      expect(app!.errors).toEqual([]);
+      expect(html().querySelector("ng-container")).toBeNull();
+      expect(html().querySelector("div > b")?.textContent).toBe("T");
+      expect(Array.from(html().querySelectorAll("div > span"), (span) => span.textContent)).toEqual(["1", "2"]);
+
+      root<{ items: number[] }>().items = [3, 1, 4];
+      app!.digest();
+      expect(Array.from(html().querySelectorAll("div > span"), (span) => span.textContent)).toEqual(["3", "1", "4"]);
+    });
+
+    it("un ng-repeat como único hijo no rompe (antes: \"reading 'parent'\" en $animate.enter)", async () => {
+      await boot('<ng-container><i ng-repeat="x in $ctrl.items">{{x}}</i></ng-container>', "  items = ['a', 'b'];");
+      expect(app!.errors).toEqual([]);
+      expect(Array.from(html().querySelectorAll("i"), (item) => item.textContent)).toEqual(["a", "b"]);
+    });
+
     it("es ancla de un ViewContainerRef: un componente dinámico insertado ahí se limpia al destruirse", async () => {
       await boot(
         "<div><ng-container></ng-container></div>",

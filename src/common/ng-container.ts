@@ -33,11 +33,18 @@ export class NgContainer implements angular.IController {
   }
 
   $postLink(): void {
-    // El contenido va donde estaba el tag: `$element` es el comentario ancla de `transclude: "element"`.
-    this.$transclude(this.$scope, (clone) => {
-      this.content = (clone as angular.IAugmentedJQuery | undefined)?.contents();
-      if (this.content) this.$element.after(this.content);
+    // El contenido va donde estaba el tag: `$element` es el comentario ancla de `transclude: "element"`. Se linkea
+    // DENTRO del clon del `<ng-container>` y recién después se sube al lugar del ancla: AngularJS linkea los hijos por
+    // su índice en `childNodes` del clon, así que sacarlos antes (en el `cloneAttachFn`) los dejaba sin linkear (un
+    // `ng-repeat` de adentro recibía un `$element` vacío → "Cannot read properties of undefined (reading 'parent')").
+    const clone = this.$transclude(this.$scope, (cloned) => {
+      if (cloned) this.$element.after(cloned);
     });
+    const wrapper = clone?.[0] as Node | undefined;
+    if (!wrapper?.parentNode) return;
+    this.content = clone.contents();
+    for (const node of Array.from(this.content as ArrayLike<Node>)) wrapper.parentNode.insertBefore(node, wrapper);
+    clone.remove();
   }
 
   $onDestroy(): void {
