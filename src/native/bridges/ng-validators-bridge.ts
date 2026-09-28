@@ -92,8 +92,9 @@ function ensureSyncValidatorWired(ngModel: NgModelController): Validator[] {
   if (!ngModel.$ngjsSyncValidators) {
     ngModel.$ngjsSyncValidators = [];
     const seenKeys = new Set<string>();
-    ngModel.$validators[SYNC_KEY] = () => {
-      const control = createValueOnlyControl(ngModel.$modelValue);
+    // El valor llega como argumento: durante la validación `$modelValue` todavía es el anterior.
+    ngModel.$validators[SYNC_KEY] = (modelValue: unknown) => {
+      const control = createValueOnlyControl(modelValue);
       const merged = mergeErrors(
         (ngModel.$ngjsSyncValidators as Validator[]).map((validator) => validator.validate(control)),
       );
@@ -109,8 +110,8 @@ function ensureAsyncValidatorWired(ngModel: NgModelController): AsyncValidator[]
   if (!ngModel.$ngjsAsyncValidators) {
     ngModel.$ngjsAsyncValidators = [];
     const seenKeys = new Set<string>();
-    ngModel.$asyncValidators[ASYNC_KEY] = () => {
-      const control = createValueOnlyControl(ngModel.$modelValue);
+    ngModel.$asyncValidators[ASYNC_KEY] = (modelValue: unknown) => {
+      const control = createValueOnlyControl(modelValue);
       const validators = ngModel.$ngjsAsyncValidators as AsyncValidator[];
       return Promise.all(validators.map((validator) => toPromise(validator.validate(control)))).then((results) => {
         const merged = mergeErrors(results);

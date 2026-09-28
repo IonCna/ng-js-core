@@ -24,7 +24,7 @@ describe("forms: ControlValueAccessor, NG_VALIDATORS y reactive forms (código c
   async function boot(code: string, declarations: string): Promise<CompiledApp> {
     app = await CompiledApp.bootstrap({
       "app.module.ts": `
-import { Component, Directive, forwardRef, NgModule } from "ngjs-core";
+import { Component, Directive, forwardRef, HostListener, NgModule } from "ngjs-core";
 import { type AbstractControl, type AsyncValidator, type ControlValueAccessor, FormArray, FormControl, FormGroup, FormsModule, NG_ASYNC_VALIDATORS, NG_VALIDATORS, NG_VALUE_ACCESSOR, type Validator, Validators } from "ngjs-core/forms";
 ${code}
 @NgModule({ imports: [FormsModule], declarations: [${declarations}] })
@@ -58,6 +58,7 @@ export class FakeCvaDirective implements ControlValueAccessor {
   setDisabledState(isDisabled: boolean): void { this.disabled = isDisabled; }
   typeValue(value: unknown): void { this.onChange(value); }
   touch(): void { this.onTouched(); }
+  @HostListener("input", ["$event"]) onInput(event: Event): void { this.onChange("cva:" + (event.target as HTMLInputElement).value); }
 }
 
 @Component({
@@ -94,6 +95,17 @@ export class FakeCvaComponent implements ControlValueAccessor {
       scope.dis = true;
       scope.$digest();
       expect(directive.disabled).toBe(true);
+    });
+
+    it("en un <input>: se van los listeners del directive input nativo, pero no los @HostListener del accessor", async () => {
+      await boot(cva, "FakeCvaDirective, FakeCvaComponent");
+      const { element, scope } = app!.compile<{ model: unknown }>('<input fake-cva ng-model="model">', { model: null });
+      const input = element[0] as HTMLInputElement;
+      input.value = "x";
+      input.dispatchEvent(new app!.window.Event("input", { bubbles: true }));
+      scope.$digest();
+      // Sin el sync nativo (que empujaría "x" crudo); con el @HostListener del accessor.
+      expect(scope.model).toBe("cva:x");
     });
 
     it("funciona sobre un componente con ngModel en el host; sin ngModel no toca nada", async () => {
@@ -153,6 +165,26 @@ export class FakeTakenDirective implements AsyncValidator {
       scope.model = "abc";
       scope.$digest();
       expect(ngModel.$valid).toBe(true);
+    });
+
+    it("vista → modelo: valida el valor nuevo (no el $modelValue anterior) y deja el modelo en undefined si no pasa", async () => {
+      await boot(validators, decls);
+      const { element, scope } = app!.compile<{ model: unknown }>('<input fake-min-length ng-model="model">', { model: "abcd" });
+      const ngModel = ngModelOf(element);
+      expect(ngModel.$valid).toBe(true);
+
+      const input = element[0] as HTMLInputElement;
+      input.value = "ab";
+      input.dispatchEvent(new app!.window.Event("input", { bubbles: true }));
+      scope.$digest();
+      expect(ngModel.$error.minlength).toBe(true);
+      expect(scope.model).toBeUndefined();
+
+      input.value = "abcde";
+      input.dispatchEvent(new app!.window.Event("input", { bubbles: true }));
+      scope.$digest();
+      expect(ngModel.$valid).toBe(true);
+      expect(scope.model).toBe("abcde");
     });
 
     it("un AsyncValidator marca $pending y después $error.<clave>; resuelve válido sin error; sin ngModel no explota", async () => {

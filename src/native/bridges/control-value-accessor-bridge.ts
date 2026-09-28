@@ -1,4 +1,4 @@
-import type angular from "angular";
+import angular from "angular";
 import { injectionTokenName } from "@/core/di/injector.ts";
 import { CompiledType } from "@/core/metadata/compiled-type.ts";
 import type { ControlValueAccessor } from "@/forms/control-value-accessor.ts";
@@ -20,10 +20,17 @@ interface NgModelController {
  * engancha con jqLite `.on()` para hacer `ctrl.$setViewValue(element.value)`.
  * Cuando el elemento declara su propio `NG_VALUE_ACCESSOR`, ese sync built-in
  * pelea con el accessor (empuja el string crudo del DOM al modelo). Se
- * desenganchan; un accessor que sí quiere escuchar el DOM usa `addEventListener`,
- * que jqLite `.off()` no toca.
+ * desenganchan SOLO los que agregó el directive nativo: los que ya estaban al
+ * construir el accessor (sus `@HostListener("input")`, que el compilador engancha
+ * con `$element.on()` en el factory) se quedan.
  */
-const NATIVE_INPUT_SYNC_EVENTS = "input change compositionstart compositionend compositionupdate drop";
+const NATIVE_INPUT_SYNC_EVENTS = ["input", "change", "compositionstart", "compositionend", "compositionupdate", "drop"];
+
+/** Los handlers de jqLite (`$element.on()`) de cada evento, en este momento. */
+function jqLiteHandlers(element: Element): Map<string, Function[]> {
+  const data = (angular.element as unknown as { _data(el: Element): { events?: Record<string, Function[]> } })._data(element);
+  return new Map(NATIVE_INPUT_SYNC_EVENTS.map((type) => [type, [...(data.events?.[type] ?? [])]]));
+}
 
 const NATIVE_FORM_CONTROL_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
 
@@ -86,6 +93,8 @@ export function decorateControllerControlValueAccessor(
 
       const accessor = instance as ControlValueAccessor;
       const isNativeFormControl = NATIVE_FORM_CONTROL_TAGS.has(($element[0] as Element)?.tagName ?? "");
+      // Antes de que linkee el directive `input` nativo (los controllers se construyen antes del link).
+      const ownHandlers = isNativeFormControl ? jqLiteHandlers($element[0] as Element) : undefined;
 
       chainInstanceMethod(instance as object, "$postLink", () => {
         const ngModel = $element.controller("ngModel") as NgModelController | null;
@@ -95,7 +104,10 @@ export function decorateControllerControlValueAccessor(
           // El directive `input` nativo ya linkeó: sacarle sus aportes al `ngModel`.
           ngModel.$formatters.length = 0;
           ngModel.$parsers.length = 0;
-          $element.off(NATIVE_INPUT_SYNC_EVENTS);
+          for (const [type, handlers] of jqLiteHandlers($element[0] as Element)) {
+            const own = ownHandlers?.get(type) ?? [];
+            for (const handler of handlers) if (!own.includes(handler)) $element.off(type, handler as never);
+          }
         }
 
         ngModel.$render = () => accessor.writeValue(ngModel.$modelValue);
