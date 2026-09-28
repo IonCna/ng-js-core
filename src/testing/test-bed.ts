@@ -11,6 +11,7 @@ import type { PlatformRef } from "@/core/platform/bootstrap.ts";
 import type { ComponentRef } from "@/core/refs/component-ref.ts";
 import { createComponent } from "@/core/refs/create-component.ts";
 import { NativeModule } from "@/native/native.module.ts";
+import { MockSpec } from "@/testing/angular-mocks.ts";
 import { ComponentFixture } from "@/testing/component-fixture.ts";
 import { TestingDeclarations } from "@/testing/testing-declarations.ts";
 
@@ -94,7 +95,8 @@ class GlobalInjector {
  * El `TestBed` de `@angular/core/testing` sobre AngularJS. Cada test configura un `angular.module` propio (los
  * bridges de `NativeModule`, los `providedIn: "root"`, el entorno, los imports, las declaraciones y los providers
  * — los del test ganan: se registran último) y la primera vez que se pide algo (`inject`, `createComponent`) se
- * crea su injector con `angular.injector()`, sin `angular.mock`. `resetTestingModule()` lo descarta; si el test
+ * crea su injector con `angular.mock.module()` + `angular.mock.inject()`: trae `ngMock` (`$timeout.flush()`,
+ * `$httpBackend`, `$interval.flush()`, …) como un spec de AngularJS. `resetTestingModule()` lo descarta; si el test
  * framework expone `afterEach` global, se llama solo después de cada test.
  */
 export class TestBedImpl {
@@ -113,6 +115,7 @@ export class TestBedImpl {
   private teardown: ModuleTeardownOptions | undefined;
 
   private $injector: angular.auto.IInjectorService | undefined;
+  private spec: MockSpec | undefined;
   private root: HTMLElement | undefined;
   private fixtures: ComponentFixture<unknown>[] = [];
   private rootCount = 0;
@@ -230,7 +233,9 @@ export class TestBedImpl {
       rootElement.remove();
       throw (
         failure ??
-        new Error(`TestBed.createComponent: "${component.name}" no terminó de crearse (¿templateUrl fuera de $templateCache?).`)
+        new Error(
+          `TestBed.createComponent: "${component.name}" no terminó de crearse (¿templateUrl fuera de $templateCache?).`,
+        )
       );
     }
     const fixture = new ComponentFixture<T>(ref, $injector, rootElement);
@@ -252,8 +257,10 @@ export class TestBedImpl {
 
     const $injector = this.$injector;
     const root = this.root;
+    const spec = this.spec;
     this.$injector = undefined;
     this.root = undefined;
+    this.spec = undefined;
     if (!$injector) return this;
 
     let firstError: unknown;
@@ -269,6 +276,7 @@ export class TestBedImpl {
       root?.remove();
     }
     attempt(() => $injector.get<ApplicationRef>(injectionTokenName(ApplicationRef)).destroy());
+    attempt(() => spec?.close());
     this.globalInjector.restore();
     if (firstError) throw firstError;
     return this;
@@ -305,7 +313,7 @@ export class TestBedImpl {
 
     let $injector: angular.auto.IInjectorService;
     try {
-      $injector = angular.injector(["ng", name]);
+      ({ spec: this.spec, $injector } = MockSpec.create([name]));
     } catch (error) {
       root.remove();
       throw error;
@@ -319,7 +327,9 @@ export class TestBedImpl {
 
   private assertNotInstantiated(method: string): void {
     if (this.$injector)
-      throw new Error(`TestBed.${method}(): el módulo de test ya se instanció (se llamó inject/createComponent antes).`);
+      throw new Error(
+        `TestBed.${method}(): el módulo de test ya se instanció (se llamó inject/createComponent antes).`,
+      );
   }
 }
 

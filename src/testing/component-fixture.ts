@@ -8,6 +8,11 @@ interface Testability {
   whenStable(callback: () => void): void;
 }
 
+/** El `$browser` de `ngMock`: sus tareas diferidas (`$timeout`, `$evalAsync` fuera de digest) no corren solas. */
+interface MockBrowser {
+  defer: { flush?(delay?: number): void };
+}
+
 /**
  * El `ComponentFixture` de Angular sobre un `ComponentRef` de `ngjs-core`. Como en Angular, la vista arranca
  * desenganchada de la detección de cambios global (el `$scope` suspendido): el template recién se actualiza con
@@ -77,10 +82,26 @@ export class ComponentFixture<T> {
     return stable;
   }
 
-  /** Como en Angular: `false` si ya estaba estable, `true` cuando termina lo pendiente. */
+  /**
+   * Como en Angular: `false` si ya estaba estable, `true` cuando termina lo pendiente. Bajo `ngMock` las tareas
+   * diferidas no corren solas: se vacían acá (lo que en Angular sería esperar a los timers de la zona).
+   */
   whenStable(): Promise<boolean> {
     if (this.isStable()) return Promise.resolve(false);
+    this.flushDeferred();
+    if (this.isStable()) return Promise.resolve(true);
     return new Promise((resolve) => this.testability.whenStable(() => resolve(true)));
+  }
+
+  private flushDeferred(): void {
+    const $browser = this.$injector.get<MockBrowser>("$browser");
+    if (typeof $browser.defer.flush !== "function") return;
+    try {
+      $browser.defer.flush();
+    } catch (error) {
+      // `ngMock` tira si no había nada diferido.
+      if (!/No deferred tasks/.test((error as Error)?.message ?? "")) throw error;
+    }
   }
 
   whenRenderingDone(): Promise<boolean> {

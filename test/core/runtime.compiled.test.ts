@@ -432,6 +432,27 @@ export class AppModule {}
       expect(() => TestBed.overrideComponent(types.Greeter, { set: { template: "x" } })).toThrow(/no es un @Component/);
     });
 
+    it("usa angular.mock por debajo: ngMock ($timeout.flush), un injector nuevo tras resetTestingModule y sin globals sueltos", async () => {
+      const { TestBed, types } = await testBed();
+      TestBed.configureTestingModule({ imports: [types.FeatureModule] });
+      const $timeout = TestBed.inject<((fn: () => void, delay?: number) => void) & { flush(): void }>("$timeout");
+      const ran: number[] = [];
+      $timeout(() => ran.push(1), 1000);
+      expect(ran).toEqual([]);
+      $timeout.flush();
+      expect(ran).toEqual([1]);
+      const first = TestBed.inject<object>("$injector");
+
+      TestBed.resetTestingModule().configureTestingModule({ imports: [types.FeatureModule] });
+      expect(TestBed.inject<object>("$injector")).not.toBe(first);
+      expect(TestBed.inject<{ greet(): string }>(types.Greeter).greet()).toBe("real");
+      const window = app!.window as unknown as Record<string, unknown>;
+      expect(window.mocha).toBeUndefined();
+      expect(window.inject).toBeUndefined();
+      expect(window.module).toBeUndefined();
+      TestBed.resetTestingModule();
+    });
+
     it("inject([...], fn) de testing: resuelve los tokens con TestBed.inject y conserva this", async () => {
       const { TestBed, types } = await testBed();
       TestBed.configureTestingModule({ imports: [types.FeatureModule], providers: [{ provide: types.TOKEN, useValue: "v" }] });
