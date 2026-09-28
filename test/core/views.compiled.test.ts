@@ -159,6 +159,40 @@ export class AppModule {}
     expect(app.errors).toEqual([]);
   });
 
+  it("inject(NgDisabled) en una directiva: el ng-disabled del mismo elemento (null sin él, sin heredar del padre)", async () => {
+    app = await CompiledApp.bootstrap(
+      {
+        "app.module.ts": `
+import { Component, Directive, inject, NgDisabled, NgModule } from "ngjs-core";
+
+@Directive({ selector: "[appItem]" })
+export class ItemDirective {
+  ngDisabled = inject(NgDisabled, { optional: true });
+  get disabled(): boolean { return !!this.ngDisabled?.disabled; }
+}
+
+@Component({
+  selector: "app-root",
+  template: '<fieldset ng-disabled="$ctrl.off"><button id="a" app-item ng-disabled="$ctrl.off"></button><button id="b" app-item></button></fieldset>',
+})
+export class AppComponent { off = true; }
+
+@NgModule({ declarations: [AppComponent, ItemDirective], bootstrap: [AppComponent] })
+export class AppModule {}
+`,
+      },
+      "<app-root></app-root>",
+    );
+    app.digest();
+    const item = (id: string) => app!.controller<{ ngDisabled: unknown; disabled: boolean }>(`#${id}`, "appItem");
+
+    expect(item("a").disabled).toBe(true);
+    expect(item("b").ngDisabled).toBeNull();
+    app.controller<{ off: boolean }>("app-root", "appRoot").off = false;
+    app.digest();
+    expect(item("a").disabled).toBe(false);
+  });
+
   it("@Output() con EventEmitter: emit() dispara el (output) del padre con $event, también desde el primer ngOnChanges", async () => {
     app = await CompiledApp.bootstrap(
       {

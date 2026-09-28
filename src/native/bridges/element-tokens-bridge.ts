@@ -2,10 +2,12 @@ import type angular from "angular";
 import { ChangeDetectorRef, ChangeDetectorRefImpl } from "@/core/change-detection/change-detector-ref.ts";
 import { injectionTokenName } from "@/core/di/injector.ts";
 import { CompiledType } from "@/core/metadata/compiled-type.ts";
+import { NgDisabled } from "@/core/ng-disabled.ts";
 import { DestroyRef, DestroyRefImpl } from "@/core/refs/destroy-ref.ts";
 import { ElementRef, ElementRefImpl } from "@/core/refs/element-ref.ts";
 import { TemplateRef, TemplateRefImpl } from "@/core/refs/template-ref.ts";
 import { ViewContainerRef, ViewContainerRefImpl } from "@/core/refs/view-container-ref.ts";
+import { ElementNgDisabled } from "@/native/bridges/ng-disabled-bridge.ts";
 import { decorateControllerWith } from "@/native/bridges/shared.ts";
 import { AsyncPipe, AsyncPipeImpl } from "@/pipes/async-pipe.ts";
 
@@ -13,6 +15,10 @@ import { AsyncPipe, AsyncPipeImpl } from "@/pipes/async-pipe.ts";
 export const VIEW_CONTAINER_REF_DATA_KEY = "$viewContainerRefController";
 
 type Locals = Record<string, unknown>;
+
+/** El resolvedor de dependencias con flags que emite `ng-js-compiler` (`ResolveDependency`). */
+const RESOLVE = "ɵresolve";
+type Resolve = (name: string, flags?: { optional?: boolean; self?: boolean; skipSelf?: boolean; host?: boolean }, element?: boolean) => unknown;
 
 interface ElementContext {
   $element: angular.IAugmentedJQuery;
@@ -45,6 +51,8 @@ export class ElementTokens {
       [injectionTokenName(ViewContainerRef), ({ $element, $injector }) => ElementTokens.viewContainerRefOf($element, $injector)],
       // El `<ng-template>` donde está (o del que sale) este elemento: el controller de la directiva `ngTemplate`.
       [injectionTokenName(TemplateRef), ({ $element }) => TemplateRefImpl.of($element[0]) ?? $element.controller("ngTemplate") ?? null],
+      // El `ng-disabled` del mismo elemento (su controller lo pone `ng-disabled-bridge`); `null` si no tiene.
+      [injectionTokenName(NgDisabled), ({ $element }) => ElementNgDisabled.of($element)],
     ]);
     return ElementTokens.byName;
   }
@@ -86,11 +94,34 @@ export class ElementTokens {
   ): Locals | undefined {
     let augmented: Locals | undefined;
     for (const name of CompiledType.depNames(expression)) {
+      if (name === RESOLVE) {
+        if (!locals?.$element) continue;
+        augmented ??= { ...locals };
+        augmented[RESOLVE] = ElementTokens.resolver(locals, $injector);
+        continue;
+      }
       if (!ElementTokens.has(name) || (locals && Object.hasOwn(locals, name))) continue;
       augmented ??= { ...locals };
       augmented[name] = ElementTokens.resolve(name, locals, $injector);
     }
     return augmented ?? locals;
+  }
+
+  /**
+   * `ɵresolve` (lo que pide el `ɵfac` para una dependencia con flags, `inject(NgDisabled, { optional: true })`) que
+   * conoce los tokens de elemento: sin esto iban al injector de la app, que no los tiene. Lo demás sigue al
+   * `ɵresolve` que ya hubiera en `locals` (el del injector de elemento) o al de la app.
+   */
+  private static resolver(locals: Locals, $injector: angular.auto.IInjectorService): Resolve {
+    const inner = locals[RESOLVE] as Resolve | undefined;
+    return (name, flags = {}, element) => {
+      if (ElementTokens.has(name) && !flags.skipSelf) {
+        const value = ElementTokens.resolve(name, locals, $injector);
+        if (value !== undefined && value !== null) return value;
+        if (flags.optional) return null;
+      }
+      return (inner ?? $injector.get<Resolve>(RESOLVE))(name, flags, element);
+    };
   }
 }
 
