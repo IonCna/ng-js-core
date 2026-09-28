@@ -21,7 +21,10 @@ export class NgContent implements angular.IController {
     const projection = this.$element.inheritedData(CONTENT_PROJECTION_KEY) as ContentProjection | undefined;
     if (projection && !projection.consumed) {
       projection.consumed = true;
-      if (projection.clone) this.$element.after(projection.clone);
+      // Todo lo del contenedor: también lo que un `ng-repeat` de la raíz ya haya insertado junto a su ancla.
+      const host = this.$element[0] as Node;
+      if (projection.container && host.parentNode) host.parentNode.insertBefore(projection.container, host.nextSibling);
+      else if (projection.clone) this.$element.after(projection.clone);
       this.$element.remove();
       return;
     }

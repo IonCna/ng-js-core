@@ -154,14 +154,38 @@ export class HostCmp {
   @ContentChildren(Marker, { descendants: false }) direct!: QueryList<Marker>;
   @ContentChildren(Marker, { descendants: true }) all!: QueryList<Marker>;
 }
-@Component({ selector: "parent", template: "<host-cmp><span marker></span><div><span marker></span></div></host-cmp>" })
-export class Parent {}`,
+@Component({
+  selector: "parent",
+  template: "<host-cmp><span marker></span><div><span marker></span></div><i marker ng-repeat='n in $ctrl.items'></i></host-cmp>",
+})
+export class Parent { items = [1, 2]; }`,
         "Parent, HostCmp, Marker",
         "<parent></parent>",
       );
+      // Los clones de un ng-repeat de la raíz del contenido son hijos directos (las vistas de un `@for` en Angular).
       const host = ctrl<{ direct: { length: number }; all: { length: number } }>("host-cmp", "hostCmp");
-      expect(host.direct.length).toBe(1);
-      expect(host.all.length).toBe(2);
+      expect(host.direct.length).toBe(3);
+      expect(host.all.length).toBe(4);
+    });
+
+    it("componente sin <ng-content>: un ng-repeat en la raíz del contenido alimenta @ContentChildren (y sus cambios)", async () => {
+      await boot(
+        `@Directive({ selector: "[slot]" })
+export class Slot {}
+@Component({ selector: "pager-cmp", template: "<ul></ul>" })
+export class PagerCmp {
+  @ContentChildren(Slot) slots!: QueryList<Slot>;
+}
+@Component({ selector: "parent", template: "<pager-cmp><i slot ng-repeat='n in $ctrl.items'></i></pager-cmp>" })
+export class Parent { items = [1, 2]; }`,
+        "Parent, PagerCmp, Slot",
+        "<parent></parent>",
+      );
+      const pager = ctrl<{ slots: { length: number } }>("pager-cmp", "pagerCmp");
+      expect(pager.slots.length).toBe(2);
+      ctrl<{ items: number[] }>("parent", "parent").items.push(3);
+      app!.digest();
+      expect(pager.slots.length).toBe(3);
     });
 
     it("forwardRef en el locator (light DOM de una @Directive): se resuelve al usarse, no al decorar", async () => {

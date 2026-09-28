@@ -120,10 +120,20 @@ export class ViewQueryRegistry {
       .filter((value) => value !== undefined);
   }
 
-  /** `descendants: false` (default de `@ContentChildren`): solo los hijos directos del contenido proyectado. */
+  /**
+   * `descendants: false` (default de `@ContentChildren`): solo los hijos directos del contenido proyectado. Lo que un
+   * `ng-repeat`/`ng-if` de la raíz del contenido inserta al lado de su ancla también lo es (en Angular son los nodos
+   * raíz de las vistas de un `@for`/`@if`): comparte padre con los nodos raíz.
+   */
   private matchesDepth(query: Query, candidate: Candidate): boolean {
     if (query.descendants || this.contentRoots.size === 0) return true;
-    return candidate.node !== undefined && this.contentRoots.has(candidate.node);
+    const node = candidate.node;
+    if (node === undefined) return false;
+    if (this.contentRoots.has(node)) return true;
+    const parent = node.parentNode;
+    if (!parent) return false;
+    for (const root of this.contentRoots) if (root.parentNode === parent) return true;
+    return false;
   }
 
   private static matches(query: Query, candidate: Candidate): boolean {

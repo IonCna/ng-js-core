@@ -13,6 +13,11 @@ export const CONTENT_PROJECTION_KEY = "$ngjsContentProjection";
 export interface ContentProjection {
   /** Nodos raíz del contenido proyectado, ya linkeados (o `undefined` si el uso no tenía contenido). */
   clone?: angular.IAugmentedJQuery;
+  /**
+   * Donde vive el contenido mientras ningún `<ng-content>` lo muestra (o si no hay ninguno): en Angular existe
+   * aunque no se vea, y un `ng-repeat`/`ng-if` de su raíz necesita un padre donde insertar sus clones.
+   */
+  container?: DocumentFragment;
   /** `true` cuando un `<ng-content>` ya insertó estos nodos en el DOM. */
   consumed: boolean;
 }
@@ -74,6 +79,11 @@ export function decorateControllerContentProjection($delegate: angular.IControll
         QueryContext.runWithContentOwners(owners, () => {
           $transclude((clone, transcludedScope) => {
             projection.clone = clone as angular.IAugmentedJQuery | undefined;
+            if (clone?.length) {
+              const container = ($element[0] as Node).ownerDocument!.createDocumentFragment();
+              for (const node of Array.from(clone) as Node[]) container.appendChild(node);
+              projection.container = container;
+            }
             const rootNodes = clone ? (Array.from(clone) as Node[]) : [];
             for (const owner of owners) owner.registerContentRoots(rootNodes);
             if (transcludedScope) QueryContext.bindContentOwners(transcludedScope, owners);
