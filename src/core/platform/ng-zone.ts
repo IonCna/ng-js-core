@@ -65,6 +65,9 @@ export class NgZoneImpl extends NgZone {
     private readonly reportError: (error: unknown) => void = () => {},
   ) {
     super($rootScope);
+    // Un digest de AngularJS es un "turno" de la zona de Angular: al terminar cada uno, `onMicrotaskEmpty` y
+    // `onStable` (lo esperan `PopupService`, el reposicionado de popper, …). Sin esto solo salían tras un `run()`.
+    $rootScope.$watch(() => this.scheduleStable());
   }
 
   run<T>(fn: () => T): T {
@@ -112,17 +115,23 @@ export class NgZoneImpl extends NgZone {
   }
 
   private leave(): void {
-    if (--this.running !== 0 || this.stableScheduled) return;
-    this.stableScheduled = true;
+    if (--this.running !== 0) return;
+    // Lo que corrió en la zona termina con un digest (que emite `onStable` al terminar): si ya hay uno en curso,
+    // basta con agendar la notificación; si no, `$evalAsync()` agenda uno.
+    if (this.$rootScope.$$phase) this.scheduleStable();
+    else this.$rootScope.$evalAsync(() => undefined);
+  }
 
-    const notify = () => {
+  /** `onMicrotaskEmpty` + `onStable` una vez, al terminar el digest en curso. */
+  private scheduleStable(): void {
+    if (this.stableScheduled) return;
+    this.stableScheduled = true;
+    (this.$rootScope as IRootScopeService & { $$postDigest(fn: () => void): void }).$$postDigest(() => {
       this.stableScheduled = false;
       this.onMicrotaskEmpty.emit();
-      this.onStable.emit();
-    };
-
-    // `$evalAsync()` es la API pública que cubre ambos casos: si ya hay
-    // digest, agrega el callback al ciclo actual; si no, agenda uno nuevo.
-    this.$rootScope.$evalAsync(notify);
+      // Como Angular (`checkStable`): `onStable` sale fuera de la zona — lo que programe un suscriptor (el `update()`
+      // de popper agenda un `.then`) no dispara otro digest, que volvería a emitir `onStable` sin fin.
+      this.runOutsideAngular(() => this.onStable.emit());
+    });
   }
 }
