@@ -4,7 +4,7 @@ import { injectionTokenName } from "@/core/di/injector.ts";
 import { CompiledType } from "@/core/metadata/compiled-type.ts";
 import { DestroyRef, DestroyRefImpl } from "@/core/refs/destroy-ref.ts";
 import { ElementRef, ElementRefImpl } from "@/core/refs/element-ref.ts";
-import { TemplateRef } from "@/core/refs/template-ref.ts";
+import { TemplateRef, TemplateRefImpl } from "@/core/refs/template-ref.ts";
 import { ViewContainerRef, ViewContainerRefImpl } from "@/core/refs/view-container-ref.ts";
 import { decorateControllerWith } from "@/native/bridges/shared.ts";
 import { AsyncPipe, AsyncPipeImpl } from "@/pipes/async-pipe.ts";
@@ -44,7 +44,7 @@ export class ElementTokens {
       [injectionTokenName(AsyncPipe), ({ $scope }) => new AsyncPipeImpl($scope)],
       [injectionTokenName(ViewContainerRef), ({ $element, $injector }) => ElementTokens.viewContainerRefOf($element, $injector)],
       // El `<ng-template>` donde está (o del que sale) este elemento: el controller de la directiva `ngTemplate`.
-      [injectionTokenName(TemplateRef), ({ $element }) => $element.controller("ngTemplate") ?? null],
+      [injectionTokenName(TemplateRef), ({ $element }) => TemplateRefImpl.of($element[0]) ?? $element.controller("ngTemplate") ?? null],
     ]);
     return ElementTokens.byName;
   }

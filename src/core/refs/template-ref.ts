@@ -20,15 +20,38 @@ export abstract class TemplateRef<C = ContextObject> {
  * necesita `transclude: "element"` y un `compile` para los `let-*`, que un `@Directive` compilado no expresa.
  */
 export class TemplateRefImpl<C = ContextObject> extends TemplateRef<C> implements IController {
-  static readonly $inject = ["$transclude", "$scope"];
+  static readonly $inject = ["$transclude", "$scope", "$element"];
+
+  /**
+   * El `TemplateRef` de cada comentario ancla de `<ng-template>` (`transclude: "element"`). jqLite no guarda `data()`
+   * en comentarios, así que `$element.controller("ngTemplate")` no lo encuentra desde otra directiva del mismo
+   * `<ng-template>` (`inject(TemplateRef)` en `@Directive({ selector: "ng-template[x]" })`).
+   */
+  private static readonly byAnchor = new WeakMap<Node, TemplateRefImpl<unknown>>();
 
   private declarations = new Map<string, string>();
 
   constructor(
     private readonly $transclude: ITranscludeFunction,
     private readonly $scope: IScope,
+    $element?: ArrayLike<Node>,
   ) {
     super();
+    const anchor = $element?.[0];
+    if (anchor) TemplateRefImpl.byAnchor.set(anchor, this as TemplateRefImpl<unknown>);
+  }
+
+  /**
+   * El `TemplateRef` del `<ng-template>` en `node` (su comentario ancla). Si otra directiva del mismo `<ng-template>`
+   * se construye antes que `ngTemplate` (AngularJS los construye por prioridad y nombre), se devuelve uno que
+   * delega en el real al usarse.
+   */
+  static of<C>(node: Node | undefined): TemplateRef<C> | undefined {
+    if (!node) return undefined;
+    const existing = TemplateRefImpl.byAnchor.get(node);
+    if (existing) return existing as unknown as TemplateRef<C>;
+    if (node.nodeType !== 8 || !/ngTemplate/.test(node.nodeValue ?? "")) return undefined;
+    return new DeferredTemplateRef<C>(() => TemplateRefImpl.byAnchor.get(node) as unknown as TemplateRef<C> | undefined);
   }
 
   /** Llamado por `compileNgTemplate` (el `pre`-link) al parsear los atributos `let-*` — nadie más lo llama. */
@@ -92,3 +115,16 @@ const compileNgTemplate: IDirectiveCompileFn = (_element, attrs) => {
     },
   };
 };
+
+/** `TemplateRef` de un `<ng-template>` cuyo controller `ngTemplate` todavía no se construyó (ver `TemplateRefImpl.of`). */
+class DeferredTemplateRef<C> extends TemplateRef<C> {
+  constructor(private readonly resolve: () => TemplateRef<C> | undefined) {
+    super();
+  }
+
+  createEmbeddedView(context: C, scope?: IScope, host?: EmbeddedViewHost): EmbeddedViewRef<C> {
+    const target = this.resolve();
+    if (!target) throw new Error("TemplateRef: el <ng-template> todavía no se creó.");
+    return target.createEmbeddedView(context, scope, host);
+  }
+}

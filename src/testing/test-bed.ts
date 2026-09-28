@@ -352,8 +352,8 @@ class TemplateOverrides {
       ) => {
         for (const [type, template] of templates) {
           const name = CompiledType.camelCase(CompiledType.componentTag(type)!);
-          // `<ng-content>` → `transclude`, lo que el compilador decide con el template original.
-          const transclude = /<ng-content[s>/]/.test(template);
+          // `<ng-content>` o content queries → `transclude`, lo que el compilador decide con el template original.
+          const transclude = /<ng-content[\s>/]/.test(template) || !!CompiledType.def(type)?.queries?.length;
           if ($injector.has(`${name}DirectiveProvider`)) {
             $provide.decorator(`${name}Directive`, [
               "$delegate",

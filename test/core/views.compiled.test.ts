@@ -117,6 +117,48 @@ export class AppModule {}
     expect(app.document.querySelector("app-root em")?.textContent).toBe("hola Ana");
   });
 
+  it("inject(TemplateRef) en una @Directive sobre <ng-template> (construida antes o después de ngTemplate) y @ContentChild de un componente sin <ng-content>", async () => {
+    app = await CompiledApp.bootstrap(
+      {
+        "app.module.ts": `
+import { Component, ContentChild, Directive, inject, NgModule, TemplateRef } from "ngjs-core";
+import { CommonModule } from "ngjs-core/common";
+
+// "aTpl" < "ngTemplate" < "zTpl": AngularJS construye los controllers de un elemento por prioridad y nombre.
+@Directive({ selector: "ng-template[aTpl]" })
+export class ATpl { templateRef = inject(TemplateRef); }
+
+@Directive({ selector: "ng-template[zTpl]" })
+export class ZTpl { templateRef = inject(TemplateRef); }
+
+@Component({
+  selector: "app-list",
+  template: '<b ng-template-outlet="$ctrl.a.templateRef" ng-template-outlet-context="{ $implicit: 1 }"></b><i ng-template-outlet="$ctrl.z.templateRef" ng-template-outlet-context="{ $implicit: 2 }"></i>',
+})
+export class ListComponent {
+  @ContentChild(ATpl) a?: ATpl;
+  @ContentChild(ZTpl) z?: ZTpl;
+}
+
+@Component({
+  selector: "app-root",
+  template: '<app-list><ng-template a-tpl let-n>A{{ n }}</ng-template><ng-template z-tpl let-n>Z{{ n }}</ng-template></app-list>',
+})
+export class AppComponent {}
+
+@NgModule({ imports: [CommonModule], declarations: [AppComponent, ListComponent, ATpl, ZTpl], bootstrap: [AppComponent] })
+export class AppModule {}
+`,
+      },
+      "<app-root></app-root>",
+    );
+    app.digest();
+
+    // `ngTemplateOutlet` inserta la vista a continuación de su elemento.
+    expect(app.document.querySelector("app-list")?.textContent).toBe("A1Z2");
+    expect(app.errors).toEqual([]);
+  });
+
   it("@Output() con EventEmitter: emit() dispara el (output) del padre con $event, también desde el primer ngOnChanges", async () => {
     app = await CompiledApp.bootstrap(
       {
