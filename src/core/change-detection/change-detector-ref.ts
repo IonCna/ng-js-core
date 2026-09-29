@@ -42,11 +42,28 @@ export class ChangeDetectorRefImpl extends ChangeDetectorRef {
   }
 
   detectChanges(): void {
-    // `$$phase` se setea en la raíz durante un `$digest`; un scope hijo puede
-    // tenerlo en `null` mientras la app está en pleno digest. Se comprueban
-    // ambos para no provocar `$rootScope:inprog` desde un ciclo activo.
-    if (this.cdDestroyed || this.scope.$$phase || this.scope.$root?.$$phase) return;
-    this.scope.$digest();
+    if (this.cdDestroyed) return;
+    // `$$phase` se setea en la raíz; un scope hijo (aislado) puede tenerlo en
+    // `null` mientras la app está en pleno ciclo. Se comprueban ambos.
+    const root = this.scope.$root as IScope & { $$phase: string | null };
+    const phase = root?.$$phase ?? this.scope.$$phase;
+    if (!phase) {
+      this.scope.$digest();
+      return;
+    }
+    // Durante un `$digest` (un watcher, `$doCheck`) no se puede anidar otro:
+    // `$rootScope:inprog`, y el digest en curso ya recorre este scope.
+    if (phase !== "$apply") return;
+    // `$apply`: corre un handler (`ng-click`, `$apply(fn)`) y el digest todavía
+    // no arrancó — lo mismo que un evento en Angular, donde `detectChanges()`
+    // es síncrono (p.ej. meter un template en el DOM para medirlo antes de una
+    // animación). La fase se libera solo mientras dura este `$digest`.
+    root.$$phase = null;
+    try {
+      this.scope.$digest();
+    } finally {
+      root.$$phase = phase;
+    }
   }
 
   detach(): void {

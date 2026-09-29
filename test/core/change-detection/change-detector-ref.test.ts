@@ -38,6 +38,43 @@ describe("etapa 6 — ChangeDetectorRef (contra un $scope real)", () => {
     expect(seen).toBe(1);
   });
 
+  it("detectChanges() dentro de un $apply (handler de un evento) digiere síncrono, como en Angular", () => {
+    const scope = freshScope();
+    const state = scope as unknown as { n: number };
+    let seen = 0;
+    scope.$watch("n", (value: number) => {
+      seen = value;
+    });
+    const cdr = new ChangeDetectorRefImpl(scope);
+
+    let seenInHandler = -1;
+    let phaseAfter: string | null = null;
+    scope.$apply(() => {
+      state.n = 2;
+      cdr.detectChanges();
+      seenInHandler = seen;
+      phaseAfter = (scope.$root as unknown as { $$phase: string | null }).$$phase;
+    });
+
+    expect(seenInHandler).toBe(2);
+    expect(phaseAfter).toBe("$apply");
+    expect((scope.$root as unknown as { $$phase: string | null }).$$phase).toBeNull();
+  });
+
+  it("detectChanges() dentro de un $digest no anida otro (no-op, sin $rootScope:inprog)", () => {
+    const scope = freshScope();
+    const cdr = new ChangeDetectorRefImpl(scope);
+    let calls = 0;
+    scope.$watch(() => {
+      calls++;
+      cdr.detectChanges();
+      return 1;
+    });
+
+    expect(() => scope.$digest()).not.toThrow();
+    expect(calls).toBeLessThan(10);
+  });
+
   it("detach()/reattach() usan $scope.$suspend()/$resume()", () => {
     const scope = freshScope();
     const cdr = new ChangeDetectorRefImpl(scope);
