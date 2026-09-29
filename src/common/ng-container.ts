@@ -33,11 +33,15 @@ export class NgContainer implements angular.IController {
   }
 
   $postLink(): void {
-    // El contenido va donde estaba el tag: `$element` es el comentario ancla de `transclude: "element"`.
-    this.$transclude(this.$scope, (clone) => {
-      this.content = (clone as angular.IAugmentedJQuery | undefined)?.contents();
-      if (this.content) this.$element.after(this.content);
+    // El contenido va donde estaba el tag: `$element` es el comentario ancla de `transclude: "element"`. El tag clonado
+    // se enlaza en su lugar y RECIÉN DESPUÉS se desenvuelve: AngularJS enlaza los hijos recorriendo su `childNodes`,
+    // así que sacarlos antes (en el `cloneAttachFn`) dejaba sin enlazar sus bindings y directivas (`ng-if`, `ng-repeat`).
+    const wrapper = this.$transclude(this.$scope, (clone) => {
+      this.$element.after(clone as angular.IAugmentedJQuery);
     });
+    this.content = wrapper.contents();
+    wrapper.after(this.content);
+    wrapper.remove();
   }
 
   $onDestroy(): void {

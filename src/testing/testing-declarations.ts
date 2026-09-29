@@ -1,5 +1,6 @@
 import angular from "angular";
 import { CompiledType } from "@/core/metadata/compiled-type.ts";
+import { OutputAttributes } from "@/core/platform/output-attributes.ts";
 
 /** Registra en un `angular.module` una declaración compilada, con lo mismo que emitiría el compilador. */
 export class TestingDeclarations {
@@ -19,10 +20,13 @@ export class TestingDeclarations {
     if (CompiledType.isComponent(type)) {
       const tag = CompiledType.componentTag(type);
       if (!tag) throw new Error(`TestBed: "${type.name}" necesita un selector de elemento.`);
-      module.component(CompiledType.camelCase(tag), {
+      const name = CompiledType.camelCase(tag);
+      module.component(name, {
         controller: factory,
         ...definition,
       } as angular.IComponentOptions);
+      const outputs = OutputAttributes.directive((definition as { bindings?: Record<string, string> }).bindings, "E");
+      if (outputs) module.directive(name, outputs);
       return;
     }
 
@@ -36,6 +40,8 @@ export class TestingDeclarations {
         controllerAs: name,
         ...rest,
       }));
+      const outputs = OutputAttributes.directive(bindings, attribute ? "A" : "E", attribute ? tag : undefined);
+      if (outputs) module.directive(name, outputs);
     }
   }
 

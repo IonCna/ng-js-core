@@ -10,6 +10,7 @@ import {
   decorateControllerHostDirectives,
   decorateControllerInjectionContext,
   decorateControllerInputDefer,
+  decorateControllerLateDecorators,
   decorateControllerNgValidators,
   decorateControllerOutputEmitters,
   decorateControllerViewChildQueries,
@@ -25,7 +26,8 @@ import {
  * `platformBrowserDynamic()` lo agrega solo al módulo raíz; un `@NgModule` también lo puede importar.
  *
  * Orden de los decoradores de `$controller` (cada uno envuelve al anterior): el contexto de inyección es el más
- * interno (envuelve la construcción real), `hostDirectives` el más externo (su `$delegate` es toda la cadena).
+ * interno (envuelve la construcción real), `hostDirectives` el más externo de los bridges (su `$delegate` es toda la
+ * cadena) y, por fuera, los decoradores que llegan con módulos lazy (`LateControllerDecorators`).
  */
 export const NativeModule: angular.IModule = angular
   .module("ng.js.native", [])
@@ -40,10 +42,14 @@ export const NativeModule: angular.IModule = angular
   .decorator("$controller", decorateControllerControlValueAccessor)
   .decorator("$controller", decorateControllerNgValidators)
   .decorator("$controller", decorateControllerHostDirectives)
+  // El más externo de core: los `.decorator("$controller")` que traen los módulos lazy (ver `LateControllerDecorators`).
+  .decorator("$controller", decorateControllerLateDecorators)
   .decorator("ngDisabledDirective", decorateNgDisabledDirective)
   .decorator("ngRefDirective", decorateNgRefDirective)
   .decorator("$exceptionHandler", decorateExceptionHandler)
-  // `ng-bind-html` sin `ngSanitize`: el sanitizador de `DomSanitizer` (ver `SanitizeBridge`).
+  // `ng-bind-html` sin `ngSanitize`
+    //
+    // : el sanitizador de `DomSanitizer` (ver `SanitizeBridge`).
   .factory("$sanitize", SanitizeBridge.factory)
   .directive("ngTemplate", TemplateRefImpl.directive)
   .directive("ngContent", NgContent.directive)

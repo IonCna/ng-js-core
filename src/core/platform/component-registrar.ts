@@ -1,6 +1,7 @@
 import type angular from "angular";
 import { CompiledType } from "@/core/metadata/compiled-type.ts";
 import { ConfigProviderFactory } from "@/core/platform/config-providers.ts";
+import { OutputAttributes } from "@/core/platform/output-attributes.ts";
 
 /**
  * Registra al vuelo, en una app ya arrancada, un `@Component` compilado que no está en ningún `@NgModule` cargado
@@ -44,6 +45,8 @@ export class ComponentRegistrar {
         hasTemplate &&
         definition.controllerAs === undefined && { controllerAs: fallbackControllerAs }),
     } as angular.IComponentOptions);
+    const outputs = OutputAttributes.directive(definition.bindings as Record<string, string> | undefined, "E");
+    if (outputs) registrar.$compile.directive(name, outputs);
     return name;
   }
 }

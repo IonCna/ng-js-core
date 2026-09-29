@@ -1,10 +1,4 @@
-import angular, {
-  type ICompileService,
-  type IPromise,
-  type IQService,
-  type IRootScopeService,
-  type ITimeoutService,
-} from "angular";
+import angular, { type ICompileService, type IRootScopeService } from "angular";
 import { ChangeDetectorRefImpl } from "@/core/change-detection/change-detector-ref.ts";
 import { Injector, unwrapAngularInjector } from "@/core/di/injector.ts";
 import { CompiledType } from "@/core/metadata/compiled-type.ts";
@@ -61,29 +55,49 @@ interface LinkedComponent {
 export function createComponent<C = unknown>(
   component: Function | string,
   options: CreateComponentOptions,
-): IPromise<ComponentRef<C>> {
+): Promise<ComponentRef<C>> {
   const injector = ComponentCreation.injectorOf(options);
-  const $q = injector.get<IQService>("$q");
   let target: ComponentTarget;
   let linked: LinkedComponent;
   try {
     target = ComponentCreation.target(component, injector);
     linked = ComponentCreation.link(target, options, injector);
   } catch (error) {
-    return $q.reject(error);
+    return Promise.reject(error);
   }
 
+  // Promesa nativa (no `$q`): el `await` del consumidor sigue en el mismo task en que se creó el componente, sin
+  // un paint en el medio (el polyfill del CLI la mete en el digest).
   const instance = linked.linkedElement.controller(target.controllerName) as C | undefined;
-  if (instance !== undefined) return $q.when(ComponentCreation.ref(instance, linked));
+  if (instance !== undefined) return Promise.resolve(ComponentCreation.ref(instance, linked));
 
   // `templateUrl`: AngularJS construye el controller recién cuando llega el template.
-  return ComponentCreation.waitForController<C>(linked.linkedElement, target.controllerName, injector).then(
+  return ComponentCreation.waitForController<C>(linked.linkedElement, target.controllerName).then(
     (resolved) => ComponentCreation.ref(resolved, linked),
     (error: unknown) => {
       linked.ownerScope.$destroy();
-      return $q.reject(error);
+      throw error;
     },
   );
+}
+
+/**
+ * Interno (`TestBed.createComponent`, síncrono como en Angular): crea el componente y devuelve el `ComponentRef` en el
+ * acto. Tiene que estar listo al enlazar — un `templateUrl` tiene que estar en `$templateCache`; si no, tira.
+ */
+export function ɵcreateComponentSync<C = unknown>(
+  component: Function | string,
+  options: CreateComponentOptions,
+): ComponentRef<C> {
+  const injector = ComponentCreation.injectorOf(options);
+  const target = ComponentCreation.target(component, injector);
+  const linked = ComponentCreation.link(target, options, injector);
+  const instance = linked.linkedElement.controller(target.controllerName) as C | undefined;
+  if (instance === undefined) {
+    linked.ownerScope.$destroy();
+    throw new Error(`createComponent: "${target.controllerName}" no terminó de crearse (¿templateUrl fuera de $templateCache?).`);
+  }
+  return ComponentCreation.ref(instance, linked);
 }
 
 class ComponentCreation {
@@ -165,27 +179,21 @@ class ComponentCreation {
     );
   }
 
-  static waitForController<C>(
-    linkedElement: angular.IAugmentedJQuery,
-    controllerName: string,
-    injector: angular.auto.IInjectorService,
-  ): IPromise<C> {
-    const $q = injector.get<IQService>("$q");
-    const $timeout = injector.get<ITimeoutService>("$timeout");
+  static waitForController<C>(linkedElement: angular.IAugmentedJQuery, controllerName: string): Promise<C> {
     const timeoutAt = Date.now() + 10_000;
-    const deferred = $q.defer<C>();
 
-    const check = () => {
-      const instance = linkedElement.controller(controllerName) as C | undefined;
-      if (instance !== undefined) return deferred.resolve(instance);
-      if (Date.now() >= timeoutAt) {
-        return deferred.reject(new Error(`createComponent: no se pudo crear el componente "${controllerName}"`));
-      }
-      $timeout(check, 0, false);
-    };
+    return new Promise<C>((resolve, reject) => {
+      const check = () => {
+        const instance = linkedElement.controller(controllerName) as C | undefined;
+        if (instance !== undefined) return resolve(instance);
+        if (Date.now() >= timeoutAt) {
+          return reject(new Error(`createComponent: no se pudo crear el componente "${controllerName}"`));
+        }
+        setTimeout(check, 0);
+      };
 
-    check();
-    return deferred.promise;
+      check();
+    });
   }
 
   /** Cada binding inicial como atributo del host: el nombre del atributo (el alias, si lo hay) y su modo. */

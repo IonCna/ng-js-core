@@ -294,6 +294,37 @@ export class AppModule {}`,
     expect(app!.document.querySelector("decl-root p")?.hasAttribute("data-upper")).toBe(true);
   });
 
+  it("ng-hidden / ng-id / ng-title (CoreModule vía BrowserModule): enlazan el atributo nativo y el input del mismo nombre", async () => {
+    await boot(
+      `import { BrowserModule } from "ngjs-core/platform-browser";
+@Component({ selector: "attr-window", template: "<span>{{ $ctrl.hidden ? 'oculto' : 'visible' }}</span>" })
+export class AttrWindow { @Input() hidden = false; }
+@Component({ selector: "attr-root", template: '<p ng-hidden="$ctrl.off" ng-id="$ctrl.domId" ng-title="$ctrl.tip">p</p><attr-window ng-hidden="$ctrl.off"></attr-window>' })
+export class AttrRoot { off = true; domId: string | null = "panel-1"; tip: unknown = 3; }
+@NgModule({ imports: [BrowserModule], declarations: [AttrRoot, AttrWindow], bootstrap: [AttrRoot] })
+export class AppModule {}`,
+    );
+    const p = app!.document.querySelector<HTMLElement>("attr-root p")!;
+    expect(p.hidden).toBe(true);
+    expect(p.id).toBe("panel-1");
+    expect(p.getAttribute("title")).toBe("3");
+    // El input `hidden` del componente (registrado como `'<?ngHidden'`) recibe el valor, y el host queda oculto.
+    expect(text("attr-window span")).toBe("oculto");
+    expect(app!.document.querySelector<HTMLElement>("attr-window")!.hidden).toBe(true);
+
+    const root = app!.angular.element(app!.document.querySelector("attr-root")!).controller("attrRoot") as {
+      off: boolean;
+      domId: string | null;
+      tip: unknown;
+    };
+    Object.assign(root, { off: false, domId: null, tip: undefined });
+    app!.digest();
+    expect(p.hasAttribute("hidden")).toBe(false);
+    expect(p.hasAttribute("id")).toBe(false);
+    expect(p.hasAttribute("title")).toBe(false);
+    expect(text("attr-window span")).toBe("visible");
+  });
+
   it("@Output(EventEmitter): x.emit(v) dispara la expresión del padre con $event = v; this.x sigue siendo el emitter; sin expresión no explota", async () => {
     await boot(
       `@Component({ selector: "out-child", template: "x" })

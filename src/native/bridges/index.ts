@@ -5,6 +5,7 @@ export { decorateExceptionHandler } from "./exception-handler-bridge.ts";
 export { decorateControllerHostDirectives } from "./host-directives-bridge.ts";
 export { decorateControllerInjectionContext } from "./injection-context-bridge.ts";
 export { decorateControllerInputDefer } from "./input-defer-bridge.ts";
+export { decorateControllerLateDecorators, LateControllerDecorators } from "./late-controller-decorators-bridge.ts";
 export { decorateNgDisabledDirective } from "./ng-disabled-bridge.ts";
 export { decorateControllerViewChildQueries, decorateNgRefDirective } from "./ng-ref-bridge.ts";
 export { decorateControllerNgValidators } from "./ng-validators-bridge.ts";

@@ -1,5 +1,4 @@
 import type angular from "angular";
-import type { IPromise, IQService } from "angular";
 import { Injectable } from "@/core/di/injectable.ts";
 import type { Injector } from "@/core/di/injector.ts";
 import type { ComponentRef } from "@/core/refs/component-ref.ts";
@@ -38,7 +37,7 @@ export abstract class ViewContainerRef {
       directives?: string[];
       bindings?: Readonly<Record<string, unknown>> | readonly Readonly<Record<string, unknown>>[];
     },
-  ): IPromise<ComponentRef<C>>;
+  ): Promise<ComponentRef<C>>;
 }
 
 export class ViewContainerRefImpl extends ViewContainerRef implements ViewOwner {
@@ -71,9 +70,7 @@ export class ViewContainerRefImpl extends ViewContainerRef implements ViewOwner 
       directives?: string[];
       bindings?: Readonly<Record<string, unknown>> | readonly Readonly<Record<string, unknown>>[];
     },
-  ): IPromise<ComponentRef<C>> {
-    const $q = this.injector.get<IQService>("$q");
-
+  ): Promise<ComponentRef<C>> {
     return createComponent<C>(componentType, {
       injector: options?.injector ?? this.injector,
       environmentInjector: options?.environmentInjector,
@@ -89,7 +86,7 @@ export class ViewContainerRefImpl extends ViewContainerRef implements ViewOwner 
         return componentRef;
       } catch (error) {
         componentRef.destroy();
-        return $q.reject(error);
+        throw error;
       }
     });
   }

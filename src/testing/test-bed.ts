@@ -8,8 +8,9 @@ import { RuntimeProviders } from "@/core/di/runtime-providers.ts";
 import { CompiledType } from "@/core/metadata/compiled-type.ts";
 import { ApplicationRef } from "@/core/platform/application-ref.ts";
 import type { PlatformRef } from "@/core/platform/bootstrap.ts";
+import { OutputAttributes } from "@/core/platform/output-attributes.ts";
 import type { ComponentRef } from "@/core/refs/component-ref.ts";
-import { createComponent } from "@/core/refs/create-component.ts";
+import { ɵcreateComponentSync } from "@/core/refs/create-component.ts";
 import { NativeModule } from "@/native/native.module.ts";
 import { MockSpec } from "@/testing/angular-mocks.ts";
 import { ComponentFixture } from "@/testing/component-fixture.ts";
@@ -215,28 +216,12 @@ export class TestBedImpl {
     rootElement.id = `root${this.rootCount++}`;
     this.root!.appendChild(rootElement);
 
-    let ref: ComponentRef<T> | undefined;
-    let failure: unknown;
-    createComponent<T>(component, { injector: $injector, hostElement: rootElement }).then(
-      (created) => {
-        ref = created;
-      },
-      (error: unknown) => {
-        failure = error;
-      },
-    );
-    // `createComponent` resuelve con `$q`: el digest lo entrega (la vista del componente sigue suspendida).
-    const $rootScope = $injector.get<angular.IRootScopeService>("$rootScope");
-    if (!$rootScope.$$phase) $rootScope.$digest();
-
-    if (!ref) {
+    let ref: ComponentRef<T>;
+    try {
+      ref = ɵcreateComponentSync<T>(component, { injector: $injector, hostElement: rootElement });
+    } catch (error) {
       rootElement.remove();
-      throw (
-        failure ??
-        new Error(
-          `TestBed.createComponent: "${component.name}" no terminó de crearse (¿templateUrl fuera de $templateCache?).`,
-        )
-      );
+      throw error;
     }
     const fixture = new ComponentFixture<T>(ref, $injector, rootElement);
     this.fixtures.push(fixture as ComponentFixture<unknown>);
@@ -374,6 +359,8 @@ class TemplateOverrides {
               templateUrl: undefined,
               transclude,
             } as angular.IComponentOptions);
+            const outputs = OutputAttributes.directive((definition as { bindings?: Record<string, string> }).bindings, "E");
+            if (outputs) $compileProvider.directive(name, outputs);
           }
         }
       },

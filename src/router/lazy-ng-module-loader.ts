@@ -1,5 +1,6 @@
 import angular from "angular";
 import { ConfigProviderFactory } from "@/core/platform/config-providers.ts";
+import { LateControllerDecorators } from "@/native/bridges/late-controller-decorators-bridge.ts";
 import type { Routes } from "@/router/route.ts";
 import { routerRegistry } from "@/router/router-registry.ts";
 
@@ -99,6 +100,10 @@ export class LazyNgModuleLoader {
 
   private runQueue(queue: InvokeQueueEntry[], providerInjector: angular.auto.IInjectorService): void {
     for (const [providerName, method, args] of queue) {
+      // `$controller` ya existe: `$provide.decorator` no tendría efecto — va a la cadena de `LateControllerDecorators`.
+      if (providerName === "$provide" && method === "decorator" && args[0] === "$controller") {
+        if (LateControllerDecorators.add(this.$injector, args[1] as angular.Injectable<Function>)) continue;
+      }
       const provider = providerInjector.get<Record<string, (...values: unknown[]) => unknown>>(providerName);
       provider[method]!.apply(provider, args);
     }

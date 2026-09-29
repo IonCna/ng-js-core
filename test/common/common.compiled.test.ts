@@ -57,6 +57,21 @@ export class AppModule {}
       expect(html().querySelector("div > span")?.textContent).toBe("hola");
     });
 
+    it("enlaza lo de adentro: bindings, ng-if y ng-repeat hijos; también con ng-if/ng-repeat sobre el propio ng-container", async () => {
+      await boot(
+        `<div class="plain"><ng-container><span>{{ $ctrl.n + 1 }}</span><b ng-if="$ctrl.on">si</b><i ng-repeat="x in $ctrl.items">{{ x }}</i></ng-container></div>
+<div class="nested"><ng-container ng-if="$ctrl.on"><ng-container ng-repeat="x in $ctrl.items"><u>{{ x }}</u></ng-container></ng-container></div>`,
+        "n = 1; on = true; items = ['a', 'b'];",
+      );
+      const text = (selector: string) => Array.from(html().querySelectorAll(selector)).map((node) => node.textContent).join(",");
+      expect(text(".plain span")).toBe("2");
+      expect(text(".plain b")).toBe("si");
+      expect(text(".plain i")).toBe("a,b");
+      expect(text(".nested u")).toBe("a,b");
+      expect(html().querySelector("ng-container")).toBeNull();
+      expect(app!.errors).toEqual([]);
+    });
+
     it("es ancla de un ViewContainerRef: un componente dinámico insertado ahí se limpia al destruirse", async () => {
       await boot(
         "<div><ng-container></ng-container></div>",
