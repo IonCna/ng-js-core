@@ -31,3 +31,27 @@ export function resolveQueryOptions<T>(options: QueryOptions<T> | undefined): Qu
   if (!options || options.read === undefined) return options;
   return { ...options, read: resolveForwardRef(options.read) as QueryToken<T> };
 }
+
+/** Lo que da `new ViewChild(...)` (y compañía) en `queries: { ... }` del decorador, como el `Query` de Angular. */
+export interface Query {
+  readonly selector: QueryToken<unknown>;
+  readonly first: boolean;
+  readonly isViewQuery: boolean;
+  readonly descendants: boolean;
+  readonly read?: QueryToken<unknown>;
+  readonly static?: boolean;
+}
+
+/** Como en Angular: decorador de propiedad (`@ViewChild(X)`) y también `new ViewChild(X)` para `queries`. */
+export interface QueryDecorator {
+  (locator: QueryToken<unknown>, options?: QueryOptions): PropertyDecorator;
+  new (locator: QueryToken<unknown>, options?: QueryOptions): Query;
+}
+
+/** Declarativo: `ng-js-compiler` lee el uso (decorador o `queries`) y emite la definición de la query. */
+export function makeQueryDecorator(first: boolean, isViewQuery: boolean, descendants: boolean): QueryDecorator {
+  return function (this: unknown, locator: QueryToken<unknown>, options?: QueryOptions) {
+    if (!new.target) return () => undefined;
+    return { descendants, ...options, selector: locator, first, isViewQuery };
+  } as unknown as QueryDecorator;
+}

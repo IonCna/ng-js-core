@@ -1,14 +1,6 @@
-import type angular from "angular";
-import type { Provider } from "@/core/di/provider.ts";
+import type { NgModuleDef } from "@/core/metadata/definitions.ts";
 
-export interface NgModuleDef {
-  id?: string;
-  declarations?: Function[];
-  imports?: (Function | angular.IModule | string)[];
-  providers?: Provider[];
-  bootstrap?: Function[];
-  controllerAs?: string;
-}
+export type { NgModuleDef } from "@/core/metadata/definitions.ts";
 
 /**
  * Decorador de autoría para `@NgModule`.
