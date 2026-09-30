@@ -53,7 +53,7 @@ function applyErrorKeys(ngModel: NgModelController, errors: ValidationErrors | n
  *    en el elemento
  */
 @Directive({ selector: "[formControlName]" })
-export class FormControlNameDirective {
+export class FormControlName {
   /** Un nombre (o índice) estático, como en Angular: `form-control-name="email"`. */
   @Input({ binding: "@" }) formControlName!: string;
 

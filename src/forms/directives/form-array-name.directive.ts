@@ -14,7 +14,7 @@ import { findAncestorControl, publishControlContainer } from "@/forms/control-co
  * `String(segmento)`, `FormArray._find` hace `Number(segmento)`).
  */
 @Directive({ selector: "[formArrayName]" })
-export class FormArrayNameDirective {
+export class FormArrayName {
   @Input({ binding: "@" }) formArrayName!: string;
 
   constructor(@Inject("$element") private readonly $element: angular.IAugmentedJQuery) {}

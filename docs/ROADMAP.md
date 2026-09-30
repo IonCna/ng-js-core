@@ -72,8 +72,16 @@ Fuera a propósito (no tendrían efecto sobre AngularJS): `encapsulation` (solo 
 
 ## Nivel 7: features
 
-- [x] forms (reactive directives, `ControlValueAccessor`, validadores, `ngDisabled`)
+- [x] forms (reactive directives con los nombres de Angular — `FormGroupDirective`, `FormControlName`, `FormArrayName` —,
+  `ControlValueAccessor`, validadores, `ngDisabled`)
 - [x] async pipe (por instancia)
+- [x] pipes de `@angular/common` con su nombre y semántica: `date`, `number` (`DecimalPipe`), `percent`, `currency`,
+  `uppercase`, `lowercase`, `titlecase`, `json`, `slice`, `i18nPlural`, `i18nSelect`, `keyvalue`, `async`. Los de
+  `date`/`number`/`currency`/`uppercase`/`lowercase`/`json` reemplazan al filtro de AngularJS del mismo nombre.
+  `formatDate`/`formatNumber`/`formatPercent`/`formatCurrency`/`getCurrencySymbol` sobre los datos del `$locale`;
+  `LOCALE_ID` (ahora en `core`, re-exportado en `i18n`), `DEFAULT_CURRENCY_CODE` y `DATE_PIPE_DEFAULT_OPTIONS`
+- Directivas de template (`NgIf`, `NgFor`, `NgClass`, `NgStyle`, `NgSwitch`) no van: las traduce a futuro
+  `ng-js-template-compiler` (`*ngIf` → `ng-if`), sin clases en el runtime
 - [x] router sobre UI-Router (`RouterModule.forRoot/forChild`, guards, resolvers, títulos, `loadComponent`,
   `loadChildren` con `@NgModule` compilado, preloading, scroll)
 - [x] animaciones (`AnimationBuilder` sobre `$animateCss`)

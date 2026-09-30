@@ -84,4 +84,31 @@ export class PureCountPipe { transform(value: unknown[]): number { return value.
     expect(root.querySelector("h1")?.textContent).toBe("Hola Mundo");
     expect(app!.get<(name: string) => { $stateful?: boolean }>("$filter")("keyvalue").$stateful).toBe(true);
   });
+
+  it("date/number/currency/json/uppercase de Angular reemplazan al filtro de AngularJS del mismo nombre; slice/i18nPlural/i18nSelect", async () => {
+    await boot(
+      [
+        "<p id=n>{{ 1234.5 | number:'1.2-2' }}</p>",
+        "<p id=c>{{ 5 | currency:'EUR':'code' }}</p>",
+        "<p id=d>{{ 0 | date:'yyyy-MM-dd HH:mm':'UTC' }}</p>",
+        "<p id=u>{{ 'hola' | uppercase }}</p>",
+        "<p id=s>{{ 'abcdef' | slice:1:3 }}</p>",
+        "<p id=p>{{ 3 | i18nPlural:{ one: 'uno', other: '# varios' } }}</p>",
+        "<p id=g>{{ 'female' | i18nSelect:{ female: 'ella', other: 'elle' } }}</p>",
+      ].join(""),
+    );
+    const text = (id: string) => app!.document.getElementById(id)?.textContent;
+    expect(text("n")).toBe("1,234.50");
+    expect(text("c")).toBe("EUR5.00");
+    expect(text("d")).toBe("1970-01-01 00:00");
+    expect(text("u")).toBe("HOLA");
+    expect(text("s")).toBe("bc");
+    expect(text("p")).toBe("3 varios");
+    expect(text("g")).toBe("ella");
+
+    // Desde código, como ngb-js: `$filter("date")(fecha, formato, zona)`.
+    const $filter = app!.get<(name: string) => (...args: unknown[]) => unknown>("$filter");
+    expect($filter("date")(new Date(Date.UTC(2020, 0, 1, 13)), "a", "UTC")).toBe("PM");
+    expect($filter("json").$stateful).toBe(true);
+  });
 });
