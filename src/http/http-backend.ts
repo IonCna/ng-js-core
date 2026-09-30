@@ -45,10 +45,15 @@ export class HttpBackendImpl extends HttpBackend {
         responseType?: string,
       ) => void;
 
+      // Como `HttpXhrBackend` de Angular: el `Content-Type` detectado solo si el dev no mandó uno.
+      const headers = req.headers.toObject();
+      const contentType = req.headers.has("Content-Type") ? null : req.detectContentTypeHeader();
+      if (contentType !== null) headers["Content-Type"] = contentType;
+
       rawBackend(
         req.method,
         req.urlWithParams(),
-        req.body,
+        req.serializeBody(),
         (status, response, headersString, statusText) => {
           const headers = new HttpHeaders(headersString);
           const url = req.urlWithParams();
@@ -60,7 +65,7 @@ export class HttpBackendImpl extends HttpBackend {
             subscriber.error(new HttpErrorResponse({ status, statusText, headers, url, error: response }));
           }
         },
-        req.headers.toObject(),
+        headers,
         cancelPromise,
         req.withCredentials,
         req.responseType === "json" ? "json" : req.responseType,

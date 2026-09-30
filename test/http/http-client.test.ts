@@ -100,4 +100,43 @@ describe("etapa 13 — HttpClient (end-to-end, sin $http)", () => {
 
     expect(order).toEqual(["auth", "logging"]);
   });
+
+  it("sin suscribirse no corre ningún interceptor (como Angular: la cadena corre al suscribirse)", () => {
+    let calls = 0;
+    const counter: HttpInterceptor = {
+      intercept: (req: HttpRequest<unknown>, next: HttpHandler) => {
+        calls++;
+        return next.handle(req);
+      },
+    };
+
+    const { httpClient } = bootHttpClient([counter]);
+    httpClient.get("/api/lazy");
+
+    expect(calls).toBe(0);
+  });
+
+  it("cada suscripción corre la cadena de nuevo: un token actualizado después de crear el observable se usa", () => {
+    let token = "viejo";
+    const sent: string[] = [];
+    const auth: HttpInterceptor = {
+      intercept: (req: HttpRequest<unknown>, next: HttpHandler) => next.handle(req.clone({ headers: req.headers.set("Authorization", token) })),
+    };
+
+    const { $httpBackend, httpClient } = bootHttpClient([auth]);
+    const record = (headers: Record<string, string>) => {
+      sent.push(headers.authorization!);
+      return true;
+    };
+    $httpBackend.expectGET("/api/me", record).respond(200, {});
+    $httpBackend.expectGET("/api/me", record).respond(200, {});
+
+    const me$ = httpClient.get("/api/me");
+    token = "nuevo";
+    me$.subscribe();
+    me$.subscribe();
+    $httpBackend.flush();
+
+    expect(sent).toEqual(["nuevo", "nuevo"]);
+  });
 });

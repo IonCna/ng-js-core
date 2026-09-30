@@ -1,4 +1,4 @@
-import { map, type Observable } from "rxjs";
+import { concatMap, map, type Observable, of } from "rxjs";
 import { Injectable } from "@/core/di/injectable.ts";
 import type { Injector } from "@/core/di/injector.ts";
 import type { HttpBackend } from "@/http/http-backend.ts";
@@ -50,7 +50,9 @@ export class HttpClientImpl extends HttpClient {
       timeout: options.timeout,
     });
 
-    const events$ = this.chain.handle(req);
+    // Como Angular: la cadena de interceptors corre al SUSCRIBIRSE, y otra vez por cada suscripción — un token
+    // actualizado entre crear el observable y suscribirse, un reintento o un contador de carga ven cada request.
+    const events$ = of(req).pipe(concatMap((request) => this.chain.handle(request)));
 
     // "events"/"response" son iguales acá: sin eventos de progreso (ver
     // http-response.ts), el único evento que existe YA ES el HttpResponse final.

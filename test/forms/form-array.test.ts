@@ -58,4 +58,18 @@ describe("etapa 15 — FormArray", () => {
     expect(array.get("1")?.value).toBe("b");
     expect(array.get([5])).toBeNull();
   });
+
+  it("deshabilitado (o con todos sus controles deshabilitados) queda DISABLED con todos en su value, como Angular", () => {
+    const array = new FormArray([new FormControl("a"), new FormControl({ value: "b", disabled: true })]);
+    expect(array.value).toEqual(["a"]);
+
+    array.disable();
+    expect(array.status).toBe("DISABLED");
+    expect(array.value).toEqual(["a", "b"]);
+
+    const allDisabled = new FormArray([new FormControl({ value: "x", disabled: true })]);
+    expect(allDisabled.status).toBe("DISABLED");
+    expect(allDisabled.value).toEqual(["x"]);
+  });
 });
+

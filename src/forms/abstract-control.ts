@@ -71,13 +71,17 @@ export abstract class AbstractControl<TValue = any> {
   protected _value: TValue;
   protected _errors: ValidationErrors | null = null;
   protected _status: FormControlStatus;
-  protected _disabled = false;
   protected _pristine = true;
   protected _touched = false;
   protected _parent: AbstractControl | null = null;
   protected _validator: ValidatorFn | null;
   protected _asyncValidator: AsyncValidatorFn | null;
   protected _asyncValidationSubscription: Subscription | null = null;
+  /**
+   * Como Angular 16.2: su PROPIO validador async todavía no respondió. Sin esto, cuando un hijo termina el suyo, el
+   * padre recalcula (`_calculateStatus`) sin hijos pendientes y pasa a `VALID` con su validador aún en vuelo.
+   */
+  private _hasOwnPendingAsyncValidator = false;
 
   private readonly valueChangesSubject: BehaviorSubject<TValue>;
   private readonly statusChangesSubject: BehaviorSubject<FormControlStatus>;
@@ -122,12 +126,13 @@ export abstract class AbstractControl<TValue = any> {
     return this._status === "PENDING";
   }
 
+  /** Como Angular: el estado ES la fuente de verdad (un grupo con todos sus hijos deshabilitados también lo está). */
   get disabled(): boolean {
-    return this._disabled;
+    return this._status === "DISABLED";
   }
 
   get enabled(): boolean {
-    return !this._disabled;
+    return this._status !== "DISABLED";
   }
 
   get errors(): ValidationErrors | null {
@@ -217,11 +222,11 @@ export abstract class AbstractControl<TValue = any> {
   }
 
   disable(opts: ControlEventOptions = {}): void {
-    this._disabled = true;
+    // Primero el estado (como Angular): `_updateValue` de un grupo/array deshabilitado junta a TODOS sus hijos.
+    this._status = "DISABLED";
     this._errors = null;
     this._forEachChild((control) => control.disable({ onlySelf: true, emitEvent: opts.emitEvent }));
     this._updateValue();
-    this._status = "DISABLED";
 
     if (opts.emitEvent !== false) {
       this.valueChangesSubject.next(this._value);
@@ -232,7 +237,7 @@ export abstract class AbstractControl<TValue = any> {
   }
 
   enable(opts: ControlEventOptions = {}): void {
-    this._disabled = false;
+    this._status = "VALID";
     this._forEachChild((control) => control.enable({ onlySelf: true, emitEvent: opts.emitEvent }));
     this.updateValueAndValidity({ onlySelf: true, emitEvent: opts.emitEvent });
     if (this._parent && !opts.onlySelf) this._parent.updateValueAndValidity(opts);
@@ -264,6 +269,8 @@ export abstract class AbstractControl<TValue = any> {
   }
 
   updateValueAndValidity(opts: ControlEventOptions = {}): void {
+    // `_setInitialStatus` de Angular: un grupo/array con todos sus hijos deshabilitados queda DISABLED.
+    this._status = this._allControlsDisabled() ? "DISABLED" : "VALID";
     this._updateValue();
 
     if (this.enabled) {
@@ -289,6 +296,25 @@ export abstract class AbstractControl<TValue = any> {
   abstract reset(value?: unknown, opts?: ControlEventOptions): void;
   /** Como `value`, pero incluye controles `disabled` (`value` los omite del árbol). */
   abstract getRawValue(): unknown;
+
+  /**
+   * `FormControl`: si él está deshabilitado. `FormGroup`/`FormArray`: si todos sus hijos lo están (y tiene alguno) —
+   * sin hijos, su propio estado. Como `_allControlsDisabled` de Angular.
+   */
+  protected _allControlsDisabled(): boolean {
+    return this.disabled;
+  }
+
+  /** Recorre los hijos: si ninguno está habilitado, todos deshabilitados (ver `_allControlsDisabled`). */
+  protected _allChildrenDisabled(): boolean {
+    let count = 0;
+    let anyEnabled = false;
+    this._forEachChild((control) => {
+      count++;
+      anyEnabled = anyEnabled || control.enabled;
+    });
+    return anyEnabled ? false : count > 0 || this.disabled;
+  }
 
   /** No-op en `FormControl` (sin hijos); recorre `controls` en `FormGroup`/`FormArray`. */
   protected _forEachChild(_callback: (control: AbstractControl) => void): void {}
@@ -318,9 +344,9 @@ export abstract class AbstractControl<TValue = any> {
   }
 
   private _calculateStatus(): FormControlStatus {
-    if (this._disabled) return "DISABLED";
+    if (this._allControlsDisabled()) return "DISABLED";
     if (this._errors) return "INVALID";
-    if (this._anyControlsHaveStatus("PENDING")) return "PENDING";
+    if (this._hasOwnPendingAsyncValidator || this._anyControlsHaveStatus("PENDING")) return "PENDING";
     if (this._anyControlsHaveStatus("INVALID")) return "INVALID";
     return "VALID";
   }
@@ -352,12 +378,15 @@ export abstract class AbstractControl<TValue = any> {
   private _cancelExistingAsyncValidation(): void {
     this._asyncValidationSubscription?.unsubscribe();
     this._asyncValidationSubscription = null;
+    this._hasOwnPendingAsyncValidator = false;
   }
 
   private _runAsyncValidator(emitEvent: boolean): void {
     if (!this._asyncValidator) return;
     this._status = "PENDING";
+    this._hasOwnPendingAsyncValidator = true;
     this._asyncValidationSubscription = toObservable(this._asyncValidator(this)).subscribe((errors) => {
+      this._hasOwnPendingAsyncValidator = false;
       this.setErrors(errors, { emitEvent });
     });
   }

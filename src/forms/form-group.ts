@@ -9,11 +9,12 @@ function isOptionsObject(value: unknown): value is AbstractControlOptions {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function computeGroupValue<TControls extends FormGroupControls>(controls: TControls): GroupValue<TControls> {
+/** Los hijos habilitados — o todos, si el grupo está deshabilitado (como `_reduceValue` de Angular). */
+function computeGroupValue<TControls extends FormGroupControls>(controls: TControls, groupDisabled = false): GroupValue<TControls> {
   const value = {} as GroupValue<TControls>;
   for (const key of Object.keys(controls)) {
     const control = controls[key];
-    if (control.enabled) value[key as keyof TControls] = control.value as GroupValue<TControls>[keyof TControls];
+    if (control.enabled || groupDisabled) value[key as keyof TControls] = control.value as GroupValue<TControls>[keyof TControls];
   }
   return value;
 }
@@ -73,12 +74,16 @@ export class FormGroup<TControls extends FormGroupControls = FormGroupControls> 
   }
 
   setValue(value: GroupValue<TControls>, opts: ControlEventOptions = {}): void {
+    // Todas las claves ANTES de tocar nada (como `_checkAllValuesPresent` de Angular): si falta una, el grupo queda
+    // como estaba, no a medio modificar.
     for (const name of Object.keys(this._controls)) {
       if (!Object.hasOwn(value as object, name)) {
         throw new Error(
           `FormGroup.setValue() requiere todas las claves de 'controls' — falta '${name}' (usar patchValue() para un valor parcial)`,
         );
       }
+    }
+    for (const name of Object.keys(this._controls)) {
       (this._controls as FormGroupControls)[name].setValue((value as Record<string, unknown>)[name], {
         onlySelf: true,
         emitEvent: opts.emitEvent,
@@ -116,7 +121,11 @@ export class FormGroup<TControls extends FormGroupControls = FormGroupControls> 
   }
 
   protected _updateValue(): void {
-    this._value = computeGroupValue(this._controls);
+    this._value = computeGroupValue(this._controls, this.disabled);
+  }
+
+  protected _allControlsDisabled(): boolean {
+    return this._allChildrenDisabled();
   }
 
   protected _forEachChild(callback: (control: AbstractControl) => void): void {

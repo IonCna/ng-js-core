@@ -54,11 +54,23 @@ export class FormControl<TValue = unknown> extends AbstractControl<TValue> {
   }
 
   reset(formState: TValue | FormControlState<TValue> = null as TValue, opts: ControlEventOptions = {}): void {
-    const { value, disabled } = isBoxedState(formState) ? formState : { value: formState, disabled: false };
+    // Como Angular (`_applyFormState`): valor y estado se aplican ANTES de avisarle al padre — `setValue` propaga con
+    // el `disabled` ya puesto, así el padre recalcula su valor sin (o con) este control. Solo `{ value, disabled }`
+    // cambia el estado; un valor suelto deja el control habilitado o deshabilitado como estaba.
+    this._applyFormState(formState);
     this.markAsPristine(opts);
     this.markAsUntouched(opts);
-    this.setValue(value, opts);
-    disabled ? this.disable({ ...opts, onlySelf: true }) : this.enable({ ...opts, onlySelf: true });
+    this.setValue(this._value, opts);
+  }
+
+  private _applyFormState(formState: TValue | FormControlState<TValue>): void {
+    if (!isBoxedState(formState)) {
+      this._value = formState;
+      return;
+    }
+    this._value = formState.value;
+    if (formState.disabled) this.disable({ onlySelf: true, emitEvent: false });
+    else this.enable({ onlySelf: true, emitEvent: false });
   }
 
   getRawValue(): TValue {

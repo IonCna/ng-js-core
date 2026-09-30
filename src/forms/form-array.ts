@@ -5,8 +5,9 @@ function isOptionsObject(value: unknown): value is AbstractControlOptions {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function computeArrayValue<TControl extends AbstractControl>(controls: readonly TControl[]): Array<TControl["value"]> {
-  return controls.filter((control) => control.enabled).map((control) => control.value);
+/** Los hijos habilitados — o todos, si el array está deshabilitado (como `_updateValue` de Angular). */
+function computeArrayValue<TControl extends AbstractControl>(controls: readonly TControl[], arrayDisabled = false): Array<TControl["value"]> {
+  return controls.filter((control) => control.enabled || arrayDisabled).map((control) => control.value);
 }
 
 /**
@@ -106,7 +107,11 @@ export class FormArray<TControl extends AbstractControl = AbstractControl> exten
   }
 
   protected _updateValue(): void {
-    this._value = computeArrayValue(this._controls);
+    this._value = computeArrayValue(this._controls, this.disabled);
+  }
+
+  protected _allControlsDisabled(): boolean {
+    return this._allChildrenDisabled();
   }
 
   protected _forEachChild(callback: (control: AbstractControl) => void): void {
