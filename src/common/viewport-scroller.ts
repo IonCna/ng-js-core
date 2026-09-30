@@ -5,7 +5,7 @@ import { DOCUMENT } from "@/core/dom-tokens.ts";
 /**
  * `ViewportScroller` — control imperativo del scroll del viewport. Mismo servicio
  * y API que `@angular/common`. Todo DOM sobre `$window` + `DOCUMENT`. Sin
- * integración con el router (eso es `withInMemoryScrolling`, aparte).
+ * integración con el router (eso es `scrollPositionRestoration`/`anchorScrolling` de `forRoot`, aparte).
  */
 @Injectable()
 export abstract class ViewportScroller {

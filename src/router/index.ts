@@ -30,13 +30,10 @@ export type {
 export type { ParamsInheritanceStrategy } from "@/router/route-title.ts";
 export { type NavigationExtras, Router } from "@/router/router.ts";
 export {
+  type ExtraOptions,
   type InMemoryScrollingOptions,
   type RouterConfigOptions,
   RouterModule,
-  withHashLocation,
-  withInMemoryScrolling,
-  withPreloading,
-  withRouterConfig,
 } from "@/router/router-module.ts";
 export { DefaultTitleStrategy, TitleStrategy } from "@/router/title-strategy.ts";
 export { type UiRouterLike, urlToStateRef } from "@/router/ui-sref-url.ts";

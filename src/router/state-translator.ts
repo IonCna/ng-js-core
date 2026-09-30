@@ -77,7 +77,7 @@ export interface TranslatedRoutes {
   redirects: { state: Ng1StateDeclaration; redirectTo: string; parentPath: string }[];
   /** Componentes de ruta (`{ camelCase, clase, state }`) — `loadChildren` los registra en el chunk lazy; `canDeactivate` los trackea. */
   components: { name: string; cls: Function; stateName: string }[];
-  /** Rutas `loadComponent`/`loadChildren` — las recorre el preloader (`withPreloading`). */
+  /** Rutas `loadComponent`/`loadChildren` — las recorre el preloader (`preloadingStrategy`). */
   lazyRoutes: LazyRouteEntry[];
 }
 
@@ -481,7 +481,8 @@ function lazyLoadChildrenFor(
   return async (context: LazyLoadContext) => {
     const { $injector } = context;
     const childRoutes = unwrapLazyRoutes(await load(), $injector, stateName);
-    const sub = translate(childRoutes, stateName, fullPath, inRootChain);
+    // El padre es la ruta del `loadChildren`: sin componente propio, salvo que declare uno.
+    const sub = translate(childRoutes, stateName, fullPath, inRootChain, !route.component);
 
     // El subárbol lazy entra al registro global: sus `titles`/`resolveKeys` los
     // leen `wireTitles` / `ActivatedRoute` en vivo, y su `pathToName` deja
@@ -683,6 +684,11 @@ interface WalkCtx {
    * arranca en `false` (`url: ""`, relativa al padre).
    */
   rootEmptyChain: boolean;
+  /**
+   * El padre no tiene componente (ni `loadComponent`): un grupo `{ path: "", data, children }` o la ruta de un
+   * `loadChildren`. Con `'emptyOnly'` sus hijos heredan su `data` aunque tengan `path` propio (como Angular).
+   */
+  parentComponentless?: boolean;
   /** Rutas con `redirectTo` para resolver en 2ª pasada, cuando `pathToName` está completo. */
   redirects: { state: Ng1StateDeclaration; redirectTo: string; parentPath: string }[];
 }
@@ -791,7 +797,11 @@ function walk(routes: Routes, ctx: WalkCtx): void {
     if (route.providers?.length) ctx.out.routeProviders.set(name, route.providers);
     const rk = resolveKeysOf(route.resolve);
     if (rk.length) ctx.out.resolveKeys.set(name, rk);
-    if ((route.path ?? "") === "" && route.redirectTo === undefined) ctx.out.emptyPathStates.add(name);
+    // Hereda la `data` del padre con `'emptyOnly'` (`inheritedParamsDataResolve` de Angular): `path` vacío o padre
+    // sin componente.
+    if (route.redirectTo === undefined && ((route.path ?? "") === "" || ctx.parentComponentless)) {
+      ctx.out.emptyPathStates.add(name);
+    }
     if (isWildcard) ctx.out.wildcardState = name; // último gana
 
     ctx.out.states.push(state);
@@ -832,6 +842,7 @@ function walk(routes: Routes, ctx: WalkCtx): void {
         parentName: name,
         parentPath: fullPath,
         rootEmptyChain: inRootChain,
+        parentComponentless: !route.component && !route.loadComponent,
         redirects: ctx.redirects,
       });
     }
@@ -844,6 +855,7 @@ function translate(
   parentName: string | undefined,
   parentPath: string,
   rootEmptyChain = false,
+  parentComponentless = false,
 ): TranslatedRoutes {
   const out: TranslatedRoutes = {
     states: [],
@@ -860,7 +872,7 @@ function translate(
     components: [],
     lazyRoutes: [],
   };
-  walk(routes, { out, parentName, parentPath, rootEmptyChain, redirects: out.redirects });
+  walk(routes, { out, parentName, parentPath, rootEmptyChain, parentComponentless, redirects: out.redirects });
 
   // Resolución local (misma tree). La global (contra `routerRegistry.pathToName`)
   // la aplica `RouterModule` en fase config, cuando ya están todos los árboles.

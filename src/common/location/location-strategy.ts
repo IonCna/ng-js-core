@@ -17,7 +17,7 @@ export const APP_BASE_HREF = new InjectionToken<string>("APP_BASE_HREF");
  * impls: `PathLocationStrategy` (History API, `/users/42`) y
  * `HashLocationStrategy` (`/#/users/42`). Delega el manoseo real de `window` en
  * `PlatformLocation`. Cuál queda activa lo elige `RouterModule.forRoot`
- * (`withHashLocation()` → `HashLocationStrategy`).
+ * (`useHash: true` de `forRoot` → `HashLocationStrategy`).
  */
 @Injectable()
 export abstract class LocationStrategy {

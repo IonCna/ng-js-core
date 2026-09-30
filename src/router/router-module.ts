@@ -71,9 +71,9 @@ interface UrlRouterProvider {
   otherwise(rule: string | ((...args: unknown[]) => string)): void;
 }
 
-// --- Features (estilo `provideRouter(routes, ...features)` de Angular) -------
+// --- Opciones (`ExtraOptions` de Angular 16) ---------------------------------
 
-/** Opciones de `withInMemoryScrolling()` — misma forma que `@angular/router`. */
+/** Las opciones de scroll de `ExtraOptions` — misma forma que `InMemoryScrollingOptions` de `@angular/router`. */
 export interface InMemoryScrollingOptions {
   /**
    * `'disabled'` (default) · `'top'` (scroll a `[0,0]` en cada nav) ·
@@ -85,7 +85,10 @@ export interface InMemoryScrollingOptions {
   anchorScrolling?: "disabled" | "enabled";
 }
 
-/** Opciones de `withRouterConfig()` — mismo nombre/forma que `@angular/router`. */
+/**
+ * Las opciones de configuración de `ExtraOptions` — mismo nombre/forma que `RouterConfigOptions` de `@angular/router`.
+ * Hoy solo `paramsInheritanceStrategy` (ver `mergeStaticData`).
+ */
 export interface RouterConfigOptions {
   /**
    * Mismo nombre/semántica que Angular. `'emptyOnly'` (default) = un hijo
@@ -97,56 +100,18 @@ export interface RouterConfigOptions {
   paramsInheritanceStrategy?: ParamsInheritanceStrategy;
 }
 
-interface RouterFeature {
-  readonly ɵkind: "hash-location" | "in-memory-scrolling" | "router-config" | "preloading";
-  readonly options?: InMemoryScrollingOptions | RouterConfigOptions;
-  readonly strategy?: PreloadingStrategyType;
-}
-
 /**
- * Feature para `RouterModule.forRoot(routes, withHashLocation())` — mismo nombre y
- * semántica que `@angular/router`. Hace dos cosas:
- *  1. registra `{ provide: LocationStrategy, useClass: HashLocationStrategy }`
- *     (URLs `#/about`; sin el feature → `PathLocationStrategy`, `/about`);
- *  2. pone `$locationProvider.html5Mode(false)` — UI-Router (el sustrato) lee la
- *     URL de `$location`, así que necesita el modo hashbang para coincidir.
+ * El segundo argumento de `RouterModule.forRoot(routes, config)` — el `ExtraOptions` de Angular 16 (las features
+ * `with…()` son de `provideRouter`, la API standalone). Lo soportado:
+ * - `useHash`: `HashLocationStrategy` (URLs `#/about`); sin él, `PathLocationStrategy` (`/about`).
+ * - `preloadingStrategy`: después de cada navegación, qué `loadChildren`/`loadComponent` bajar por adelantado
+ *   (`PreloadAllModules`, `NoPreloading` o una clase propia, instanciada con DI de constructor).
+ * - `scrollPositionRestoration`/`anchorScrolling` (`InMemoryScrollingOptions`) y `paramsInheritanceStrategy`
+ *   (`RouterConfigOptions`).
  */
-export function withHashLocation(): RouterFeature {
-  return { ɵkind: "hash-location" };
-}
-
-/**
- * Feature para `RouterModule.forRoot(routes, withInMemoryScrolling(opts))` —
- * mismo nombre que `@angular/router`. Soporta `anchorScrolling: 'enabled'`
- * (scroll al `#fragment`), `scrollPositionRestoration: 'top'` y `'enabled'`
- * (guarda la posición por URL y la restaura en back/forward — el trigger de
- * back/forward se infiere escuchando `popstate` en `window`, porque UI-Router no
- * lo expone). **Matiz vs Angular:** el store es por URL, así que también restaura
- * al volver a una URL ya visitada por un link (no solo con el botón atrás). No
- * se emite el evento `Scroll` en `Router.events`.
- */
-export function withInMemoryScrolling(options: InMemoryScrollingOptions = {}): RouterFeature {
-  return { ɵkind: "in-memory-scrolling", options };
-}
-
-/**
- * Feature para `RouterModule.forRoot(routes, withRouterConfig(opts))` — mismo
- * nombre que `@angular/router`. Hoy solo cubre `paramsInheritanceStrategy`
- * (ver `mergeStaticData`); el resto de las opciones de Angular quedan fuera
- * del MVP.
- */
-export function withRouterConfig(options: RouterConfigOptions = {}): RouterFeature {
-  return { ɵkind: "router-config", options };
-}
-
-/**
- * Feature para `RouterModule.forRoot(routes, withPreloading(PreloadAllModules))` —
- * mismo nombre que `@angular/router`. Después de cada navegación exitosa, la
- * estrategia decide qué rutas `loadChildren`/`loadComponent` bajar por adelantado
- * (ver `RouterPreloader`). La clase se instancia con DI de constructor.
- */
-export function withPreloading(strategy: PreloadingStrategyType): RouterFeature {
-  return { ɵkind: "preloading", strategy };
+export interface ExtraOptions extends InMemoryScrollingOptions, RouterConfigOptions {
+  useHash?: boolean;
+  preloadingStrategy?: PreloadingStrategyType;
 }
 
 // --- Wiring interno --------------------------------------------------------
@@ -240,12 +205,8 @@ function wireTitles(
   return run;
 }
 
-function hashRequested(features: RouterFeature[]): boolean {
-  return features.some((f) => f.ɵkind === "hash-location");
-}
-
 /**
- * `withInMemoryScrolling()` → `.run`. El scroll se difiere con `$timeout(0)`
+ * `scrollPositionRestoration`/`anchorScrolling` de `ExtraOptions` → `.run`. El scroll se difiere con `$timeout(0)`
  * porque el `<ui-view>` nuevo se linkea recién después de `onSuccess`.
  * Prioridad: posición restaurada (back/forward con `'enabled'`) → `#fragment`
  * (`anchorScrolling`) → `[0,0]` (`'top'`/`'enabled'` yendo adelante).
@@ -315,7 +276,7 @@ function wireRouterScroller(options: InMemoryScrollingOptions) {
 }
 
 /**
- * `RouterModule.forRoot(routes, ...features)` / `forChild(routes)` — devuelven un
+ * `RouterModule.forRoot(routes, config?)` / `forChild(routes)` — devuelven un
  * `angular.IModule` (que `@NgModule({ imports: [...] })` acepta como tal). Traduce
  * las `Routes` (path-based, API de Angular) al árbol de estados con nombre de UI-Router.
  */
@@ -323,7 +284,7 @@ export const RouterModule = {
   /** `imports: [RouterModule]` (sin `forRoot`/`forChild`): trae `ui.router` (directivas `ui-sref`/`ui-view`). */
   name: "ui.router",
 
-  forRoot(routes: Routes, ...features: RouterFeature[]): angular.IModule {
+  forRoot(routes: Routes, config: ExtraOptions = {}): angular.IModule {
     const translated = routesToStates(routes, /* isRoot */ true);
     const { states, guards, deactivateGuards, matchGuards, titles, resolveKeys } = translated;
 
@@ -337,22 +298,20 @@ export const RouterModule = {
     routerRegistry.mergeRouteProviders(translated.routeProviders);
     routerRegistry.mergePathToName(translated.pathToName);
 
-    const configFeature = features.find((f) => f.ɵkind === "router-config");
-    const paramsInheritanceStrategy: ParamsInheritanceStrategy =
-      (configFeature?.options as RouterConfigOptions | undefined)?.paramsInheritanceStrategy ?? "emptyOnly";
+    const paramsInheritanceStrategy: ParamsInheritanceStrategy = config.paramsInheritanceStrategy ?? "emptyOnly";
 
     // La URL `/` de la raíz la asigna el traductor (hoja de la cadena `path: ""`); acá no
     // se fuerza: un layout raíz con hijos lleva `url: ""` a propósito (ver `walk`).
     const root = states.find((state) => !state.name?.includes("."));
     const fallbackUrl = (typeof root?.url === "string" && root.url) || "/";
 
-    const useHash = hashRequested(features);
+    const useHash = config.useHash === true;
     // El router depende de `@angular/common` (`CommonModule`): trae `PlatformLocation` + `APP_BASE_HREF` +
     // `Location`. `LocationStrategy` la fija acá abajo.
     const commonId = (CommonModule as unknown as { ɵmod: { id: string } }).ɵmod.id;
     const mod = angular.module(nextModuleName("ngjs.router"), ["ui.router", commonId]);
 
-    // `@angular/common` no da un `LocationStrategy` por default — lo elige el router según `withHashLocation()`.
+    // `@angular/common` no da un `LocationStrategy` por default — lo elige el router según `useHash`.
     const Strategy = useHash ? HashLocationStrategy : PathLocationStrategy;
     mod.factory(injectionTokenName(LocationStrategy), (Strategy as unknown as { ɵfac: unknown[] }).ɵfac as never);
     // `Route.providers`: AngularJS tiene un solo injector — quedan para toda la app.
@@ -364,14 +323,18 @@ export const RouterModule = {
       mod.config(registerProviders);
     }
 
-    const config = (
+    const configureStates = (
       $stateProvider: StateProvider,
       $urlRouterProvider: UrlRouterProvider,
       $locationProvider: ILocationProvider,
     ) => {
-      // Default = PathLocationStrategy (html5), como Angular. `withHashLocation()` → hashbang.
+      // Default = PathLocationStrategy (html5), como Angular. `useHash: true` → hash.
       if (!useHash) {
         $locationProvider.html5Mode({ enabled: true, requireBase: false });
+      } else {
+        // Como Angular (`#/about`): sin esto AngularJS usa su hashbang (`#!/about`) y no coincide con los links que arma
+        // `HashLocationStrategy` (`#/about`).
+        $locationProvider.hashPrefix("");
       }
       applyGlobalRedirects(translated); // redirects cruzados forRoot↔forChild — el registro ya está completo
       for (const state of states) $stateProvider.state({ ...state }); // clon: UI-Router muta la decl (quita lazyLoad); no compartir entre bootstraps
@@ -380,9 +343,9 @@ export const RouterModule = {
       // `otherwise` solo cubre la URL raíz sin match → va a la raíz.
       $urlRouterProvider.otherwise(fallbackUrl);
     };
-    config.$inject = ["$stateProvider", "$urlRouterProvider", "$locationProvider"];
+    configureStates.$inject = ["$stateProvider", "$urlRouterProvider", "$locationProvider"];
 
-    mod.config(config);
+    mod.config(configureStates);
 
     // `ui-sref` acepta también la forma URL (`/algo`), no solo el state name — se
     // traduce contra la misma config (ver `ui-sref-url.ts`). Solo en `forRoot`:
@@ -418,12 +381,13 @@ export const RouterModule = {
     );
 
     if (translated.lazyRoutes.length) mod.run(wireLazyRoutes(translated.lazyRoutes));
-    const preloadingFeature = features.find((f) => f.ɵkind === "preloading");
-    if (preloadingFeature?.strategy) mod.run(wirePreloading(preloadingFeature.strategy));
+    if (config.preloadingStrategy) mod.run(wirePreloading(config.preloadingStrategy));
 
-    const scrollFeature = features.find((f) => f.ɵkind === "in-memory-scrolling");
-    if (scrollFeature)
-      mod.run(wireRouterScroller((scrollFeature.options as InMemoryScrollingOptions | undefined) ?? {}));
+    // Como Angular: los dos arrancan en `'disabled'` — sin pedirlos, el router no toca el scroll.
+    const { scrollPositionRestoration, anchorScrolling } = config;
+    if ((scrollPositionRestoration && scrollPositionRestoration !== "disabled") || anchorScrolling === "enabled") {
+      mod.run(wireRouterScroller({ scrollPositionRestoration, anchorScrolling }));
+    }
 
     mod.factory(injectionTokenName(Router), (RouterImpl as unknown as { ɵfac: unknown[] }).ɵfac as never);
 

@@ -3,7 +3,7 @@ import { BrowserPlatformLocation, HashLocationStrategy, PathLocationStrategy } f
 
 /**
  * Las dos estrategias. Qué provee cada módulo (`CommonModule` da `PlatformLocation` pero no `LocationStrategy`;
- * `RouterModule.forRoot` elige según `withHashLocation()`) y el override de `APP_BASE_HREF` por DI lo cubren
+ * `RouterModule.forRoot` elige según `useHash`) y el override de `APP_BASE_HREF` por DI lo cubren
  * `platform-browser.compiled.test.ts` y `router/router-location.compiled.test.ts`.
  */
 describe("etapa 14 — platform-browser: LocationStrategy / PlatformLocation", () => {

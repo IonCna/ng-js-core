@@ -8,7 +8,7 @@ import {
 } from "@/common/index.ts";
 
 /**
- * `Location` sobre la estrategia que elegiría el router (`withHashLocation()` → hash). Qué estrategia provee
+ * `Location` sobre la estrategia que elegiría el router (`useHash: true` → hash). Qué estrategia provee
  * `RouterModule.forRoot` lo cubre `router/router-location.compiled.test.ts`.
  */
 function bootLocation(hash = false): Location {
@@ -61,7 +61,7 @@ describe("etapa 14 — platform-browser: Location", () => {
     ]);
   });
 
-  it("con withHashLocation() la URL va después del #", () => {
+  it("con useHash la URL va después del #", () => {
     const location = bootLocation(true);
 
     location.go("/dash");

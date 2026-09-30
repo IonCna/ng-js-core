@@ -3,7 +3,7 @@ import { RouterApp } from "./router-app.ts";
 
 const HEADER = `import { Component, Injectable, NgModule, inject } from "ngjs-core";
 import { CommonModule } from "ngjs-core/common";
-import { ActivatedRoute, RouterModule, TitleStrategy, withInMemoryScrolling, withRouterConfig, type Routes } from "ngjs-core/router";
+import { ActivatedRoute, RouterModule, TitleStrategy, type Routes } from "ngjs-core/router";
 @Component({ selector: "app-root", template: "<ui-view></ui-view>" })
 export class AppRoot {}
 `;
@@ -196,7 +196,29 @@ export class AppModule {}
     expect(app.text).toContain("home");
   });
 
-  describe("withInMemoryScrolling", () => {
+  it("useHash: la URL queda #/ruta, como Angular (no el hashbang #!/ de AngularJS), igual que los href de ui-sref", async () => {
+    app = await boot(`
+@Component({ selector: "hash-home", template: "<h1>home</h1>" })
+export class HashHome {}
+@Component({ selector: "hash-about", template: "<h1>about</h1>" })
+export class HashAbout {}
+@Component({ selector: "hash-root", template: '<a id="l-about" ui-sref="/about">about</a><ui-view></ui-view>' })
+export class HashRoot {}
+const routes: Routes = [
+  { path: "", component: HashHome },
+  { path: "about", component: HashAbout },
+];
+@NgModule({ imports: [CommonModule, RouterModule.forRoot(routes, { useHash: true })], declarations: [AppRoot, HashRoot, HashHome, HashAbout], bootstrap: [HashRoot] })
+export class AppModule {}
+`);
+    await app.navigate("/about");
+
+    expect(app.app.window.location.hash).toBe("#/about");
+    expect(app.app.document.getElementById("l-about")?.getAttribute("href")).toBe("#/about");
+    expect(app.text).toContain("about");
+  });
+
+  describe("scrollPositionRestoration / anchorScrolling", () => {
     const scrolling = (feature: string) => `
 export const scrolls: number[][] = [];
 (globalThis as any).scrolls = scrolls;
@@ -212,7 +234,7 @@ export class AppModule {}
     const scrolls = () => app!.app.global<number[][]>("scrolls");
 
     it("scrollPositionRestoration: 'top' → scroll a [0,0] tras navegar", async () => {
-      app = await boot(scrolling(`withInMemoryScrolling({ scrollPositionRestoration: "top" })`));
+      app = await boot(scrolling(`{ scrollPositionRestoration: "top" }`));
       scrolls().length = 0;
       await app.navigate("/page");
       expect(scrolls()).toContainEqual([0, 0]);
@@ -220,7 +242,7 @@ export class AppModule {}
 
     it("anchorScrolling: 'enabled' → scroll al elemento del #fragment (gana sobre top)", async () => {
       app = await boot(
-        scrolling(`withInMemoryScrolling({ scrollPositionRestoration: "top", anchorScrolling: "enabled" })`),
+        scrolling(`{ scrollPositionRestoration: "top", anchorScrolling: "enabled" }`),
       );
       scrolls().length = 0;
       const pending = app.router.navigateByUrl("/page#sec");
@@ -238,14 +260,14 @@ export class AppModule {}
     });
 
     it("scrollPositionRestoration: 'enabled' yendo adelante → scroll a [0,0]", async () => {
-      app = await boot(scrolling(`withInMemoryScrolling({ scrollPositionRestoration: "enabled" })`));
+      app = await boot(scrolling(`{ scrollPositionRestoration: "enabled" }`));
       scrolls().length = 0;
       await app.navigate("/page");
       expect(scrolls()).toContainEqual([0, 0]);
     });
 
     it("scrollPositionRestoration: 'enabled' → restaura la posición guardada en un back/forward", async () => {
-      app = await boot(scrolling(`withInMemoryScrolling({ scrollPositionRestoration: "enabled" })`));
+      app = await boot(scrolling(`{ scrollPositionRestoration: "enabled" }`));
       const scroller = app.app.inject<{ getScrollPosition(): [number, number] }>("ViewportScroller");
       await app.navigate("/page");
       scroller.getScrollPosition = () => [0, 300];
@@ -260,7 +282,7 @@ export class AppModule {}
       expect(scrolls()).not.toContainEqual([0, 0]);
     });
 
-    it("sin el feature → no toca el scroll", async () => {
+    it("sin las opciones (default disabled, como Angular) → no toca el scroll", async () => {
       app = await boot(scrolling(""));
       scrolls().length = 0;
       await app.navigate("/page");
@@ -269,17 +291,19 @@ export class AppModule {}
   });
 
   describe("paramsInheritanceStrategy (integración vía RouterModule.forRoot)", () => {
-    const inheritance = (feature: string) => `
+    // `withComponent`: el padre tiene componente (corta la herencia con 'emptyOnly'); sin él es un grupo.
+    const inheritance = (feature: string, withComponent = true) => `
 @Component({ selector: "pi-home", template: "<h1>home</h1>" })
 export class HomePi {}
+@Component({ selector: "pi-parent", template: "<ui-view></ui-view>" })
+export class ParentPi {}
 @Component({ selector: "pi-leaf", template: "<h1>leaf</h1>" })
 export class LeafPi {}
 const routes: Routes = [
   { path: "", component: HomePi },
-  // Padre con URL propia (no vacía) — como components/nav en ngbjs-doc.
-  { path: "parent", data: { title: "Parent", tabs: ["a", "b"] }, children: [{ path: "leaf", component: LeafPi, data: { sections: ["s1"] } }] },
+  { path: "parent", ${withComponent ? "component: ParentPi, " : ""}data: { title: "Parent", tabs: ["a", "b"] }, children: [{ path: "leaf", component: LeafPi, data: { sections: ["s1"] } }] },
 ];
-@NgModule({ imports: [CommonModule, RouterModule.forRoot(routes${feature ? `, ${feature}` : ""})], declarations: [AppRoot, HomePi, LeafPi], bootstrap: [AppRoot] })
+@NgModule({ imports: [CommonModule, RouterModule.forRoot(routes${feature ? `, ${feature}` : ""})], declarations: [AppRoot, HomePi, ParentPi, LeafPi], bootstrap: [AppRoot] })
 export class AppModule {}
 `;
     const leafData = async () => {
@@ -291,7 +315,7 @@ export class AppModule {}
       return data;
     };
 
-    it("'emptyOnly' (default): NO hereda data del padre con path propio no vacío", async () => {
+    it("'emptyOnly' (default): NO hereda data de un padre con componente si el hijo tiene path propio", async () => {
       app = await boot(inheritance(""));
       const data = await leafData();
       expect(data.sections).toEqual(["s1"]);
@@ -299,8 +323,17 @@ export class AppModule {}
       expect(data.tabs).toBeUndefined();
     });
 
+    it("'emptyOnly' (default): SÍ hereda data de un padre sin componente, aunque el hijo tenga path propio (como Angular)", async () => {
+      // El idiom de ngbjs-doc: `{ path: "", data: { title, tabs }, children: [{ path: "examples", ... }] }`.
+      app = await boot(inheritance("", false));
+      const data = await leafData();
+      expect(data.sections).toEqual(["s1"]);
+      expect(data.title).toBe("Parent");
+      expect(data.tabs).toEqual(["a", "b"]);
+    });
+
     it("'always': hereda data de toda la cadena, incluso con path propio no vacío", async () => {
-      app = await boot(inheritance(`withRouterConfig({ paramsInheritanceStrategy: "always" })`));
+      app = await boot(inheritance(`{ paramsInheritanceStrategy: "always" }`));
       const data = await leafData();
       expect(data.sections).toEqual(["s1"]);
       expect(data.title).toBe("Parent");

@@ -5,7 +5,7 @@ import { RouterApp } from "./router-app.ts";
 const HEADER = `import { Component, Inject, Injectable, InjectionToken, NgModule, inject } from "ngjs-core";
 import { CommonModule } from "ngjs-core/common";
 import { of, type Observable } from "rxjs";
-import { PreloadAllModules, PreloadingStrategy, RouterModule, withPreloading, type Route, type Routes } from "ngjs-core/router";
+import { PreloadAllModules, PreloadingStrategy, RouterModule, type Route, type Routes } from "ngjs-core/router";
 import { counters } from "./counters";
 @Component({ selector: "app-root", template: "<ui-view></ui-view>" })
 export class AppRoot {}
@@ -88,7 +88,7 @@ export class AppModule {}
     });
   });
 
-  describe("withPreloading", () => {
+  describe("preloadingStrategy", () => {
     const preloading = (strategy: string, extra = "") => `
 @Component({ selector: "pl-home", template: "<h1>home</h1>" })
 export class PlHome {}
@@ -99,7 +99,7 @@ const routes: Routes = [
   { path: "nested", loadChildren: () => { counters.nested += 1; return import("./nested.routes").then((m) => m.NESTED_ROUTES); } },
   { path: "page", loadComponent: () => { counters.page += 1; return import("./lazy-page.component"); } },
 ];
-@NgModule({ imports: [CommonModule, RouterModule.forRoot(routes, withPreloading(${strategy}))], declarations: [AppRoot, PlHome], bootstrap: [AppRoot] })
+@NgModule({ imports: [CommonModule, RouterModule.forRoot(routes, { preloadingStrategy: ${strategy} })], declarations: [AppRoot, PlHome], bootstrap: [AppRoot] })
 export class AppModule {}
 `;
     const counters = () => app!.app.global<Record<string, number>>("counters");
@@ -133,7 +133,7 @@ const routes: Routes = [
   { path: "admin", loadChildren: () => import("./lazy-admin.module").then((m) => m.AdminModule) },
   { path: "**", redirectTo: "" },
 ];
-@NgModule({ imports: [CommonModule, RouterModule.forRoot(routes, withPreloading(PreloadAllModules))], declarations: [AppRoot, PlRoot, PlHome], bootstrap: [PlRoot] })
+@NgModule({ imports: [CommonModule, RouterModule.forRoot(routes, { preloadingStrategy: PreloadAllModules })], declarations: [AppRoot, PlRoot, PlHome], bootstrap: [PlRoot] })
 export class AppModule {}
 `);
       await app.settle();

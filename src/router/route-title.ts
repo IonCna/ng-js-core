@@ -1,6 +1,6 @@
 import type { Data, ResolveFn } from "@/router/route.ts";
 
-/** Mismo nombre/semántica que `withRouterConfig({ paramsInheritanceStrategy })` de `@angular/router`. */
+/** Mismo nombre/semántica que `paramsInheritanceStrategy` de `ExtraOptions` (`@angular/router`). */
 export type ParamsInheritanceStrategy = "emptyOnly" | "always";
 
 /** Contexto que recibe una `title: ResolveFn<string>` — el mismo en `wireTitles` y en `ActivatedRoute`. */
@@ -45,8 +45,9 @@ export function pickRouteTitleState(
  *   hijo gana en choques).
  * - `'emptyOnly'` (default, paridad con el default de Angular): solo hereda
  *   la `data` del padre mientras, subiendo desde la hoja, cada state tenga
- *   `path` vacío (`""`) — el idiom de "ruta contenedora sin URL propia". Un
- *   state con `path` propio no vacío corta la herencia ahí.
+ *   `path` vacío (`""`) o un padre sin componente (un grupo `{ path: "",
+ *   data, children }`, la ruta de un `loadChildren`) — los que marca el
+ *   traductor en `emptyPathStates`. Si no, la herencia corta ahí.
  */
 export function mergeStaticData(
   chain: { name: string; data?: Data }[],
