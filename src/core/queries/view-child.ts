@@ -1,6 +1,4 @@
-import type { QueryOptions, QueryToken } from "@/core/queries/query-types.ts";
+import { makeQueryDecorator, type QueryDecorator } from "@/core/queries/query-types.ts";
 
-/** Decorador declarativo; `ng-js-compiler` emite la definición de la query. */
-export function ViewChild(_locator: QueryToken<unknown>, _options?: QueryOptions): PropertyDecorator {
-  return () => undefined;
-}
+/** Decorador declarativo (o `new ViewChild(...)` en `queries`); `ng-js-compiler` emite la definición de la query. */
+export const ViewChild: QueryDecorator = makeQueryDecorator(true, true, true);

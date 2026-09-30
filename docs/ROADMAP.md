@@ -18,7 +18,16 @@ portaron: eso ahora es el compilador y tiene sus propios tests.
   y filtros de tecla)
 - [x] `Attribute`, `Inject`, `Optional`, `Self`, `SkipSelf`, `Host`, `forwardRef`
 - [x] `InjectionToken` (con `factory`), providers y `ProviderToken`
-- [x] `ViewChild`, `ViewChildren`, `ContentChild`, `ContentChildren` (definición en `ɵcmp.queries`/`viewQueries`)
+- [x] `ViewChild`, `ViewChildren`, `ContentChild`, `ContentChildren` (definición en `ɵcmp.queries`/`viewQueries`); también
+  `new ViewChild(...)` en `queries: {}` del decorador
+- [x] Metadata del objeto del decorador como Angular 16: `inputs` (`"prop"`, `"prop: alias"`, `{ name, alias, required,
+  transform }`), `outputs`, `host` (`"[prop]"`, `"(evento)"`, atributos estáticos), `queries`, `styles`/`styleUrls`
+- [x] `@Input({ transform })` con `booleanAttribute`/`numberAttribute` (16.1) y `@Input({ required: true })` (error en
+  build de `ng-js-template-compiler` si un uso del selector no trae el atributo)
+- [x] `ModuleWithProviders<T>` (tipo)
+
+Fuera a propósito (no tendrían efecto sobre AngularJS): `encapsulation` (solo existe la emulada), `changeDetection`,
+`viewProviders`, `animations`, `preserveWhitespaces`, y `schemas`/`exports`/`id` de `@NgModule`.
 
 `Service` queda fuera del target (Angular 14/16 usa `Injectable`). `afterRender`/`afterNextRender` también.
 
