@@ -25,6 +25,10 @@ function mergeErrors(errorsList: readonly (ValidationErrors | null)[]): Validati
   return hasErrors ? merged : null;
 }
 
+function addDistinct<T>(current: T[], added: T[]): T[] {
+  return [...current, ...added.filter((item, index) => !current.includes(item) && added.indexOf(item) === index)];
+}
+
 function composeValidators(validators: ValidatorFn[] | null): ValidatorFn | null {
   if (!validators || validators.length === 0) return null;
   return (control) => mergeErrors(validators.map((validator) => validator(control)));
@@ -76,6 +80,9 @@ export abstract class AbstractControl<TValue = any> {
   protected _parent: AbstractControl | null = null;
   protected _validator: ValidatorFn | null;
   protected _asyncValidator: AsyncValidatorFn | null;
+  /** Los validadores tal como se pasaron (sin componer): los usan `addValidators`/`removeValidators`/`hasValidator`. */
+  private _rawValidators: ValidatorFn[] = [];
+  private _rawAsyncValidators: AsyncValidatorFn[] = [];
   protected _asyncValidationSubscription: Subscription | null = null;
   /**
    * Como Angular 16.2: su PROPIO validador async todavía no respondió. Sin esto, cuando un hijo termina el suyo, el
@@ -95,8 +102,10 @@ export abstract class AbstractControl<TValue = any> {
     asyncValidators: AsyncValidatorFn | AsyncValidatorFn[] | null,
   ) {
     this._value = value;
-    this._validator = composeValidators(coerceToArray(validators));
-    this._asyncValidator = composeAsyncValidators(coerceToArray(asyncValidators));
+    this._validator = null;
+    this._asyncValidator = null;
+    this.setValidators(validators);
+    this.setAsyncValidators(asyncValidators);
 
     this.valueChangesSubject = new BehaviorSubject<TValue>(value);
     this.valueChanges = this.valueChangesSubject.asObservable();
@@ -174,19 +183,49 @@ export abstract class AbstractControl<TValue = any> {
   }
 
   setValidators(validators: ValidatorFn | ValidatorFn[] | null): void {
-    this._validator = composeValidators(coerceToArray(validators));
+    this._rawValidators = [...(coerceToArray(validators) ?? [])];
+    this._validator = composeValidators(this._rawValidators);
   }
 
   setAsyncValidators(validators: AsyncValidatorFn | AsyncValidatorFn[] | null): void {
-    this._asyncValidator = composeAsyncValidators(coerceToArray(validators));
+    this._rawAsyncValidators = [...(coerceToArray(validators) ?? [])];
+    this._asyncValidator = composeAsyncValidators(this._rawAsyncValidators);
+  }
+
+  /** Como Angular: suma los que no estaban (por referencia); rige desde el próximo `updateValueAndValidity()`. */
+  addValidators(validators: ValidatorFn | ValidatorFn[]): void {
+    this.setValidators(addDistinct(this._rawValidators, coerceToArray(validators) ?? []));
+  }
+
+  addAsyncValidators(validators: AsyncValidatorFn | AsyncValidatorFn[]): void {
+    this.setAsyncValidators(addDistinct(this._rawAsyncValidators, coerceToArray(validators) ?? []));
+  }
+
+  removeValidators(validators: ValidatorFn | ValidatorFn[]): void {
+    const removed = coerceToArray(validators) ?? [];
+    this.setValidators(this._rawValidators.filter((validator) => !removed.includes(validator)));
+  }
+
+  removeAsyncValidators(validators: AsyncValidatorFn | AsyncValidatorFn[]): void {
+    const removed = coerceToArray(validators) ?? [];
+    this.setAsyncValidators(this._rawAsyncValidators.filter((validator) => !removed.includes(validator)));
+  }
+
+  /** `true` si el validador está (por referencia: `Validators.required` sí; `Validators.min(3)` crea uno nuevo). */
+  hasValidator(validator: ValidatorFn): boolean {
+    return this._rawValidators.includes(validator);
+  }
+
+  hasAsyncValidator(validator: AsyncValidatorFn): boolean {
+    return this._rawAsyncValidators.includes(validator);
   }
 
   clearValidators(): void {
-    this._validator = null;
+    this.setValidators(null);
   }
 
   clearAsyncValidators(): void {
-    this._asyncValidator = null;
+    this.setAsyncValidators(null);
   }
 
   setParent(parent: AbstractControl | null): void {
@@ -196,6 +235,12 @@ export abstract class AbstractControl<TValue = any> {
   markAsTouched(opts: ControlEventOptions = {}): void {
     this._touched = true;
     if (this._parent && !opts.onlySelf) this._parent.markAsTouched(opts);
+  }
+
+  /** Este control y todos sus descendientes, como Angular (típico antes de mostrar errores al enviar). */
+  markAllAsTouched(): void {
+    this.markAsTouched({ onlySelf: true });
+    this._forEachChild((control) => control.markAllAsTouched());
   }
 
   markAsUntouched(opts: ControlEventOptions = {}): void {

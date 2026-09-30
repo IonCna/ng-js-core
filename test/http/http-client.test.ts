@@ -1,14 +1,14 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { HttpBackendImpl } from "@/http/http-backend.ts";
-import { type HttpClient, HttpClientImpl } from "@/http/http-client.ts";
-import type { HttpHandler, HttpInterceptor } from "@/http/http-interceptor.ts";
+import { HttpXhrBackend } from "@/http/http-backend.ts";
+import { HttpClient } from "@/http/http-client.ts";
+import { buildInterceptorChain, type HttpHandler, type HttpInterceptor } from "@/http/http-interceptor.ts";
 import type { HttpRequest } from "@/http/http-request.ts";
 import { HttpErrorResponse, HttpResponse } from "@/http/http-response.ts";
 
 /**
  * `HttpClient` construido a mano sobre el `$httpBackend` de `ngMock`: los interceptors llegan por el `Injector`
- * (`injector.get(HTTP_INTERCEPTORS, [])`). Que `HttpClientModule` lo provea por DI con los interceptors `multi` lo
+ * (`buildInterceptorChain`). Que `HttpClientModule` lo provea por DI con los interceptors `multi` lo
  * cubre `http.compiled.test.ts`.
  */
 function bootHttpClient(interceptors: HttpInterceptor[] = []): {
@@ -17,8 +17,7 @@ function bootHttpClient(interceptors: HttpInterceptor[] = []): {
 } {
   const $injector = angular.injector(["ng", "ngMock"]);
   const $httpBackend = $injector.get<angular.IHttpBackendService>("$httpBackend");
-  const injector = { get: () => interceptors } as never;
-  return { $httpBackend: $httpBackend as never, httpClient: new HttpClientImpl(injector, new HttpBackendImpl($httpBackend)) };
+  return { $httpBackend: $httpBackend as never, httpClient: new HttpClient(buildInterceptorChain(interceptors, new HttpXhrBackend($httpBackend))) };
 }
 
 describe("etapa 13 — HttpClient (end-to-end, sin $http)", () => {
@@ -93,7 +92,7 @@ describe("etapa 13 — HttpClient (end-to-end, sin $http)", () => {
     };
 
     const { $httpBackend, httpClient } = bootHttpClient([authInterceptor, loggingInterceptor]);
-    $httpBackend.expectGET("/api/secure", (headers: Record<string, string>) => headers.authorization === "Bearer x").respond(200, {});
+    $httpBackend.expectGET("/api/secure", (headers: Record<string, string>) => headers.Authorization === "Bearer x").respond(200, {});
 
     httpClient.get("/api/secure").subscribe();
     $httpBackend.flush();
@@ -125,7 +124,7 @@ describe("etapa 13 — HttpClient (end-to-end, sin $http)", () => {
 
     const { $httpBackend, httpClient } = bootHttpClient([auth]);
     const record = (headers: Record<string, string>) => {
-      sent.push(headers.authorization!);
+      sent.push(headers.Authorization!);
       return true;
     };
     $httpBackend.expectGET("/api/me", record).respond(200, {});

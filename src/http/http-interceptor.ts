@@ -1,10 +1,16 @@
 import type { Observable } from "rxjs";
+import { Injectable } from "@/core/di/injectable.ts";
 import { InjectionToken } from "@/core/di/injection-token.ts";
 import type { HttpRequest } from "@/http/http-request.ts";
 import type { HttpEvent } from "@/http/http-response.ts";
 
-export interface HttpHandler {
-  handle(req: HttpRequest<unknown>): Observable<HttpEvent<unknown>>;
+/**
+ * `HttpHandler` de `@angular/common/http`: lo que manda un request y devuelve sus eventos. Inyectable — por DI es la
+ * cadena de interceptors (`HttpInterceptingHandler`); `new HttpClient(backend)` la saltea, como en Angular.
+ */
+@Injectable()
+export abstract class HttpHandler {
+  abstract handle(req: HttpRequest<unknown>): Observable<HttpEvent<unknown>>;
 }
 
 export interface HttpInterceptor {
@@ -34,12 +40,6 @@ export class HttpInterceptorHandler implements HttpHandler {
  * mismo orden que Angular real — armado con `reduceRight` para que el
  * ÚLTIMO de la lista quede más cerca del backend.
  */
-export function buildInterceptorChain(
-  interceptors: readonly HttpInterceptor[],
-  backendHandler: HttpHandler,
-): HttpHandler {
-  return interceptors.reduceRight<HttpHandler>(
-    (next, interceptor) => new HttpInterceptorHandler(next, interceptor),
-    backendHandler,
-  );
+export function buildInterceptorChain(interceptors: readonly HttpInterceptor[], backendHandler: HttpHandler): HttpHandler {
+  return interceptors.reduceRight<HttpHandler>((next, interceptor) => new HttpInterceptorHandler(next, interceptor), backendHandler);
 }

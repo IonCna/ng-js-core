@@ -3,19 +3,19 @@ import { HttpParams } from "@/http/http-params.ts";
 import { HttpRequest } from "@/http/http-request.ts";
 
 describe("etapa 13 — HttpRequest", () => {
-  it("urlWithParams() anexa los params como query string", () => {
-    const req = new HttpRequest("GET", "/api/users", null, { params: new HttpParams({ page: "2" }) });
-    expect(req.urlWithParams()).toBe("/api/users?page=2");
+  it("urlWithParams anexa los params como query string", () => {
+    const req = new HttpRequest("GET", "/api/users", null, { params: new HttpParams({ fromObject: { page: "2" } }) });
+    expect(req.urlWithParams).toBe("/api/users?page=2");
   });
 
-  it("urlWithParams() sin params devuelve la url tal cual", () => {
+  it("urlWithParams sin params devuelve la url tal cual", () => {
     const req = new HttpRequest("GET", "/api/users");
-    expect(req.urlWithParams()).toBe("/api/users");
+    expect(req.urlWithParams).toBe("/api/users");
   });
 
-  it("urlWithParams() con una url que ya trae '?' usa '&'", () => {
-    const req = new HttpRequest("GET", "/api/users?active=true", null, { params: new HttpParams({ page: "2" }) });
-    expect(req.urlWithParams()).toBe("/api/users?active=true&page=2");
+  it("urlWithParams con una url que ya trae '?' usa '&'", () => {
+    const req = new HttpRequest("GET", "/api/users?active=true", null, { params: new HttpParams({ fromObject: { page: "2" } }) });
+    expect(req.urlWithParams).toBe("/api/users?active=true&page=2");
   });
 
   it("clone() es inmutable: devuelve un HttpRequest nuevo, sin tocar el original", () => {

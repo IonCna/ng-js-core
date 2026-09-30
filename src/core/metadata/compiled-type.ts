@@ -107,14 +107,19 @@ export class CompiledType {
     return def.selectors.flatMap((selector): { name: string; restrict: "A" | "C" | "E"; tag?: string }[] => {
       const parsed = CompiledType.parseSelector(selector);
       const tag = parsed.tag || undefined;
-      if (parsed.attributes[0]) return [{ name: CompiledType.camelCase(parsed.attributes[0]), restrict: "A" as const, tag }];
+      if (parsed.attributes[0])
+        return [{ name: CompiledType.camelCase(parsed.attributes[0]), restrict: "A" as const, tag }];
       if (parsed.classes[0]) return [{ name: CompiledType.camelCase(parsed.classes[0]), restrict: "C" as const, tag }];
       return tag ? [{ name: CompiledType.camelCase(tag), restrict: "E" as const }] : [];
     });
   }
 
   /** `[tag, attr, valor, ..., CLASS, clase, ..., NOT | X, ...]` → lo positivo (lo negado no registra nada). */
-  private static parseSelector(selector: (string | number)[]): { tag: string; attributes: string[]; classes: string[] } {
+  private static parseSelector(selector: (string | number)[]): {
+    tag: string;
+    attributes: string[];
+    classes: string[];
+  } {
     const CLASS = 8;
     const NOT = 1;
     const result = { tag: String(selector[0] ?? ""), attributes: [] as string[], classes: [] as string[] };
@@ -147,7 +152,9 @@ export class CompiledType {
   /** Tag del selector de elemento de un `@Component` (`undefined` si no es uno, o su selector es de atributo). */
   static componentTag(type: Function | undefined): string | undefined {
     if (!CompiledType.isComponent(type)) return undefined;
-    return CompiledType.registrations(type).find(({ restrict }) => restrict === "E")?.name.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`);
+    return CompiledType.registrations(type)
+      .find(({ restrict }) => restrict === "E")
+      ?.name.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`);
   }
 
   /** `app-card` → `appCard` (nombre de registro de AngularJS). */

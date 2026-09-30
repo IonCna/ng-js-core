@@ -12,3 +12,6 @@ export { BrowserModule, PlatformBrowserModule } from "@/platform-browser/platfor
 export * from "@/platform-browser/renderer.ts";
 export * from "@/platform-browser/security/index.ts";
 export { Title, TitleImpl } from "@/platform-browser/title.ts";
+// Como `@angular/platform-browser` 16 (también en `ngjs-core`, donde los deja la plataforma).
+export type { ApplicationConfig } from "@/core/platform/bootstrap.ts";
+export { bootstrapApplication, platformBrowser } from "@/core/platform/bootstrap.ts";

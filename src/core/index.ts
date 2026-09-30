@@ -8,6 +8,11 @@ export { NgDisabled } from "@/core/ng-disabled.ts";
 export * from "@/core/platform/index.ts";
 export * from "@/core/queries/index.ts";
 export * from "@/core/refs/index.ts";
-export { DOCUMENT } from "@/core/dom-tokens"
+export { DOCUMENT } from "@/core/dom-tokens";
+export { enableProdMode, isDevMode, VERSION, Version } from "@/core/dev-mode.ts";
+export { LOCALE_ID } from "@/core/locale-id.ts";
+export { SecurityContext } from "@/core/security-context.ts";
+export { ENVIRONMENT_INITIALIZER } from "@/core/environment-initializer.ts";
+export type { ForwardRefFn } from "@/core/types.ts";
 export * from "@/core/render/index.ts";
 export { NativeModule } from "@/native/native.module.ts";

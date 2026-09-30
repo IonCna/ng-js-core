@@ -1,3 +1,4 @@
+import { HttpContext } from "@/http/http-context.ts";
 import { HttpHeaders } from "@/http/http-headers.ts";
 import { HttpParams } from "@/http/http-params.ts";
 
@@ -7,39 +8,80 @@ export type HttpResponseType = "json" | "text" | "blob" | "arraybuffer";
 
 export interface HttpRequestInit {
   headers?: HttpHeaders;
+  context?: HttpContext;
+  reportProgress?: boolean;
   params?: HttpParams;
   withCredentials?: boolean;
   responseType?: HttpResponseType;
-  /** Número: se convierte en timeout real; también puede cancelarse desabonándose del Observable — ver `http-backend.ts`. */
+  /** Propio de ngjs: número de ms; también se cancela desabonándose del Observable — ver `http-backend.ts`. */
   timeout?: number;
 }
 
-/** Inmutable — `clone()` es lo único que usan los interceptors para "modificar" un request. */
+export interface HttpRequestUpdate<T> extends HttpRequestInit {
+  body?: T | null;
+  method?: string;
+  url?: string;
+  /** Headers a poner encima de los actuales (`req.clone({ setHeaders: { Authorization: "..." } })`). */
+  setHeaders?: { [name: string]: string | string[] };
+  /** Params a poner encima de los actuales. */
+  setParams?: { [param: string]: string };
+}
+
+/** Como Angular: estos métodos no llevan body, así que su tercer argumento son las opciones. */
+function mightHaveBody(method: string): boolean {
+  return !["DELETE", "GET", "HEAD", "OPTIONS", "JSONP"].includes(method.toUpperCase());
+}
+
+/**
+ * `HttpRequest` de `@angular/common/http`, inmutable — `clone()` es lo único que usan los interceptors para
+ * "modificarlo". Mismo constructor que Angular: `new HttpRequest("GET", url, init?)` o
+ * `new HttpRequest("POST", url, body, init?)`.
+ */
 export class HttpRequest<T = unknown> {
+  readonly body: T | null;
   readonly headers: HttpHeaders;
-  readonly params: HttpParams;
+  readonly context: HttpContext;
+  readonly reportProgress: boolean;
   readonly withCredentials: boolean;
   readonly responseType: HttpResponseType;
+  readonly method: string;
+  readonly params: HttpParams;
+  /** La URL de verdad a pedir — `params` ya anexados como query string. */
+  readonly urlWithParams: string;
   readonly timeout?: number;
 
+  constructor(method: HttpMethod | string, url: string, init?: HttpRequestInit);
+  constructor(method: HttpMethod | string, url: string, body: T | null, init?: HttpRequestInit);
   constructor(
-    public readonly method: HttpMethod,
-    public readonly url: string,
-    public readonly body: T | null = null,
-    init: HttpRequestInit = {},
+    method: HttpMethod | string,
+    readonly url: string,
+    third?: T | null | HttpRequestInit,
+    fourth?: HttpRequestInit,
   ) {
-    this.headers = init.headers ?? new HttpHeaders();
-    this.params = init.params ?? new HttpParams();
-    this.withCredentials = init.withCredentials ?? false;
-    this.responseType = init.responseType ?? "json";
-    this.timeout = init.timeout;
-  }
+    this.method = method.toUpperCase();
+    let init: HttpRequestInit | undefined;
+    if (mightHaveBody(this.method) || fourth !== undefined) {
+      this.body = third !== undefined ? (third as T | null) : null;
+      init = fourth;
+    } else {
+      this.body = null;
+      init = third as HttpRequestInit | undefined;
+    }
+    this.headers = init?.headers ?? new HttpHeaders();
+    this.context = init?.context ?? new HttpContext();
+    this.reportProgress = !!init?.reportProgress;
+    this.withCredentials = !!init?.withCredentials;
+    this.responseType = init?.responseType ?? "json";
+    this.params = init?.params ?? new HttpParams();
+    this.timeout = init?.timeout;
 
-  /** La URL de verdad a pedir — `params` ya anexados como query string. */
-  urlWithParams(): string {
     const query = this.params.toString();
-    if (!query) return this.url;
-    return this.url + (this.url.includes("?") ? "&" : "?") + query;
+    if (!query) this.urlWithParams = url;
+    else {
+      const index = url.indexOf("?");
+      const separator = index === -1 ? "?" : index < url.length - 1 ? "&" : "";
+      this.urlWithParams = url + separator + query;
+    }
   }
 
   /**
@@ -73,19 +115,26 @@ export class HttpRequest<T = unknown> {
     return null;
   }
 
-  clone(update: Partial<HttpRequestInit & { method: HttpMethod; url: string; body: T | null }> = {}): HttpRequest<T> {
-    return new HttpRequest(
-      update.method ?? this.method,
-      update.url ?? this.url,
-      "body" in update ? (update.body ?? null) : this.body,
-      {
-        headers: update.headers ?? this.headers,
-        params: update.params ?? this.params,
-        withCredentials: update.withCredentials ?? this.withCredentials,
-        responseType: update.responseType ?? this.responseType,
-        timeout: update.timeout ?? this.timeout,
-      },
-    );
+  clone<V = T>(update: HttpRequestUpdate<V> = {}): HttpRequest<V> {
+    const method = update.method ?? this.method;
+    const body = update.body !== undefined ? update.body : (this.body as unknown as V | null);
+    let headers = update.headers ?? this.headers;
+    let params = update.params ?? this.params;
+    if (update.setHeaders) {
+      for (const [name, value] of Object.entries(update.setHeaders)) headers = headers.set(name, value);
+    }
+    if (update.setParams) {
+      for (const [param, value] of Object.entries(update.setParams)) params = params.set(param, value);
+    }
+    return new HttpRequest<V>(method, update.url ?? this.url, body, {
+      headers,
+      params,
+      context: update.context ?? this.context,
+      reportProgress: update.reportProgress ?? this.reportProgress,
+      withCredentials: update.withCredentials ?? this.withCredentials,
+      responseType: update.responseType ?? this.responseType,
+      timeout: update.timeout ?? this.timeout,
+    });
   }
 }
 

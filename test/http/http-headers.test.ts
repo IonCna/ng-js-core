@@ -33,7 +33,7 @@ describe("etapa 13 — HttpHeaders", () => {
 
   it("toObject() aplana valores múltiples con coma", () => {
     const headers = new HttpHeaders({ a: "1" }).append("a", "2");
-    expect(headers.toObject()).toEqual({ a: "1, 2" });
+    expect(headers.toObject()).toEqual({ a: "1,2" }); // como `setRequestHeader` de Angular
   });
 
   it("get()/getAll()/has() de una clave inexistente dan null/false", () => {

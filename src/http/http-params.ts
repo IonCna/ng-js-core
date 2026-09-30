@@ -1,73 +1,153 @@
 type HttpParamValue = string | number | boolean;
 
-/** Inmutable, igual que `HttpHeaders` — `set`/`append`/`delete` devuelven una copia. */
-export class HttpParams {
-  private readonly params = new Map<string, string[]>();
+/** Cómo se codifican/decodifican las claves y valores de `HttpParams` (`@angular/common/http`). */
+export interface HttpParameterCodec {
+  encodeKey(key: string): string;
+  encodeValue(value: string): string;
+  decodeKey(key: string): string;
+  decodeValue(value: string): string;
+}
 
-  constructor(init?: string | Readonly<Record<string, HttpParamValue | readonly HttpParamValue[]>>) {
-    if (typeof init === "string") {
-      const search = init.startsWith("?") ? init.slice(1) : init;
-      for (const pair of search.split("&")) {
-        if (!pair) continue;
-        const [rawKey, rawValue = ""] = pair.split("=");
-        this.appendInPlace(decodeURIComponent(rawKey), decodeURIComponent(rawValue));
-      }
-    } else if (init) {
-      for (const [key, value] of Object.entries(init)) this.appendInPlace(key, value);
+/**
+ * El codec por defecto de Angular: `encodeURIComponent` pero dejando sin escapar `@ : $ , ; = ? /` (lo que Angular
+ * considera seguro en una query) — la misma URL que arma Angular.
+ */
+export class HttpUrlEncodingCodec implements HttpParameterCodec {
+  encodeKey(key: string): string {
+    return standardEncoding(key);
+  }
+
+  encodeValue(value: string): string {
+    return standardEncoding(value);
+  }
+
+  decodeKey(key: string): string {
+    return decodeURIComponent(key);
+  }
+
+  decodeValue(value: string): string {
+    return decodeURIComponent(value);
+  }
+}
+
+const STANDARD_ENCODING_REPLACEMENTS: Record<string, string> = {
+  "40": "@",
+  "3A": ":",
+  "24": "$",
+  "2C": ",",
+  "3B": ";",
+  "3D": "=",
+  "3F": "?",
+  "2F": "/",
+};
+
+function standardEncoding(value: string): string {
+  return encodeURIComponent(value).replace(/%(\d[a-f0-9])/gi, (match, code: string) => STANDARD_ENCODING_REPLACEMENTS[code.toUpperCase()] ?? match);
+}
+
+export interface HttpParamsOptions {
+  /** Una query ya armada (`"a=1&b=2"`, con o sin `?`). */
+  fromString?: string;
+  fromObject?: { [param: string]: HttpParamValue | ReadonlyArray<HttpParamValue> };
+  encoder?: HttpParameterCodec;
+}
+
+/**
+ * `HttpParams` de `@angular/common/http`: inmutable (`set`/`append`/`delete` devuelven una copia), con las mismas
+ * opciones de construcción (`fromString`/`fromObject`/`encoder`) y la misma serialización que Angular.
+ */
+export class HttpParams {
+  private readonly map = new Map<string, string[]>();
+  private readonly encoder: HttpParameterCodec;
+
+  constructor(options: HttpParamsOptions = {}) {
+    this.encoder = options.encoder ?? new HttpUrlEncodingCodec();
+    if (options.fromString !== undefined && options.fromObject !== undefined) {
+      throw new Error("Cannot specify both fromString and fromObject.");
+    }
+    if (options.fromString !== undefined) this.parse(options.fromString);
+    else if (options.fromObject) {
+      for (const [key, value] of Object.entries(options.fromObject)) this.appendInPlace(key, value);
     }
   }
 
-  has(key: string): boolean {
-    return this.params.has(key);
+  has(param: string): boolean {
+    return this.map.has(param);
   }
 
-  get(key: string): string | null {
-    return this.params.get(key)?.[0] ?? null;
+  get(param: string): string | null {
+    return this.map.get(param)?.[0] ?? null;
   }
 
-  getAll(key: string): string[] | null {
-    const values = this.params.get(key);
+  getAll(param: string): string[] | null {
+    const values = this.map.get(param);
     return values ? [...values] : null;
   }
 
   keys(): string[] {
-    return [...this.params.keys()];
+    return [...this.map.keys()];
   }
 
-  set(key: string, value: HttpParamValue | readonly HttpParamValue[]): HttpParams {
-    const copy = this.clone();
-    copy.params.set(key, (Array.isArray(value) ? value : [value]).map(String));
-    return copy;
+  append(param: string, value: HttpParamValue): HttpParams {
+    return this.copy((params) => params.appendInPlace(param, value));
   }
 
-  append(key: string, value: HttpParamValue | readonly HttpParamValue[]): HttpParams {
-    const copy = this.clone();
-    copy.appendInPlace(key, value);
-    return copy;
+  appendAll(params: { [param: string]: HttpParamValue | ReadonlyArray<HttpParamValue> }): HttpParams {
+    return this.copy((copy) => {
+      for (const [key, value] of Object.entries(params)) copy.appendInPlace(key, value);
+    });
   }
 
-  delete(key: string): HttpParams {
-    const copy = this.clone();
-    copy.params.delete(key);
-    return copy;
+  set(param: string, value: HttpParamValue): HttpParams {
+    return this.copy((params) => params.map.set(param, [String(value)]));
+  }
+
+  /** Sin `value`, saca el parámetro; con `value`, solo esa aparición (como Angular). */
+  delete(param: string, value?: HttpParamValue): HttpParams {
+    return this.copy((params) => {
+      const current = params.map.get(param);
+      if (value === undefined || !current) {
+        params.map.delete(param);
+        return;
+      }
+      const rest = current.filter((item) => item !== String(value));
+      if (rest.length) params.map.set(param, rest);
+      else params.map.delete(param);
+    });
   }
 
   toString(): string {
-    const parts: string[] = [];
-    for (const [key, values] of this.params) {
-      for (const value of values) parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+    return this.keys()
+      .map((key) => {
+        const encodedKey = this.encoder.encodeKey(key);
+        return (this.map.get(key) ?? []).map((value) => `${encodedKey}=${this.encoder.encodeValue(value)}`).join("&");
+      })
+      .filter((param) => param !== "")
+      .join("&");
+  }
+
+  private parse(raw: string): void {
+    const query = raw.replace(/^\?/, "");
+    if (!query) return;
+    for (const param of query.split("&")) {
+      const index = param.indexOf("=");
+      const [key, value] =
+        index === -1
+          ? [this.encoder.decodeKey(param), ""]
+          : [this.encoder.decodeKey(param.slice(0, index)), this.encoder.decodeValue(param.slice(index + 1))];
+      this.map.set(key, [...(this.map.get(key) ?? []), value]);
     }
-    return parts.join("&");
   }
 
-  private appendInPlace(key: string, value: HttpParamValue | readonly HttpParamValue[]): void {
+  private appendInPlace(key: string, value: HttpParamValue | ReadonlyArray<HttpParamValue>): void {
     const values = (Array.isArray(value) ? value : [value]).map(String);
-    this.params.set(key, [...(this.params.get(key) ?? []), ...values]);
+    this.map.set(key, [...(this.map.get(key) ?? []), ...values]);
   }
 
-  private clone(): HttpParams {
-    const copy = new HttpParams();
-    for (const [key, values] of this.params) copy.params.set(key, [...values]);
+  private copy(change: (params: HttpParams) => void): HttpParams {
+    const copy = new HttpParams({ encoder: this.encoder });
+    for (const [key, values] of this.map) copy.map.set(key, [...values]);
+    change(copy);
     return copy;
   }
 }

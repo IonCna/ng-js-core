@@ -52,6 +52,8 @@ export interface ComponentDef extends DirectiveOptions {
   styleUrls?: string[];
   /** La forma de un solo archivo (Angular 17+); en 16.2 es `styleUrls`. */
   styleUrl?: string;
+  /** Van al injector del elemento, como `providers` (en Angular no los ve el contenido proyectado). */
+  viewProviders?: Provider[];
 }
 
 /** Opciones aceptadas por `@Directive` y leídas por `ng-js-compiler`. */
@@ -83,6 +85,8 @@ export interface NgModuleDef {
   imports?: (Function | ModuleWithProviders<unknown> | angular.IModule | { name: string } | string | unknown[])[];
   providers?: Provider[];
   bootstrap?: Function[];
+  /** Un `@NgModule` exportado llega a quien importa este; las declaraciones ya son globales en AngularJS. */
+  exports?: (Function | unknown[])[];
   controllerAs?: string;
 }
 

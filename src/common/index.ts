@@ -9,4 +9,7 @@ export { NgContainer } from "./ng-container.ts";
 export { NgContent } from "./ng-content.ts";
 export { NgTemplateOutlet } from "./ng-template-outlet.ts";
 export { isPlatformBrowser, isPlatformServer } from "./platform.ts";
+// Como `@angular/common` 16: `DOCUMENT` y `registerLocaleData` viven acá (también en su lugar de ngjs).
+export { DOCUMENT } from "@/core/dom-tokens.ts";
+export { registerLocaleData } from "@/i18n/locale-data.ts";
 export { BrowserViewportScroller, ViewportScroller } from "./viewport-scroller.ts";

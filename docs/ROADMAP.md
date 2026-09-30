@@ -63,6 +63,22 @@ Fuera a propósito (no tendrían efecto sobre AngularJS): `encapsulation` (solo 
 - [x] `ngTemplateOutlet` con contexto (`$implicit` y `let-x` con clave)
 - Limitación: lo que un `ng-if` agrega aparece por `QueryList.changes`, no en `ngAfterViewInit`
 
+## API de Angular 16.2 por subpath
+
+- [x] En el subpath de Angular: `LOCALE_ID`/`SecurityContext` (core), `DOCUMENT`/`registerLocaleData` (common),
+  `bootstrapApplication`/`platformBrowser` (platform-browser); `isDevMode`/`enableProdMode`/`VERSION`,
+  `ENVIRONMENT_INITIALIZER` (corre antes que `APP_INITIALIZER`)
+- [x] `@NgModule({ exports })` (un módulo exportado llega a quien importa) y `viewProviders` (al injector del elemento)
+- [x] `common/http` como Angular 16: `HttpClient` concreto sobre `HttpHandler` (inyectable: la cadena de interceptors;
+  `new HttpClient(backend)` la saltea), `HttpXhrBackend`, `headers`/`params` como objeto plano, `request(HttpRequest)`,
+  `HttpContext`/`HttpContextToken`, `HttpParams` con `fromString`/`fromObject`/`encoder` y la codificación de Angular,
+  `HttpHeaders` que conserva el nombre, eventos `Sent`/progreso (`reportProgress`) con los valores de `HttpEventType`,
+  JSON parseado como Angular (prefijo XSSI, error "during parsing"), `HttpResponseBase`/`HttpHeaderResponse`,
+  `HttpStatusCode`, XSRF por defecto (`HttpClientXsrfModule.withOptions()`/`disable()`, `HttpXsrfTokenExtractor`).
+  Falta: `provideHttpClient`/`withInterceptors` (funcionales), JSONP, `withFetch`
+- Solo entra lo que tiene comportamiento real en ngjs: nada de metadata o tokens aceptados "sin efecto"
+  (`changeDetection`/`encapsulation` no se soportan)
+
 ## Nivel 6: plataforma
 
 - [x] `platformBrowserDynamic()` sobre `ɵngjsPlatform`; agrega `NativeModule` (los bridges) al módulo raíz
@@ -72,7 +88,9 @@ Fuera a propósito (no tendrían efecto sobre AngularJS): `encapsulation` (solo 
 
 ## Nivel 7: features
 
-- [x] forms (reactive directives, `ControlValueAccessor`, validadores, `ngDisabled`)
+- [x] forms (reactive directives, `ControlValueAccessor`, validadores, `ngDisabled`); `FormBuilder`/`NonNullableFormBuilder`
+  inyectables (`providedIn: "root"`), `nonNullable`/`defaultValue`, `FormRecord`/`fb.record`, `Untyped*`, `isForm*`,
+  `addValidators`/`removeValidators`/`hasValidator`, `markAllAsTouched`
 - [x] async pipe (por instancia)
 - [x] router sobre UI-Router (`RouterModule.forRoot/forChild`, guards, resolvers, títulos, `loadComponent`,
   `loadChildren` con `@NgModule` compilado, preloading, scroll; `navigate`/`createUrlTree` con `relativeTo`, `..`,

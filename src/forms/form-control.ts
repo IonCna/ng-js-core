@@ -1,5 +1,5 @@
 import { AbstractControl } from "@/forms/abstract-control.ts";
-import type { AbstractControlOptions, AsyncValidatorFn, ControlEventOptions, ValidatorFn } from "@/forms/types.ts";
+import type { AbstractControlOptions, AsyncValidatorFn, ControlEventOptions, FormControlOptions, ValidatorFn } from "@/forms/types.ts";
 
 export interface FormControlState<TValue> {
   value: TValue;
@@ -27,9 +27,12 @@ function isOptionsObject(value: unknown): value is AbstractControlOptions {
  * es el mismo shim de valor/estado que `FormControl` de `@angular/forms`.
  */
 export class FormControl<TValue = unknown> extends AbstractControl<TValue> {
+  /** Con `nonNullable`, el valor inicial (al que vuelve `reset()`); si no, `null` — como Angular. */
+  readonly defaultValue: TValue;
+
   constructor(
     formState: TValue | FormControlState<TValue> = null as TValue,
-    validatorsOrOpts?: ValidatorFn | ValidatorFn[] | AbstractControlOptions | null,
+    validatorsOrOpts?: ValidatorFn | ValidatorFn[] | FormControlOptions | null,
     asyncValidators?: AsyncValidatorFn | AsyncValidatorFn[] | null,
   ) {
     const { value, disabled } = isBoxedState(formState) ? formState : { value: formState, disabled: false };
@@ -40,6 +43,7 @@ export class FormControl<TValue = unknown> extends AbstractControl<TValue> {
       super(value, validatorsOrOpts ?? null, asyncValidators ?? null);
     }
 
+    this.defaultValue = isOptionsObject(validatorsOrOpts) && (validatorsOrOpts as FormControlOptions).nonNullable ? value : (null as TValue);
     if (disabled) this.disable({ onlySelf: true, emitEvent: false });
     this.updateValueAndValidity({ onlySelf: true, emitEvent: false });
   }
@@ -53,7 +57,7 @@ export class FormControl<TValue = unknown> extends AbstractControl<TValue> {
     this.setValue(value, opts);
   }
 
-  reset(formState: TValue | FormControlState<TValue> = null as TValue, opts: ControlEventOptions = {}): void {
+  reset(formState: TValue | FormControlState<TValue> = this.defaultValue, opts: ControlEventOptions = {}): void {
     // Como Angular (`_applyFormState`): valor y estado se aplican ANTES de avisarle al padre — `setValue` propaga con
     // el `disabled` ya puesto, así el padre recalcula su valor sin (o con) este control. Solo `{ value, disabled }`
     // cambia el estado; un valor suelto deja el control habilitado o deshabilitado como estaba.

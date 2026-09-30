@@ -1,15 +1,15 @@
 import angular from "angular";
 import { describe, expect, it } from "vitest";
-import { HttpBackendImpl } from "@/http/http-backend.ts";
+import { HttpXhrBackend } from "@/http/http-backend.ts";
 import { HttpHeaders } from "@/http/http-headers.ts";
 import { HttpParams } from "@/http/http-params.ts";
 import { HttpRequest } from "@/http/http-request.ts";
 import type { HttpErrorResponse, HttpResponse } from "@/http/http-response.ts";
 
-function mockHttpBackend(): { $httpBackend: angular.IHttpBackendService; backend: HttpBackendImpl } {
+function mockHttpBackend(): { $httpBackend: angular.IHttpBackendService; backend: HttpXhrBackend } {
   const injector = angular.injector(["ng", "ngMock"]);
   const $httpBackend = injector.get<angular.IHttpBackendService>("$httpBackend");
-  const backend = new HttpBackendImpl($httpBackend as unknown as angular.IHttpBackendService);
+  const backend = new HttpXhrBackend($httpBackend as unknown as angular.IHttpBackendService);
   return { $httpBackend, backend };
 }
 
@@ -106,7 +106,7 @@ class FakeXhr {
   }
 }
 
-function realHttpBackend(): { xhr: FakeXhr; backend: HttpBackendImpl } {
+function realHttpBackend(): { xhr: FakeXhr; backend: HttpXhrBackend } {
   const xhr = new FakeXhr();
   const injector = angular.injector([
     "ng",
@@ -115,7 +115,7 @@ function realHttpBackend(): { xhr: FakeXhr; backend: HttpBackendImpl } {
       $provide.value("$xhrFactory", () => xhr);
     },
   ]);
-  return { xhr, backend: new HttpBackendImpl(injector.get<angular.IHttpBackendService>("$httpBackend")) };
+  return { xhr, backend: new HttpXhrBackend(injector.get<angular.IHttpBackendService>("$httpBackend")) };
 }
 
 describe("HttpBackend — lo que llega al XHR (con el $httpBackend real, sin ngMock)", () => {
@@ -164,8 +164,9 @@ describe("HttpBackend — lo que llega al XHR (con el $httpBackend real, sin ngM
     backend.handle(new HttpRequest("POST", "/api", { a: 1 }, { headers })).subscribe();
 
     expect(xhr.sent).toBe('{"a":1}');
-    expect(xhr.requestHeaders["content-type"]).toBe("application/vnd.api+json");
-    expect(xhr.requestHeaders["Content-Type"]).toBeUndefined();
+    // Como Angular: el nombre va tal como lo escribió el dev.
+    expect(xhr.requestHeaders["Content-Type"]).toBe("application/vnd.api+json");
+    expect(xhr.requestHeaders["content-type"]).toBeUndefined();
   });
 
   it("sin body: send(null) y sin Content-Type", () => {

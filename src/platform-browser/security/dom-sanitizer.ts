@@ -20,15 +20,9 @@ import {
 import { sanitizeHtml } from "@/platform-browser/security/html-sanitizer.ts";
 import { sanitizeUrl } from "@/platform-browser/security/url-sanitizer.ts";
 
-/** Contexto de seguridad — mismo enum (y valores) que `@angular/core`. */
-export enum SecurityContext {
-  NONE = 0,
-  HTML = 1,
-  STYLE = 2,
-  SCRIPT = 3,
-  URL = 4,
-  RESOURCE_URL = 5,
-}
+import { SecurityContext } from "@/core/security-context.ts";
+
+export { SecurityContext };
 
 /**
  * `DomSanitizer` — mismo servicio y API que `@angular/platform-browser`.

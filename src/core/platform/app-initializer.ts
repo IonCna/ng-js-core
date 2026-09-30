@@ -1,4 +1,5 @@
 import type angular from "angular";
+import { ENVIRONMENT_INITIALIZER } from "@/core/environment-initializer.ts";
 import { InjectionToken } from "@/core/di/injection-token.ts";
 import { injectionTokenName } from "@/core/di/injector.ts";
 
@@ -34,6 +35,13 @@ class AppInitializers {
   }
 }
 
+// Como Angular: `ENVIRONMENT_INITIALIZER` al crear el injector, antes que `APP_INITIALIZER`.
+AppInitializers.add(($injector) => {
+  const name = injectionTokenName(ENVIRONMENT_INITIALIZER);
+  if (!$injector.has(name)) return undefined;
+  for (const initializer of $injector.get<readonly (() => void)[]>(name)) initializer();
+  return undefined;
+});
 AppInitializers.add(($injector) => AppInitializers.fromToken($injector));
 
 /** Como `provideAppInitializer()` de Angular: una función que corre al arrancar (puede devolver una promesa). */

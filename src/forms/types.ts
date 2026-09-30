@@ -25,6 +25,11 @@ export interface AbstractControlOptions {
   updateOn?: "change" | "blur" | "submit";
 }
 
+/** Opciones de `FormControl` (Angular 14+): con `nonNullable`, `reset()` vuelve al valor inicial en vez de a `null`. */
+export interface FormControlOptions extends AbstractControlOptions {
+  nonNullable?: boolean;
+}
+
 export interface ControlEventOptions {
   /** No propagar el efecto (validez, touched, pristine…) hacia el `parent`. */
   onlySelf?: boolean;
