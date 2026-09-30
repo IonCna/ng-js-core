@@ -50,7 +50,7 @@ Fuera a propósito (no tendrían efecto sobre AngularJS): `encapsulation` (solo 
 ## Nivel 4: wiring de componentes
 
 - [x] `@Output` con `EventEmitter` y bindings `&`
-- [x] `hostDirectives` (instancia la directiva compuesta antes del host; sin reenvío de `inputs`/`outputs`)
+- [x] `hostDirectives` (instancia la directiva compuesta antes del host; reenvía `inputs`/`outputs` de la forma larga con su alias)
 - [x] proyección de contenido (`<ng-content>`, `transclude` lo emite el compilador) y proyección eager
 - [x] `exportAs` y referencias `ng-ref` / `ng-ref-read`
 - [x] `ControlValueAccessor` y validadores (`NG_VALUE_ACCESSOR`/`NG_VALIDATORS` en `ɵfac.ɵproviders`)
@@ -60,7 +60,7 @@ Fuera a propósito (no tendrían efecto sobre AngularJS): `encapsulation` (solo 
 - [x] `QueryList`, `@ViewChild(ren)`, `@ContentChild(ren)` (resueltas antes de `ngAfterViewInit`/`ngAfterContentInit`)
 - [x] `TemplateRef` (directiva nativa `ngTemplate`), `ViewContainerRef`, `EmbeddedViewRef`, `ComponentRef`
 - [x] `createComponent()` / `ViewContainerRef.createComponent()` (componente declarado en un módulo cargado)
-- [ ] `ngTemplateOutlet`: el test de contexto `let-x` falla — pendiente de revisar en la etapa de tests
+- [x] `ngTemplateOutlet` con contexto (`$implicit` y `let-x` con clave)
 - Limitación: lo que un `ng-if` agrega aparece por `QueryList.changes`, no en `ngAfterViewInit`
 
 ## Nivel 6: plataforma
@@ -75,12 +75,17 @@ Fuera a propósito (no tendrían efecto sobre AngularJS): `encapsulation` (solo 
 - [x] forms (reactive directives, `ControlValueAccessor`, validadores, `ngDisabled`)
 - [x] async pipe (por instancia)
 - [x] router sobre UI-Router (`RouterModule.forRoot/forChild`, guards, resolvers, títulos, `loadComponent`,
-  `loadChildren` con `@NgModule` compilado, preloading, scroll)
+  `loadChildren` con `@NgModule` compilado, preloading, scroll; `navigate`/`createUrlTree` con `relativeTo`, `..`,
+  `queryParamsHandling` y `fragment` — sin parámetros de matriz, que UI-Router no separa del segmento)
 - [x] animaciones (`AnimationBuilder` sobre `$animateCss`)
 - [x] i18n (`TranslateModule` sobre `angular-translate`, `TranslateService`, `registerLocaleData`)
 - [x] CDK: `a11y` (`A11yModule`, `LiveAnnouncer`, `FocusTrap`, `FocusMonitor`) y `layout` (`BreakpointObserver`)
 - [x] `platform-browser` (`Title`, `Meta`, `DomSanitizer`, renderer)
-- [x] `testing`: `TestBed` (configureTestingModule, inject, runInInjectionContext, overrideProvider, createComponent → `ComponentFixture`, initTestEnvironment) sobre un `angular.injector` propio, sin `angular.mock`
+- [x] `testing`: `TestBed` (configureTestingModule, inject, runInInjectionContext, overrideProvider, createComponent → `ComponentFixture`, initTestEnvironment) sobre un `angular.injector` propio
+- [x] `testing`: `fakeAsync`/`tick`/`flush`/`flushMicrotasks`/`discardPeriodicTasks`/`waitForAsync` sin Zone.js: los parches de
+  zona de `ng-js-compiler` le entregan timers/`requestAnimationFrame`/`queueMicrotask` al reloj falso
+  (`globalThis.ɵngjsFakeAsync`), `Promise`/`Date` falsos mientras dura, y el `$browser` de `ngMock` agenda ahí
+  (`$evalAsync`/`$applyAsync` como microtasks); afuera, `$timeout.flush()` de siempre
 
 Limitaciones de AngularJS (un solo injector): los `providers` de una ruta o de un `@NgModule` cargado lazy quedan
 para toda la app, no para su rama (sin override por rama, sin `inject(Injector)` de la rama, sin `ngOnDestroy` por

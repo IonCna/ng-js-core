@@ -30,17 +30,16 @@ export class TestingDeclarations {
       return;
     }
 
-    for (const [tag, attribute] of def.selectors) {
-      const name = CompiledType.camelCase(attribute || tag || "");
+    for (const { name, restrict, tag } of CompiledType.registrations(type)) {
       const { bindings, ...rest } = definition as { bindings?: Record<string, string> };
       module.directive(name, () => ({
         controller: factory as never,
-        restrict: attribute ? "A" : "E",
+        restrict,
         bindToController: bindings ?? true,
         controllerAs: name,
         ...rest,
       }));
-      const outputs = OutputAttributes.directive(bindings, attribute ? "A" : "E", attribute ? tag : undefined);
+      const outputs = OutputAttributes.directive(bindings, restrict, tag);
       if (outputs) module.directive(name, outputs);
     }
   }

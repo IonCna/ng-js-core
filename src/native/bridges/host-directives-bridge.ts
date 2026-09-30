@@ -1,5 +1,5 @@
 import type angular from "angular";
-import { CompiledType } from "@/core/metadata/compiled-type.ts";
+import { type CompiledHostDirectiveDef, CompiledType } from "@/core/metadata/compiled-type.ts";
 
 type ControllerInvoke = (
   expression: unknown,
@@ -26,8 +26,12 @@ interface LifecycleController {
  * Se registra como el decorador de `$controller` **más externo**: el `$delegate` de acá es toda la cadena de
  * bridges, así la directiva compuesta pasa por todos ellos.
  *
- * Limitaciones: no reenvía `inputs`/`outputs` de la forma larga (AngularJS no bindea una instancia que no creó), y
- * una directiva compuesta necesita selector (su nombre de registro es la clave de `data()`).
+ * `inputs`/`outputs` de la forma larga (`{ directive, inputs: ["text: tooltipText"], outputs: ["shown"] }`) se reenvían
+ * como en Angular: el host los expone con su alias como atributos de su elemento, y solo esos (AngularJS no bindea una
+ * instancia que no creó, así que se bindean acá, contra el scope donde está el elemento del host). Los valores
+ * iniciales y el primer `ngOnChanges` llegan antes de `ngOnInit`.
+ *
+ * Limitación: una directiva compuesta necesita selector (su nombre de registro es la clave de `data()`).
  */
 export function decorateControllerHostDirectives($delegate: angular.IControllerService): angular.IControllerService {
   const invoke = $delegate as unknown as ControllerInvoke;
@@ -67,6 +71,12 @@ class HostDirectives {
       const instance = construct(factory, locals) as LifecycleController;
       $element.data(key, instance);
 
+      // El scope donde se evalúan los atributos del elemento: el de afuera (un componente tiene scope aislado).
+      const outer = $scope && CompiledType.isComponent(hostType) ? $scope.$parent : $scope;
+      const $attrs = locals?.$attrs as angular.IAttributes | undefined;
+      if (outer && $attrs)
+        HostDirectiveBindings.forward(entry, type, instance as Record<string, unknown>, outer, $attrs, $element);
+
       // AngularJS no conoce esta instancia: su ciclo de vida corre a mano.
       instance.$onInit?.();
       if (instance.$postLink) {
@@ -77,5 +87,83 @@ class HostDirectives {
         $scope.$on("$destroy", () => instance.$onDestroy?.());
       }
     }
+  }
+}
+
+interface EmitterLike {
+  subscribe(next: (value: unknown) => void): { unsubscribe(): void };
+}
+
+/** El reenvío de `inputs`/`outputs` de una entrada de `hostDirectives` (ver `decorateControllerHostDirectives`). */
+class HostDirectiveBindings {
+  static forward(
+    entry: CompiledHostDirectiveDef,
+    type: Function,
+    instance: Record<string, unknown>,
+    outer: angular.IScope,
+    $attrs: angular.IAttributes,
+    $element: angular.IAugmentedJQuery,
+  ): void {
+    const def = CompiledType.def(type);
+    if (!def) return;
+    const bindings = (def.definition?.bindings ?? def.definition?.bindToController ?? {}) as Record<string, string>;
+    const unsubscribers: (() => void)[] = [];
+
+    const changes: Record<string, { currentValue: unknown; previousValue: unknown; isFirstChange(): boolean }> = {};
+    for (const [publicName, alias] of HostDirectiveBindings.pairs(entry.inputs)) {
+      const propName = def.inputs[publicName];
+      if (propName === undefined) throw new Error(`hostDirectives: "${type.name}" no tiene un input "${publicName}".`);
+      const attribute = CompiledType.camelCase(alias);
+      const interpolated = (bindings[propName] ?? "").startsWith("@");
+      let first = true;
+      let previous: unknown;
+      const assign = (value: unknown): void => {
+        const isFirst = first;
+        first = false;
+        const change = { currentValue: value, previousValue: previous, isFirstChange: () => isFirst };
+        previous = value;
+        instance[propName] = value;
+        if (isFirst) changes[propName] = change;
+        else (instance as { $onChanges?(changes: object): void }).$onChanges?.({ [propName]: change });
+      };
+
+      const source = $attrs[attribute] as string | undefined;
+      if (source === undefined) continue;
+      if (interpolated) {
+        const $interpolate = $element.injector().get("$interpolate");
+        assign($interpolate(source)(outer));
+        unsubscribers.push($attrs.$observe(attribute, (value) => value !== previous && assign(value)) as () => void);
+      } else {
+        assign(outer.$eval(source));
+        unsubscribers.push(outer.$watch(source, (value, old) => value !== old && assign(value)));
+      }
+    }
+    if (Object.keys(changes).length) (instance as { $onChanges?(changes: object): void }).$onChanges?.(changes);
+
+    for (const [publicName, alias] of HostDirectiveBindings.pairs(entry.outputs)) {
+      const propName = def.outputs[publicName];
+      if (propName === undefined) throw new Error(`hostDirectives: "${type.name}" no tiene un output "${publicName}".`);
+      const source = $attrs[CompiledType.camelCase(alias)] as string | undefined;
+      const emitter = instance[propName] as EmitterLike | undefined;
+      if (source === undefined || !emitter || typeof emitter.subscribe !== "function") continue;
+      const subscription = emitter.subscribe((value) => outer.$eval(source, { $event: value }));
+      unsubscribers.push(() => subscription.unsubscribe());
+    }
+
+    if (!unsubscribers.length) return;
+    const release = (): void => {
+      for (const off of unsubscribers.splice(0)) off();
+    };
+    // Lo que llegue primero: el scope de afuera, o el elemento (un `ng-if` lo saca sin destruir ese scope).
+    outer.$on("$destroy", release);
+    $element.on("$destroy", release);
+  }
+
+  /** `["text: tooltipText", "open"]` → `[["text", "tooltipText"], ["open", "open"]]` (nombre público → alias). */
+  private static pairs(list: string[] | undefined): [string, string][] {
+    return (list ?? []).map((item) => {
+      const [name = "", alias] = item.split(":").map((part) => part.trim());
+      return [name, alias || name];
+    });
   }
 }

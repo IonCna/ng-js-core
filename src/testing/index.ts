@@ -1,9 +1,10 @@
 /**
  * `ngjs-core/testing` — el `TestBed` de `@angular/core/testing` sobre AngularJS, con clases compiladas por
  * `ng-js-compiler`: `TestBed.configureTestingModule({ imports, declarations, providers })`, `TestBed.inject(Foo)`,
- * `TestBed.createComponent(Cmp)` → `ComponentFixture`.
+ * `TestBed.createComponent(Cmp)` → `ComponentFixture`; `fakeAsync`/`tick`/`flush`/`waitForAsync` sobre los parches de zona.
  */
 export { ComponentFixture } from "@/testing/component-fixture.ts";
+export { discardPeriodicTasks, fakeAsync, flush, flushMicrotasks, tick, waitForAsync } from "@/testing/fake-async.ts";
 export {
   getTestBed,
   inject,

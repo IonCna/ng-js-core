@@ -4,6 +4,7 @@ import "@/testing/angular-mocks-install.ts";
 import "angular-mocks";
 import "@/testing/angular-mocks-restore.ts";
 import angular from "angular";
+import { FakeAsyncBrowser } from "@/testing/fake-async.ts";
 
 /** Lo interno de `angular.mock.module` que usa `MockSpec` (lo mismo que usan sus hooks de Jasmine/Mocha). */
 interface MockModuleInternals {
@@ -37,7 +38,8 @@ export class MockSpec {
     const mock = MockSpec.mock;
     mock.$$beforeEach.call(spec.spec);
     try {
-      mock(...modules);
+      // El `$browser` de `ngMock` agenda en el reloj de `fakeAsync` mientras hay uno activo (ver `FakeAsyncBrowser`).
+      mock(...modules, FakeAsyncBrowser.decorator);
       let $injector: angular.auto.IInjectorService | undefined;
       angular.mock.inject([
         "$injector",

@@ -196,6 +196,32 @@ export class AppModule {}
     expect(app.text).toContain("home");
   });
 
+  it("router.navigate con relativeTo, '..', queryParamsHandling y fragment (como Angular)", async () => {
+    app = await boot(`
+@Component({ selector: "rel-home", template: "<h1>home</h1>" })
+export class RelHome {}
+@Component({ selector: "rel-user", template: "<h1>user</h1>" })
+export class RelUser {}
+@Component({ selector: "rel-root", template: "<ui-view></ui-view>" })
+export class RelRoot {}
+const routes: Routes = [
+  { path: "", component: RelHome },
+  { path: "users/:id", component: RelUser },
+];
+@NgModule({ imports: [CommonModule, RouterModule.forRoot(routes)], declarations: [AppRoot, RelRoot, RelHome, RelUser], bootstrap: [RelRoot] })
+export class AppModule {}
+`);
+    await app.navigate("/users/5?tab=a");
+    const route = app.app.inject<object>("ActivatedRoute");
+
+    await app.settle(app.router.navigate(["../7"], { relativeTo: route, queryParamsHandling: "preserve", fragment: "top" }));
+    expect(app.path).toBe("/users/7?tab=a#top");
+
+    await app.settle(app.router.navigate(["..", "..", ""], { relativeTo: route }));
+    expect(app.path).toBe("/");
+    expect(app.text).toContain("home");
+  });
+
   it("useHash: la URL queda #/ruta, como Angular (no el hashbang #!/ de AngularJS), igual que los href de ui-sref", async () => {
     app = await boot(`
 @Component({ selector: "hash-home", template: "<h1>home</h1>" })

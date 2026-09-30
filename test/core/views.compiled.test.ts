@@ -252,6 +252,60 @@ export class AppModule {}
     expect(controller.highlight.on).toBe(true);
   });
 
+  it("hostDirectives con inputs/outputs: el host los expone con su alias (expresión, interpolación y output), antes de ngOnInit", async () => {
+    app = await CompiledApp.bootstrap(
+      {
+        "app.module.ts": `
+import { Component, Directive, EventEmitter, Input, NgModule, OnChanges, OnInit, Output, SimpleChanges } from "ngjs-core";
+
+@Directive({ selector: "[appTooltip]" })
+export class TooltipDirective implements OnChanges, OnInit {
+  @Input() text = "";
+  @Input({ binding: "@" }) placement = "";
+  @Input() hidden = "no expuesto";
+  @Output() shown = new EventEmitter<string>();
+  log: string[] = [];
+  ngOnChanges(changes: SimpleChanges): void { this.log.push("changes:" + Object.keys(changes).sort().join(",") + ":" + changes["text"]?.firstChange); }
+  ngOnInit(): void { this.log.push("init:" + this.text + "/" + this.placement); }
+}
+
+@Component({
+  selector: "app-card",
+  template: "card",
+  hostDirectives: [{ directive: TooltipDirective, inputs: ["text: tip", "placement"], outputs: ["shown: tipShown"] }],
+})
+export class CardComponent {
+  constructor(readonly tooltip: TooltipDirective) {}
+}
+
+@Component({ selector: "app-root", template: '<app-card tip="$ctrl.message" placement="{{ $ctrl.side }}" hidden="\\'x\\'" tip-shown="$ctrl.seen = $event"></app-card>' })
+export class AppComponent { message = "hola"; side = "top"; seen = ""; }
+
+@NgModule({ declarations: [AppComponent, CardComponent, TooltipDirective], bootstrap: [AppComponent] })
+export class AppModule {}
+`,
+      },
+      "<app-root></app-root>",
+    );
+    app.digest();
+
+    expect(app.errors).toEqual([]);
+    const root = app.controller<{ message: string; side: string; seen: string }>("app-root", "appRoot");
+    const tooltip = app.controller<{ tooltip: { text: string; placement: string; hidden: string; log: string[]; shown: { emit(v: string): void } } }>("app-card", "appCard").tooltip;
+    expect(tooltip.log).toEqual(["changes:placement,text:true", "init:hola/top"]);
+    expect(tooltip.hidden).toBe("no expuesto");
+
+    root.message = "chau";
+    root.side = "bottom";
+    app.digest();
+    expect(tooltip.text).toBe("chau");
+    expect(tooltip.placement).toBe("bottom");
+    expect(tooltip.log).toContain("changes:text:false");
+
+    tooltip.shown.emit("abierto");
+    expect(root.seen).toBe("abierto");
+  });
+
   it("ViewContainerRef.createComponent(): crea un componente declarado, con inputs iniciales y setInput()", async () => {
     app = await CompiledApp.bootstrap(
       {

@@ -22,7 +22,8 @@ export interface CompiledHostDirectiveDef {
 
 /** `ɵcmp`/`ɵdir`: `inputs`/`outputs` como mapa nombre público → propiedad (forma de Ivy). */
 export interface CompiledDirectiveDef {
-  selectors: string[][];
+  /** Como Ivy: `[tag, attr, valor, ..., flag, ...]` por alternativa (`SelectorFlags`: `NOT` 1, `CLASS` 8, …). */
+  selectors: (string | number)[][];
   inputs: Record<string, string>;
   outputs: Record<string, string>;
   exportAs?: string[];
@@ -92,14 +93,45 @@ export class CompiledType {
   }
 
   /**
-   * Nombres con que AngularJS registró la directiva/componente (camelCase del atributo, o del tag si el selector
-   * es de elemento) — la clave `$<nombre>Controller` de `$element.data()` donde queda su instancia.
+   * Nombres con que AngularJS registró la directiva/componente (camelCase del atributo, si no de la clase, si no del
+   * tag) — la clave `$<nombre>Controller` de `$element.data()` donde queda su instancia.
    */
   static registrationNames(type: Function | undefined): string[] {
+    return [...new Set(CompiledType.registrations(type).map(({ name }) => name))];
+  }
+
+  /** Cómo registra AngularJS cada alternativa del selector (lo mismo que decide el compilador). */
+  static registrations(type: Function | undefined): { name: string; restrict: "A" | "C" | "E"; tag?: string }[] {
     const def = CompiledType.def(type);
     if (!def) return [];
-    const names = def.selectors.map(([tag, attribute]) => CompiledType.camelCase(attribute || tag || ""));
-    return [...new Set(names.filter(Boolean))];
+    return def.selectors.flatMap((selector): { name: string; restrict: "A" | "C" | "E"; tag?: string }[] => {
+      const parsed = CompiledType.parseSelector(selector);
+      const tag = parsed.tag || undefined;
+      if (parsed.attributes[0]) return [{ name: CompiledType.camelCase(parsed.attributes[0]), restrict: "A" as const, tag }];
+      if (parsed.classes[0]) return [{ name: CompiledType.camelCase(parsed.classes[0]), restrict: "C" as const, tag }];
+      return tag ? [{ name: CompiledType.camelCase(tag), restrict: "E" as const }] : [];
+    });
+  }
+
+  /** `[tag, attr, valor, ..., CLASS, clase, ..., NOT | X, ...]` → lo positivo (lo negado no registra nada). */
+  private static parseSelector(selector: (string | number)[]): { tag: string; attributes: string[]; classes: string[] } {
+    const CLASS = 8;
+    const NOT = 1;
+    const result = { tag: String(selector[0] ?? ""), attributes: [] as string[], classes: [] as string[] };
+    let mode: "attribute" | "class" | "not" = "attribute";
+    for (let i = 1; i < selector.length; i++) {
+      const item = selector[i];
+      if (typeof item === "number") {
+        mode = item & NOT ? "not" : item & CLASS ? "class" : "attribute";
+        continue;
+      }
+      if (mode === "class") result.classes.push(item as string);
+      else if (mode === "attribute") {
+        result.attributes.push(item as string);
+        i++; // su valor
+      }
+    }
+    return result;
   }
 
   /** La instancia de `type` (o de una subclase registrada con su nombre) en `$element` o sus ancestros. */
@@ -115,7 +147,7 @@ export class CompiledType {
   /** Tag del selector de elemento de un `@Component` (`undefined` si no es uno, o su selector es de atributo). */
   static componentTag(type: Function | undefined): string | undefined {
     if (!CompiledType.isComponent(type)) return undefined;
-    return CompiledType.def(type)?.selectors.find(([element, attribute]) => element && !attribute)?.[0];
+    return CompiledType.registrations(type).find(({ restrict }) => restrict === "E")?.name.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`);
   }
 
   /** `app-card` → `appCard` (nombre de registro de AngularJS). */

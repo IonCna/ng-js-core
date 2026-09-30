@@ -10,16 +10,17 @@ import {
   NavigationStart,
   type RouterEvent,
 } from "@/router/events.ts";
+import { UrlCommands, type UrlCommandsExtras } from "@/router/url-commands.ts";
 
-export interface NavigationExtras {
+export interface NavigationExtras extends UrlCommandsExtras {
   replaceUrl?: boolean;
-  queryParams?: Record<string, string | number | boolean>;
 }
 
 /**
  * `Router` — navegación imperativa sobre `$location`/`$transitions` de UI-Router.
- * `navigate(['/x', id])` arma la URL y delega en `navigateByUrl`. La promesa
- * resuelve cuando la transición de UI-Router completa (o falla).
+ * `navigate(commands, extras)` arma la URL como Angular (`UrlCommands`: relativos con `relativeTo`, `..`, matriz,
+ * `queryParamsHandling`, `fragment`) y delega en `navigateByUrl`. La promesa resuelve cuando la transición de
+ * UI-Router completa (o falla).
  */
 /** Lo provee `RouterModule.forRoot()`. */
 @Injectable()
@@ -28,6 +29,8 @@ export abstract class Router {
   abstract readonly events: Observable<RouterEvent>;
   abstract navigateByUrl(url: string, extras?: NavigationExtras): Promise<boolean>;
   abstract navigate(commands: unknown[], extras?: NavigationExtras): Promise<boolean>;
+  /** La URL que daría `navigate(commands, extras)` (en Angular, un `UrlTree`; acá su forma serializada). */
+  abstract createUrlTree(commands: unknown[], extras?: NavigationExtras): string;
 }
 
 const REJECT_ERROR = 6; // RejectType.ERROR de UI-Router; el resto (SUPERSEDED/ABORTED/…) = cancel.
@@ -80,11 +83,15 @@ export class RouterImpl extends Router {
   }
 
   navigate(commands: unknown[], extras?: NavigationExtras): Promise<boolean> {
-    const path = commands
-      .map((segment) => String(segment))
-      .join("/")
-      .replace(/\/{2,}/g, "/");
-    return this.navigateByUrl(path, extras);
+    return this.navigateByUrl(this.createUrlTree(commands, extras), { replaceUrl: extras?.replaceUrl });
+  }
+
+  createUrlTree(commands: unknown[], extras?: NavigationExtras): string {
+    return UrlCommands.apply(commands, extras, {
+      path: this.$location.path(),
+      query: this.$location.search() as Record<string, string | string[]>,
+      fragment: this.$location.hash() || null,
+    });
   }
 
   private targetUrl(transition: Transition): string {
