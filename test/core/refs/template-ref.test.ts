@@ -30,14 +30,17 @@ function bootWithTemplate(html: string): { host: HTMLElement; $rootScope: angula
 }
 
 describe("etapa 8 — TemplateRef / <ng-template>", () => {
-  it("createEmbeddedView clona el contenido, desconectado, listo para insertarse a mano", () => {
+  it("createEmbeddedView clona el contenido, fuera del documento, listo para insertarse a mano", () => {
     const { captured } = bootWithTemplate("<ng-template capture-template-ref><span>hola</span></ng-template>");
     const [templateRef] = captured;
 
     const view = templateRef.createEmbeddedView({});
 
     expect(view.rootNodes.length).toBeGreaterThan(0);
-    expect(view.rootNodes.every((node) => node.parentNode === null)).toBe(true);
+    expect(view.rootNodes.every((node) => !node.isConnected)).toBe(true);
+    const mount = document.createElement("div");
+    for (const node of view.rootNodes) mount.appendChild(node);
+    expect(mount.textContent).toContain("hola");
     expect(view.rootNodes.map((node) => node.textContent).join("")).toContain("hola");
   });
 

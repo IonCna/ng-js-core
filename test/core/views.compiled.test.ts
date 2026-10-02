@@ -117,6 +117,49 @@ export class AppModule {}
     expect(app.document.querySelector("app-root em")?.textContent).toBe("hola Ana");
   });
 
+  it("createEmbeddedView: rootNodes son los nodos renderizados aunque un componente templateUrl se compile async", async () => {
+    // AngularJS compila la transclusión la primera vez que se usa; un `templateUrl` adentro llega después y AngularJS
+    // REEMPLAZA el nodo clonado. La vista tiene que exponer el nodo nuevo (como Angular: rootNodes = lo renderizado).
+    app = await CompiledApp.bootstrap(
+      {
+        "app.module.ts": `
+import angular from "angular";
+import { Component, NgModule, TemplateRef, ViewChild } from "ngjs-core";
+import { CommonModule } from "ngjs-core/common";
+
+const legacy = angular.module("async-child", [])
+  .component("asyncChild", { templateUrl: "async-child.html" })
+  .run(["$templateCache", ($templateCache: any) => $templateCache.put("async-child.html", "<b class='ok'>ok</b>")]);
+
+@Component({ selector: "app-root", template: '<ng-template ng-ref="tpl"><async-child></async-child></ng-template>' })
+export class AppComponent {
+  @ViewChild("tpl") tpl!: TemplateRef<unknown>;
+}
+
+@NgModule({ imports: [legacy, CommonModule], declarations: [AppComponent], bootstrap: [AppComponent] })
+export class AppModule {}
+`,
+      },
+      "<app-root></app-root>",
+    );
+    app.digest();
+
+    const tpl = app.controller<{ tpl: { createEmbeddedView(context: object): { rootNodes: Node[] } } }>("app-root", "appRoot").tpl;
+    const view = tpl.createEmbeddedView({});
+    // El template del hijo llega en un digest posterior (antes de que alguien inserte la vista).
+    for (let i = 0; i < 3; i++) {
+      app.digest();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    const host = app.document.createElement("div");
+    app.document.body.append(host);
+    for (const node of view.rootNodes) host.append(node);
+    app.digest();
+
+    expect(host.querySelector("async-child .ok")?.textContent).toBe("ok");
+  });
+
   it("inject(TemplateRef) en una @Directive sobre <ng-template> (construida antes o después de ngTemplate) y @ContentChild de un componente sin <ng-content>", async () => {
     app = await CompiledApp.bootstrap(
       {

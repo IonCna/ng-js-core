@@ -17,9 +17,14 @@ export class ViewRefImpl extends ChangeDetectorRefImpl implements ViewRef {
 
   constructor(
     $scope: IScope,
-    public readonly rootNodes: readonly Node[] = [],
+    private readonly initialRootNodes: readonly Node[] = [],
   ) {
     super($scope);
+  }
+
+  /** Getter (no campo) para que una vista pueda exponer sus nodos en vivo (ver `EmbeddedViewRefImpl`). */
+  get rootNodes(): readonly Node[] {
+    return this.initialRootNodes;
   }
 
   get destroyed(): boolean {

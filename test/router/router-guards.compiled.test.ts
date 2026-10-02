@@ -170,6 +170,33 @@ export class AppModule {}
     });
   }
 
+  it("una redirección con un hook onBefore async no deja un rechazo sin manejar", async () => {
+    // La transición reemplazada por el `redirectTo` no es un error: con un hook async (que devuelve una promesa) el
+    // digest de la zona corría antes de que el motor encadenara sus handlers y `$q` la reportaba como no manejada.
+    app = await boot(`
+import angular from "angular";
+@Component({ selector: "ur-home", template: "<h1>home</h1>" })
+export class UrHome {}
+@Component({ selector: "ur-target", template: "<h2>target</h2>" })
+export class UrTarget {}
+const routes: Routes = [
+  { path: "", component: UrHome },
+  { path: "go", redirectTo: "target", pathMatch: "full" },
+  { path: "target", component: UrTarget },
+];
+const hooks = angular.module("async-hook", []).run(["$transitions", ($transitions: any) => {
+  $transitions.onBefore({}, async () => true);
+}]);
+@NgModule({ imports: [hooks, CommonModule, RouterModule.forRoot(routes)], declarations: [AppRoot, UrHome, UrTarget], bootstrap: [AppRoot] })
+export class AppModule {}
+`);
+    await app.navigate("/go");
+    expect(app.text).toContain("target");
+
+    const unhandled = app.app.errors.filter((error) => String(error).includes("unhandled rejection"));
+    expect(unhandled).toEqual([]);
+  });
+
   it("dos paths que sanitizan igual (a/b y a.b) registran ambos estados", async () => {
     app = await boot(`
 @Component({ selector: "nc-one", template: "<h1>one</h1>" })

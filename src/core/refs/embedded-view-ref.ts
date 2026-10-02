@@ -39,7 +39,20 @@ export abstract class EmbeddedViewRef<C = ContextObject> extends ViewRef {
  *   `<ng-template>` se saca al final; sus hijos quedan en el DOM en ese lugar.
  */
 export class EmbeddedViewRefImpl<C = ContextObject> extends ViewRefImpl implements EmbeddedViewRef<C> {
-  public override readonly rootNodes: Node[] = [];
+  private nodes: Node[] = [];
+  /**
+   * Sin `host`, el envoltorio clonado (detached) donde quedan los nodos raíz hasta que alguien los inserte. AngularJS
+   * compila la transclusión la primera vez que se usa: un componente `templateUrl` adentro se linkea después y
+   * AngularJS REEMPLAZA su nodo clonado en el padre que tenga en ese momento. Con los nodos sueltos (sin padre) el
+   * reemplazo se perdía y la vista mostraba el nodo viejo, sin compilar.
+   */
+  private holder?: Node;
+
+  /** Los nodos raíz actuales (como Angular: lo renderizado). Mientras sigan en el envoltorio se leen de ahí. */
+  public override get rootNodes(): Node[] {
+    if (this.holder?.firstChild) this.nodes = Array.from(this.holder.childNodes);
+    return this.nodes;
+  }
 
   constructor(
     public context: C,
@@ -62,20 +75,21 @@ export class EmbeddedViewRefImpl<C = ContextObject> extends ViewRefImpl implemen
       // `clone` es el envoltorio `<ng-template>` ya linkeado y en el DOM. Se
       // suben sus hijos a la misma posición y se descarta el envoltorio.
       const wrapper = clone[0] as Node;
-      this.rootNodes = Array.from(clone.contents() as ArrayLike<Node>) as Node[];
-      for (const node of this.rootNodes) wrapper.parentNode?.insertBefore(node, wrapper);
+      this.nodes = Array.from(clone.contents() as ArrayLike<Node>) as Node[];
+      for (const node of this.nodes) wrapper.parentNode?.insertBefore(node, wrapper);
       clone.remove();
       return;
     }
 
     const clone = $transclude(this.scope, () => undefined);
-    this.rootNodes = Array.from(clone.contents() as ArrayLike<Node>) as Node[];
-    for (const node of this.rootNodes) node.parentNode?.removeChild(node);
-    clone.remove();
+    this.holder = clone[0] as Node;
+    this.nodes = Array.from(clone.contents() as ArrayLike<Node>) as Node[];
   }
 
   public override destroy(): void {
     for (const node of this.rootNodes) node.parentNode?.removeChild(node);
+    if (this.holder) angular.element(this.holder as Element).remove();
+    this.holder = undefined;
     super.destroy();
   }
 }

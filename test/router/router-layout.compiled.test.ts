@@ -242,6 +242,12 @@ export class RpLazyModule {}
       expect(app.query(".team")?.textContent).toBe("org");
     });
 
+    it("guards y resolvers de la URL inicial ven inject() (la navegación corre durante el bootstrap)", async () => {
+      app = await RouterApp.boot({ ...LAZY_FIXTURES, ...files, "app.module.ts": `${HEADER}${routeProviders}` }, "/org/team");
+      expect(app.app.global<string[]>("log")).toEqual(expect.arrayContaining(["guard:org", "resolve:org"]));
+      expect(app.query(".team")?.textContent).toBe("org");
+    });
+
     it("un módulo lazy bajo una ruta con providers ve los de la ruta y los propios", async () => {
       app = await bootProviders();
       await app.navigate("/org/lazy");

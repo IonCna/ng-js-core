@@ -9,7 +9,7 @@ function uniqueName(prefix: string): string {
 }
 
 describe("etapa 6 — EmbeddedViewRef (contra un $transclude real)", () => {
-  it("createEmbeddedView clona el contenido transcluido, ya desconectado de todo parentNode", () => {
+  it("createEmbeddedView clona el contenido transcluido, fuera del documento", () => {
     let captured: { $transclude: angular.ITranscludeFunction; $scope: angular.IScope } | undefined;
 
     const name = uniqueName("embeddedViewTest");
@@ -33,7 +33,9 @@ describe("etapa 6 — EmbeddedViewRef (contra un $transclude real)", () => {
 
     expect(view.context).toEqual({ $implicit: "ctx" });
     expect(view.rootNodes.length).toBeGreaterThan(0);
-    expect(view.rootNodes.every((node) => node.parentNode === null)).toBe(true);
+    // Fuera del documento, pero dentro del envoltorio clonado (detached): ahí AngularJS puede reemplazar el nodo de un
+    // componente `templateUrl` que se linkea async (ver `EmbeddedViewRefImpl.holder`).
+    expect(view.rootNodes.every((node) => !node.isConnected)).toBe(true);
     expect(view.rootNodes.map((node) => node.textContent).join("")).toContain("hola");
   });
 

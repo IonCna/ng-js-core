@@ -1,5 +1,7 @@
 import { type Ng1StateDeclaration, ParamType } from "@uirouter/angularjs";
 import type angular from "angular";
+import { runInInjectionContext } from "@/core/di/injection-context.ts";
+import { InjectorImpl } from "@/core/di/injector.ts";
 import type { Provider } from "@/core/di/provider.ts";
 import { RuntimeProviders } from "@/core/di/runtime-providers.ts";
 import { CompiledType } from "@/core/metadata/compiled-type.ts";
@@ -233,12 +235,18 @@ function componentName(route: Route): string | undefined {
 }
 
 /**
- * Corre `fn` (guard, resolver, `title`) en el contexto de la ruta `stateName`. AngularJS tiene un solo injector (no
- * hay un entorno por rama lazy como en Angular): `inject()` adentro resuelve contra el de la app. Se mantiene el
- * punto único por si una rama vuelve a tener injector propio.
+ * Corre `fn` (guard, resolver, `title`) en el contexto de inyección de la ruta `stateName`, como Angular los corre en
+ * el `EnvironmentInjector` de la ruta: `inject()` adentro resuelve contra `$injector`. No depende del injector global
+ * de la app, que la plataforma recién publica al terminar el bootstrap — la navegación a la URL inicial corre antes.
+ * AngularJS tiene un solo injector (no hay un entorno por rama lazy), así que `stateName` no cambia el resultado; se
+ * mantiene el punto único por si una rama vuelve a tener injector propio.
  */
-export function runInRouteContext<T>(_$injector: unknown, _stateName: string, fn: () => T): T {
-  return fn();
+export function runInRouteContext<T>($injector: unknown, _stateName: string, fn: () => T): T {
+  const injector = new InjectorImpl($injector as angular.auto.IInjectorService);
+  return runInInjectionContext(
+    { get: (token, options) => (options?.optional ? injector.get(token, null) : injector.get(token)) },
+    fn,
+  );
 }
 
 /** `Route.providers` de un árbol ya arrancado (rama lazy) → registrados en la app con el `$provide` capturado. */
@@ -376,7 +384,9 @@ function runGuards<T>(guards: ((arg: T) => boolean | Promise<boolean>)[], arg: T
  * (guards del subárbol lazy — se wirean con el `$transitions` de la transición).
  */
 export function wireGuardHook($transitions: TransitionsLike, guard: GuardBinding): void {
-  const criteria = guard.forChildren ? { to: `${guard.stateName}.**` } : { to: guard.stateName };
+  // `canActivate` corre cuando la ruta se activa, también si la navegación va a un hijo (`/org/team` activa `org`),
+  // y no si ya estaba activa — como Angular. `entering` de UI-Router es exactamente eso.
+  const criteria = guard.forChildren ? { to: `${guard.stateName}.**` } : { entering: guard.stateName };
   $transitions.onBefore(criteria, (transition: GuardTransition) => {
     if (guard.forChildren && transition.to().name === guard.stateName) return true;
     const snapshot = {
