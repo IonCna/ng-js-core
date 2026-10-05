@@ -14,8 +14,8 @@ type AppInitializer = (injector: angular.auto.IInjectorService) => void | Promis
 export const APP_INITIALIZER = new InjectionToken<readonly (() => void | PromiseLike<unknown>)[]>("APP_INITIALIZER");
 
 /**
- * La plataforma que emite `ng-js-compiler` corre, después de `angular.bootstrap`, las funciones de
- * `globalThis.ɵngjsAppInitializers` y espera sus promesas antes de resolver `bootstrapModule()`. Esa es la
+ * La plataforma que emite `ng-js-compiler` crea el injector, corre las funciones de `globalThis.ɵngjsAppInitializers`
+ * y espera sus promesas ANTES de compilar el host (ningún componente existe todavía) y de resolver `bootstrapModule()`. Esa es la
  * única puerta: acá se anota UNA función que lee `APP_INITIALIZER` del injector de la app (el token multi,
  * con lo que hayan provisto los módulos) más las de `provideAppInitializer()`.
  */

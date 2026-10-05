@@ -11,6 +11,7 @@ import {
 import { ViewportScroller } from "@/common/viewport-scroller.ts";
 import { injectionTokenName } from "@/core/di/injector.ts";
 import { RuntimeProviders } from "@/core/di/runtime-providers.ts";
+import { BootstrapListeners } from "@/core/platform/bootstrap-listeners.ts";
 import { ConfigProviderFactory } from "@/core/platform/config-providers.ts";
 import { Title } from "@/platform-browser/title.ts";
 import { ActivatedRoute, ActivatedRouteImpl } from "@/router/activated-route.ts";
@@ -55,6 +56,21 @@ function nextModuleName(prefix: string): string {
  * arma varias apps no dispara el error; dos `forRoot` en la MISMA app sí.
  */
 const forRootInjectors = new WeakSet<object>();
+
+// Navegación inicial, como el router de Angular: recién cuando la app terminó de arrancar (`APP_INITIALIZER` resueltos y
+// componente raíz montado). `forRoot` difiere la intercepción de URL de UI-Router (`deferIntercept`) y acá se suelta;
+// sin esto la primera transición — con sus guards y resolvers — salía en el primer digest, en medio de los initializers.
+BootstrapListeners.add(($injector) => {
+  if (!forRootInjectors.has($injector)) return;
+  const urlService = $injector.get<{ listen(): void; sync(): void }>("$urlService");
+  const $rootScope = $injector.get<IRootScopeService>("$rootScope");
+  const start = () => {
+    urlService.listen();
+    urlService.sync();
+  };
+  if ($rootScope.$$phase) start();
+  else $rootScope.$apply(start);
+});
 
 /**
  * Re-resuelve los `redirectTo` de `translated` contra el `pathToName` **global**
@@ -327,7 +343,10 @@ export const RouterModule = {
       $stateProvider: StateProvider,
       $urlRouterProvider: UrlRouterProvider,
       $locationProvider: ILocationProvider,
+      $urlServiceProvider: { deferIntercept(): void },
     ) => {
+      // La navegación inicial la dispara el listener de bootstrap de arriba, no el primer `$locationChangeSuccess`.
+      $urlServiceProvider.deferIntercept();
       // Default = PathLocationStrategy (html5), como Angular. `useHash: true` → hash.
       if (!useHash) {
         $locationProvider.html5Mode({ enabled: true, requireBase: false });
@@ -343,7 +362,7 @@ export const RouterModule = {
       // `otherwise` solo cubre la URL raíz sin match → va a la raíz.
       $urlRouterProvider.otherwise(fallbackUrl);
     };
-    configureStates.$inject = ["$stateProvider", "$urlRouterProvider", "$locationProvider"];
+    configureStates.$inject = ["$stateProvider", "$urlRouterProvider", "$locationProvider", "$urlServiceProvider"];
 
     mod.config(configureStates);
 

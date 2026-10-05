@@ -1,6 +1,7 @@
 import angular from "angular";
 import { injectionTokenName } from "@/core/di/injector.ts";
 import { ApplicationRef } from "@/core/platform/application-ref.ts";
+import { BootstrapListeners } from "@/core/platform/bootstrap-listeners.ts";
 import { ComponentRegistrar } from "@/core/platform/component-registrar.ts";
 import { NativeModule } from "@/native/native.module.ts";
 
@@ -44,6 +45,7 @@ export class PlatformRefImpl extends PlatformRef {
       .bootstrapModule(moduleType)
       .then(($injector) => {
         this.injectors.add($injector);
+        BootstrapListeners.run($injector);
         return $injector;
       });
   }

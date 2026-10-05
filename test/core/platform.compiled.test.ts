@@ -131,6 +131,44 @@ export class AppModule {}
     expect((app.window as unknown as { initLog: string[] }).initLog.sort()).toEqual(["async", "sync"]);
   });
 
+  it("APP_INITIALIZER termina antes de que se construya el primer componente (como Angular)", async () => {
+    app = await CompiledApp.bootstrap(
+      {
+        "app.module.ts": `
+import { APP_INITIALIZER, Component, Injectable, NgModule, inject } from "ngjs-core";
+
+export const log: string[] = [];
+(globalThis as any).initLog = log;
+
+@Injectable({ providedIn: "root" })
+export class Session {
+  user?: string;
+  load(): Promise<void> {
+    return new Promise<void>((resolve) => setTimeout(() => { this.user = "max"; log.push("loaded"); resolve(); }, 5));
+  }
+}
+
+@Component({ selector: "app-root", template: "<span>{{ $ctrl.user }}</span>" })
+export class AppComponent {
+  readonly user = inject(Session).user;
+  constructor() { log.push("component:" + this.user); }
+}
+
+@NgModule({
+  declarations: [AppComponent],
+  bootstrap: [AppComponent],
+  providers: [{ provide: APP_INITIALIZER, multi: true, useFactory: (session: Session) => () => session.load(), deps: [Session] }],
+})
+export class AppModule {}
+`,
+      },
+      "<app-root></app-root>",
+    );
+
+    expect(app.global<string[]>("initLog")).toEqual(["loaded", "component:max"]);
+    expect(app.document.querySelector("app-root span")?.textContent).toBe("max");
+  });
+
   describe("porta de old/test/platform/{bootstrap,injector-wiring,digest-bridge}", () => {
     const MAIN = `import { platformBrowserDynamic } from "ngjs-core";
 import { AppModule } from "./app.module";

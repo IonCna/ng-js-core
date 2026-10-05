@@ -212,4 +212,34 @@ export class AppModule {}
     await app.navigate("/a.b");
     expect(app.text).toContain("two");
   });
+
+  it("la navegación inicial (guards y resolvers) espera a APP_INITIALIZER, como en Angular", async () => {
+    app = await boot(`
+import { APP_INITIALIZER } from "ngjs-core";
+export const log: string[] = [];
+(globalThis as any).initLog = log;
+@Component({ selector: "ini-a", template: "<h1>a</h1>" })
+export class PageA { constructor() { log.push("page"); } }
+const routes: Routes = [
+  { path: "", component: PageA, canActivate: [() => { log.push("guard"); return true; }], resolve: { x: () => { log.push("resolver"); return 1; } } },
+];
+// El \`$apply\` a mitad de camino es lo que hace cualquier initializer con \`HttpClient\`: un digest antes de terminar.
+const initializer = ($rootScope: { $apply(): void }) => () =>
+  new Promise<void>((resolve) =>
+    setTimeout(() => {
+      $rootScope.$apply();
+      setTimeout(() => { log.push("initialized"); resolve(); }, 20);
+    }, 5),
+  );
+@NgModule({
+  imports: [CommonModule, RouterModule.forRoot(routes)],
+  declarations: [AppRoot, PageA],
+  providers: [{ provide: APP_INITIALIZER, multi: true, useFactory: initializer, deps: ["$rootScope"] }],
+  bootstrap: [AppRoot],
+})
+export class AppModule {}
+`);
+    expect(app.app.global<string[]>("initLog")).toEqual(["initialized", "guard", "resolver", "page"]);
+    expect(app.text).toBe("a");
+  });
 });
