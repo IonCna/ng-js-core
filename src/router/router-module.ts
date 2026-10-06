@@ -64,7 +64,12 @@ BootstrapListeners.add(($injector) => {
   if (!forRootInjectors.has($injector)) return;
   const urlService = $injector.get<{ listen(): void; sync(): void }>("$urlService");
   const $rootScope = $injector.get<IRootScopeService>("$rootScope");
+  const $location = $injector.get<ILocationService>("$location");
+  const useHash = $injector.get(injectionTokenName(LocationStrategy)) instanceof HashLocationStrategy;
   const start = () => {
+    // Con hash, cargar en `/` deja el path en `""` (html5 siempre da `"/"`): matchearía el layout raíz de `url: ""`
+    // en vez del índice, y la URL quedaría sin `#/`. Como Angular: la raíz es `#/`.
+    if (useHash && $location.path() === "") $location.path("/").replace();
     urlService.listen();
     urlService.sync();
   };

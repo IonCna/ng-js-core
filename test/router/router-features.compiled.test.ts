@@ -244,6 +244,27 @@ export class AppModule {}
     expect(app.text).toContain("about");
   });
 
+  it("useHash: cargar en / (hash vacío) va a #/ y monta el índice, no el layout raíz de url vacía", async () => {
+    app = await boot(`
+@Component({ selector: "hash-index", template: "<h1>index</h1>" })
+export class HashIndex {}
+@Component({ selector: "hash-shell", template: "<h2>shell</h2><ui-view></ui-view>" })
+export class HashShell {}
+@Component({ selector: "hash-guide", template: "<h1>guide</h1>" })
+export class HashGuide {}
+const routes: Routes = [
+  { path: "", pathMatch: "full", component: HashIndex },
+  { path: "", component: HashShell, children: [{ path: "guide", component: HashGuide }] },
+];
+@NgModule({ imports: [CommonModule, RouterModule.forRoot(routes, { useHash: true })], declarations: [AppRoot, HashIndex, HashShell, HashGuide], bootstrap: [AppRoot] })
+export class AppModule {}
+`);
+
+    expect(app.path).toBe("/#/");
+    expect(app.text).toContain("index");
+    expect(app.text).not.toContain("shell");
+  });
+
   describe("scrollPositionRestoration / anchorScrolling", () => {
     const scrolling = (feature: string) => `
 export const scrolls: number[][] = [];
