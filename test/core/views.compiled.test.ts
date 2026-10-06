@@ -202,6 +202,55 @@ export class AppModule {}
     expect(app.errors).toEqual([]);
   });
 
+  it("una @Directive sobre <ng-template> se aplica igual con el debug info de AngularJS apagado (ngjs build): el comentario ancla sale sin texto", async () => {
+    app = await CompiledApp.bootstrap(
+      {
+        "main.ts": `
+import angular from "angular";
+import { platformBrowserDynamic } from "ngjs-core";
+import { AppModule } from "./app.module";
+
+angular.module("ng").config(["$compileProvider", ($compileProvider: { debugInfoEnabled(enabled: boolean): void }) => $compileProvider.debugInfoEnabled(false)]);
+(globalThis as any).ɵready = platformBrowserDynamic().bootstrapModule(AppModule);
+`,
+        "app.module.ts": `
+import { Component, ContentChild, Directive, inject, NgModule, TemplateRef } from "ngjs-core";
+import { CommonModule } from "ngjs-core/common";
+
+@Directive({ selector: "ng-template[aProd]" })
+export class AProd { templateRef = inject(TemplateRef); }
+
+@Directive({ selector: "ng-template[zProd]" })
+export class ZProd { templateRef = inject(TemplateRef); }
+
+@Component({
+  selector: "prod-list",
+  template: '<b ng-template-outlet="$ctrl.a.templateRef" ng-template-outlet-context="{ $implicit: 1 }"></b><i ng-template-outlet="$ctrl.z.templateRef" ng-template-outlet-context="{ $implicit: 2 }"></i>',
+})
+export class ProdList {
+  @ContentChild(AProd) a?: AProd;
+  @ContentChild(ZProd) z?: ZProd;
+}
+
+@Component({
+  selector: "app-root",
+  template: '<prod-list><ng-template a-prod let-n>A{{ n }}</ng-template><ng-template z-prod let-n>Z{{ n }}</ng-template></prod-list>',
+})
+export class AppComponent {}
+
+@NgModule({ imports: [CommonModule], declarations: [AppComponent, ProdList, AProd, ZProd], bootstrap: [AppComponent] })
+export class AppModule {}
+`,
+      },
+      "<app-root></app-root>",
+    );
+    app.digest();
+
+    expect(app.document.body.classList.contains("ng-scope")).toBe(false);
+    expect(app.document.querySelector("prod-list")?.textContent).toBe("A1Z2");
+    expect(app.errors).toEqual([]);
+  });
+
   it("inject(NgDisabled) en una directiva: el ng-disabled del mismo elemento (null sin él, sin heredar del padre)", async () => {
     app = await CompiledApp.bootstrap(
       {

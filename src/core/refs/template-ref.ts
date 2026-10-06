@@ -94,7 +94,13 @@ export class TemplateRefImpl<C = ContextObject> extends TemplateRef<C> implement
   }
 }
 
-const compileNgTemplate: IDirectiveCompileFn = (_element, attrs) => {
+const compileNgTemplate: IDirectiveCompileFn = (element, attrs) => {
+  // El comentario ancla se reconoce por su texto (`TemplateRefImpl.of`, y el guard de selector que emite el compilador
+  // para `ng-template[x]`). Con `debugInfoEnabled(false)` (`ngjs build`) AngularJS lo crea vacío: se le pone acá, en
+  // `compile`, para que lo hereden los clones (`ng-repeat`, contenido proyectado).
+  const anchor = element[0] as Node | undefined;
+  if (anchor?.nodeType === 8 && !/ngTemplate/.test(anchor.nodeValue ?? "")) anchor.nodeValue = " ngTemplate: ";
+
   const declarations = new Map<string, string>();
 
   for (const [name, value] of Object.entries(attrs)) {
