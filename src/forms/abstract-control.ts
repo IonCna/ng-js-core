@@ -1,4 +1,4 @@
-import { BehaviorSubject, forkJoin, from, isObservable, type Observable, type Subscription } from "rxjs";
+import { forkJoin, from, isObservable, type Observable, Subject, type Subscription } from "rxjs";
 import { map } from "rxjs/operators";
 import type {
   AsyncValidatorFn,
@@ -52,10 +52,9 @@ function composeAsyncValidators(validators: AsyncValidatorFn[] | null): AsyncVal
  * porque AngularJS no tiene nada parecido: `NgModelController` valida un solo
  * input, no compone un árbol — es "brecha" (ver `CONCEPTOS.md`).
  *
- * `valueChanges`/`statusChanges` son `BehaviorSubject` (no `Subject` como en
- * Angular real, decisión de diseño documentada en `CONCEPTOS.md`): un
- * suscriptor tardío — típicamente el bridge que conecta un control recién
- * creado contra el DOM — ve el estado actual sin esperar el próximo cambio.
+ * `valueChanges`/`statusChanges` emiten solo los cambios, como en Angular (ahí son `EventEmitter`): quien se
+ * suscribe no recibe el valor actual. El que lo necesita lo lee de `value`/`status` (o usa `startWith`); el bridge
+ * que conecta un control recién creado contra el DOM aplica el estado inicial a mano.
  *
  * Varios miembros con prefijo `_` son públicos a propósito, no `protected`
  * (mismo criterio que el `@angular/forms` real: `_forEachChild`,
@@ -63,7 +62,7 @@ function composeAsyncValidators(validators: AsyncValidatorFn[] | null): AsyncVal
  * por visibilidad — hace falta que un `FormGroup` pueda llamarlos sobre sus
  * hijos, que no necesariamente son instancias de su misma subclase).
  *
- * Default `TValue = any` (no `unknown`) a propósito: `BehaviorSubject<TValue>`
+ * Default `TValue = any` (no `unknown`) a propósito: `Subject<TValue>`
  * hace que `TValue` aparezca en posición contravariante (`Observer.next`), así
  * que un `AbstractControl` sin tipar tiene que ser bivariante para poder
  * convivir en el mismo árbol con hijos de distinto tipo (`_parent`,
@@ -90,11 +89,11 @@ export abstract class AbstractControl<TValue = any> {
    */
   private _hasOwnPendingAsyncValidator = false;
 
-  private readonly valueChangesSubject: BehaviorSubject<TValue>;
-  private readonly statusChangesSubject: BehaviorSubject<FormControlStatus>;
+  private readonly valueChangesSubject = new Subject<TValue>();
+  private readonly statusChangesSubject = new Subject<FormControlStatus>();
 
-  readonly valueChanges: Observable<TValue>;
-  readonly statusChanges: Observable<FormControlStatus>;
+  readonly valueChanges: Observable<TValue> = this.valueChangesSubject.asObservable();
+  readonly statusChanges: Observable<FormControlStatus> = this.statusChangesSubject.asObservable();
 
   protected constructor(
     value: TValue,
@@ -107,12 +106,7 @@ export abstract class AbstractControl<TValue = any> {
     this.setValidators(validators);
     this.setAsyncValidators(asyncValidators);
 
-    this.valueChangesSubject = new BehaviorSubject<TValue>(value);
-    this.valueChanges = this.valueChangesSubject.asObservable();
-
     this._status = "VALID";
-    this.statusChangesSubject = new BehaviorSubject<FormControlStatus>(this._status);
-    this.statusChanges = this.statusChangesSubject.asObservable();
   }
 
   get value(): TValue {

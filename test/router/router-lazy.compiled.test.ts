@@ -108,6 +108,226 @@ export class AppModule {}
     });
   });
 
+  describe("RouteConfigLoadStart / RouteConfigLoadEnd", () => {
+    const loads = `
+@Component({ selector: "rc-home", template: "<h1>home</h1>" })
+export class RcHome {}
+const routes: Routes = [
+  { path: "", component: RcHome },
+  { path: "admin", loadChildren: () => import("./lazy-children.routes").then((m) => m.CHILD_ROUTES) },
+  { path: "lazy", loadComponent: () => import("./lazy-page.component") },
+  { path: "broken", loadChildren: () => Promise.reject(new Error("chunk caído")) },
+  { path: "old", redirectTo: "/admin/users" },
+  { path: "ghost", redirectTo: "/nowhere" },
+];
+@NgModule({ imports: [CommonModule, RouterModule.forRoot(routes)], declarations: [AppRoot, RcHome], bootstrap: [AppRoot] })
+export class AppModule {}
+`;
+
+    type Recorded = { type?: string; id?: number; url?: string; urlAfterRedirects?: string; route?: { path?: string } };
+
+    /** Arranca y junta los eventos del router como `tipo:path` (los de carga) o `tipo` (los de navegación). */
+    const bootLoads = async () => {
+      app = await boot(loads);
+      const events: string[] = [];
+      const navigation: Recorded[] = [];
+      app.router.events.subscribe((event) => {
+        const recorded = event as Recorded;
+        events.push(recorded.route ? `${recorded.type}:${recorded.route.path}` : String(recorded.type));
+        if (!recorded.route) navigation.push(recorded);
+      });
+      return Object.assign(events, { navigation });
+    };
+    const loadsOf = (events: string[]) => events.filter((event) => event.startsWith("RouteConfigLoad"));
+    /** Navega y espera: el valor con el que resuelve `navigateByUrl`, o `{ rejected }` con el error si rechaza. */
+    const outcomeOf = async (url: string) => {
+      const outcome = app!.router.navigateByUrl(url).then(
+        (value): unknown => value,
+        (rejected: unknown) => ({ rejected }),
+      );
+      await app!.settle(outcome);
+      return outcome;
+    };
+
+    it("loadChildren: la secuencia de Angular, en una sola navegación", async () => {
+      const events = await bootLoads();
+      const navigated = app!.router.navigateByUrl("/admin/users");
+      await app!.settle(navigated);
+      await until("lazy users page");
+
+      expect([...events]).toEqual([
+        "NavigationStart",
+        "RouteConfigLoadStart:admin",
+        "RouteConfigLoadEnd:admin",
+        "NavigationEnd",
+      ]);
+      const [start, end] = events.navigation;
+      expect(start?.url).toBe("/admin/users");
+      expect(end).toMatchObject({ id: start?.id, url: "/admin/users", urlAfterRedirects: "/admin/users" });
+      expect(await navigated).toBe(true);
+    });
+
+    it("redirectTo hacia una ruta lazy sin cargar: una sola navegación, con la URL pedida y la final", async () => {
+      const events = await bootLoads();
+      await app!.navigate("/old");
+      await until("lazy users page");
+
+      expect([...events]).toEqual([
+        "NavigationStart",
+        "RouteConfigLoadStart:admin",
+        "RouteConfigLoadEnd:admin",
+        "NavigationEnd",
+      ]);
+      const [start, end] = events.navigation;
+      expect(start?.url).toBe("/old");
+      expect(end).toMatchObject({ id: start?.id, url: "/old", urlAfterRedirects: "/admin/users" });
+    });
+
+    it("no se repiten al volver a una ruta ya cargada", async () => {
+      const events = await bootLoads();
+      await app!.navigate("/admin/users");
+      await until("lazy users page");
+      await app!.navigate("/");
+      await app!.navigate("/admin/users/42");
+      await until("detail 42");
+
+      expect(loadsOf(events)).toEqual(["RouteConfigLoadStart:admin", "RouteConfigLoadEnd:admin"]);
+    });
+
+    it("loadComponent también los emite", async () => {
+      const events = await bootLoads();
+      await app!.navigate("/lazy");
+      await until("lazy loaded");
+
+      expect(loadsOf(events)).toEqual(["RouteConfigLoadStart:lazy", "RouteConfigLoadEnd:lazy"]);
+    });
+
+    it("redirectTo hacia una ruta que no existe: NavigationError, la promesa rechaza y la URL se restaura", async () => {
+      const events = await bootLoads();
+      await app!.navigate("/lazy");
+      await until("lazy loaded");
+      events.length = 0;
+      events.navigation.length = 0;
+
+      const outcome = (await outcomeOf("/ghost")) as { rejected?: Error };
+
+      expect([...events]).toEqual(["NavigationStart", "NavigationError"]);
+      const [start, error] = events.navigation;
+      expect(start?.url).toBe("/ghost");
+      expect(error).toMatchObject({ id: start?.id, url: "/ghost" });
+      expect(outcome.rejected?.message).toBe("NG04002: Cannot match any routes. URL Segment: 'nowhere'");
+      expect((error as { error?: Error }).error?.message).toBe(outcome.rejected?.message);
+      expect(app!.path).toBe("/lazy");
+      expect(app!.router.url).toBe("/lazy");
+      expect(app!.text).toContain("lazy loaded");
+    });
+
+    it("una URL que ninguna ruta matchea (sin `**`): NavigationError NG04002, la promesa rechaza y la URL se restaura", async () => {
+      const events = await bootLoads();
+      await app!.navigate("/lazy");
+      await until("lazy loaded");
+      events.length = 0;
+      events.navigation.length = 0;
+
+      const outcome = (await outcomeOf("/no/such/route?x=1")) as { rejected?: Error };
+
+      expect([...events]).toEqual(["NavigationStart", "NavigationError"]);
+      const [start, error] = events.navigation;
+      expect(start?.url).toBe("/no/such/route?x=1");
+      expect(error).toMatchObject({ id: start?.id, url: "/no/such/route?x=1" });
+      expect(outcome.rejected?.message).toBe("NG04002: Cannot match any routes. URL Segment: 'no/such/route'");
+      expect(app!.path).toBe("/lazy");
+      expect(app!.text).toContain("lazy loaded");
+
+      // El router sigue sano: la navegación siguiente funciona y su `id` no repite el de la fallida.
+      events.length = 0;
+      events.navigation.length = 0;
+      expect(await outcomeOf("/")).toBe(true);
+      expect([...events]).toEqual(["NavigationStart", "NavigationEnd"]);
+      expect(events.navigation[0]?.id).not.toBe(start?.id);
+      expect(app!.text).toContain("home");
+    });
+
+    it("si la carga falla no hay End: NavigationError, la promesa rechaza con el error y la URL se restaura", async () => {
+      const events = await bootLoads();
+      await app!.navigate("/lazy");
+      await until("lazy loaded");
+      events.length = 0;
+      events.navigation.length = 0;
+
+      const outcome = (await outcomeOf("/broken/x")) as { rejected?: Error };
+
+      expect([...events]).toEqual(["NavigationStart", "RouteConfigLoadStart:broken", "NavigationError"]);
+      expect(events.navigation[1]?.id).toBe(events.navigation[0]?.id);
+      expect(outcome.rejected?.message).toBe("chunk caído");
+      expect(app!.path).toBe("/lazy");
+      expect(app!.router.url).toBe("/lazy");
+    });
+  });
+
+  describe("canActivateChild de un layout sobre una ruta loadChildren", () => {
+    const guarded = `
+@Injectable()
+export class Session { role = "guest"; }
+@Component({ selector: "gl-shell", template: "<h1>shell</h1><ui-view></ui-view>" })
+export class GlShell {}
+@Component({ selector: "gl-home", template: "<h2>home</h2>" })
+export class GlHome {}
+export const seen: unknown[] = [];
+(globalThis as any).seen = seen;
+const byRole = (route) => {
+  seen.push(route.data.role);
+  return !route.data.role || route.data.role === inject(Session).role;
+};
+const routes: Routes = [
+  {
+    path: "",
+    component: GlShell,
+    canActivateChild: [byRole],
+    children: [
+      { path: "", pathMatch: "full", component: GlHome },
+      { path: "admin", data: { role: "admin" }, loadChildren: () => { counters.admin += 1; return import("./lazy-admin.module").then((m) => m.AdminModule); } },
+    ],
+  },
+];
+@NgModule({ imports: [CommonModule, RouterModule.forRoot(routes)], declarations: [AppRoot, GlShell, GlHome], providers: [Session], bootstrap: [AppRoot] })
+export class AppModule {}
+`;
+    const session = () => app!.app.inject<{ role: string }>("Session", "test-app");
+    const seen = () => app!.app.global<unknown[]>("seen");
+
+    // Como en Angular, el chunk se baja al reconocer la ruta, antes de los guards: solo `canMatch` lo evita.
+    it("rechaza la primera navegación con la data de la ruta lazy", async () => {
+      app = await boot(guarded);
+      expect(app.text).toContain("home");
+
+      expect(await app.navigate("/admin")).toBe(false);
+      expect(seen()).toContain("admin");
+      expect(app.text).not.toContain("hola admin");
+    });
+
+    it("con el chunk ya cargado sigue viendo la data de la ruta lazy en sus hijas", async () => {
+      app = await boot(guarded);
+      session().role = "admin";
+      await app.navigate("/admin");
+      await until("hola admin");
+      expect(app.text).toContain("hola admin");
+
+      await app.navigate("/");
+      session().role = "guest";
+      seen().length = 0;
+
+      expect(await app.navigate("/admin")).toBe(false);
+      expect(seen()).toContain("admin");
+      expect(app.text).not.toContain("hola admin");
+
+      seen().length = 0;
+      expect(await app.navigate("/admin/users/3")).toBe(false);
+      expect(seen()).toContain("admin");
+      expect(app.text).not.toContain("admin user");
+    });
+  });
+
   describe("loadChildren → @NgModule", () => {
     const lazyModule = `
 @Component({ selector: "lm-home", template: "<h1>home</h1>" })
@@ -146,6 +366,24 @@ export class AppModule {}
       expect(counters().admin).toBe(0);
     });
 
+    it("el mismo módulo montado en dos rutas: cada una monta sus hijas, y se navega de una a la otra", async () => {
+      app = await boot(lazyModule);
+      await app.navigate("/admin/users/7");
+      expect(app.text).toContain("admin user 7");
+
+      // El módulo ya está cargado (sus declarations no se registran dos veces): la segunda ruta solo cuelga sus hijas.
+      await app.navigate("/admin-default");
+      expect(app.text).toContain("hola admin");
+      expect(app.router.url).toBe("/admin-default");
+      await app.navigate("/admin-default/users/3");
+      expect(app.text).toContain("admin user 3");
+
+      await app.navigate("/admin");
+      expect(app.text).toContain("hola admin");
+      expect(app.router.url).toBe("/admin");
+      expect(counters().admin).toBe(1);
+    });
+
     it("el forChild del chunk lazy no registra estados en la raíz", async () => {
       app = await boot(lazyModule);
       await app.navigate("/admin");
@@ -155,6 +393,56 @@ export class AppModule {}
         .map((state) => state.name);
       expect(names).not.toContain("users_id");
       expect(names).toContain("admin.users_id");
+    });
+  });
+
+  describe("un @NgModule lazy con layout y pestañas, montado en dos rutas", () => {
+    const tabs = `
+@Component({ selector: "tb-home", template: "<h1>home</h1>" })
+export class TbHome {}
+const routes: Routes = [
+  { path: "", component: TbHome },
+  { path: "advances", loadChildren: () => import("./lazy-tabs.module").then((m) => m.TabsModule) },
+  { path: "collections", loadChildren: () => import("./lazy-tabs.module").then((m) => m.TabsModule) },
+];
+@NgModule({ imports: [CommonModule, RouterModule.forRoot(routes)], declarations: [AppRoot, TbHome], bootstrap: [AppRoot] })
+export class AppModule {}
+`;
+
+    it("cada ruta redirige a su propia pestaña inicial y la pinta dentro del layout", async () => {
+      app = await boot(tabs);
+      await app.navigate("/advances");
+      await until("list advances pending");
+      expect(app.router.url).toBe("/advances/pending");
+      expect(app.text).toContain("shell advances");
+      expect(app.text).toContain("list advances pending");
+
+      await app.navigate("/collections");
+      await until("list collections pending");
+      expect(app.router.url).toBe("/collections/pending");
+      expect(app.text).toContain("shell collections");
+      expect(app.text).toContain("list collections pending");
+    });
+
+    it("se cambia de pestaña y de ruta en la misma sesión sin mezclar las dos ramas", async () => {
+      app = await boot(tabs);
+      await app.navigate("/collections/applied");
+      expect(app.text).toContain("list collections applied");
+
+      await app.navigate("/advances/applied");
+      expect(app.text).toContain("shell advances");
+      expect(app.text).toContain("list advances applied");
+      expect(app.text).not.toContain("collections");
+
+      await app.navigate("/advances/pending");
+      await until("list advances pending");
+      expect(app.router.url).toBe("/advances/pending");
+      expect(app.text).toContain("list advances pending");
+
+      await app.navigate("/collections/pending");
+      expect(app.text).toContain("shell collections");
+      expect(app.text).toContain("list collections pending");
+      expect(app.text).not.toContain("advances");
     });
   });
 

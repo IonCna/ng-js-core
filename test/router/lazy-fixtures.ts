@@ -60,6 +60,42 @@ const ADMIN_ROUTES: Routes = [
 export class AdminModule {}
 `,
 
+  "lazy-tabs.module.ts": `
+import { Component, NgModule, inject } from "ngjs-core";
+import { ActivatedRoute, Router, RouterModule } from "ngjs-core/router";
+
+/** Una vista con pestañas como rutas hijas, pensada para montarse en más de una ruta: lee de la URL en cuál está. */
+@Component({ selector: "tabs-shell", template: "<h2>shell {{ $ctrl.base }}</h2><ui-view></ui-view>" })
+export class TabsShell {
+  private readonly router = inject(Router);
+  get base(): string { return this.router.url.split("/")[1] ?? ""; }
+}
+
+@Component({ selector: "tabs-list", template: "<p>list {{ $ctrl.base }} {{ $ctrl.status }}</p>" })
+export class TabsList {
+  readonly base = inject(Router).url.split("/")[1] ?? "";
+  readonly status = inject(ActivatedRoute).snapshot.data["status"];
+}
+
+@NgModule({
+  imports: [
+    RouterModule.forChild([
+      {
+        path: "",
+        component: TabsShell,
+        children: [
+          { path: "", redirectTo: "pending", pathMatch: "full" },
+          { path: "pending", component: TabsList, data: { status: "pending" } },
+          { path: "applied", component: TabsList, data: { status: "applied" } },
+        ],
+      },
+    ]),
+  ],
+  declarations: [TabsShell, TabsList],
+})
+export class TabsModule {}
+`,
+
   "lazy-children.routes.ts": `
 import { Component } from "ngjs-core";
 import { ActivatedRoute, type Routes } from "ngjs-core/router";

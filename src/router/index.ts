@@ -9,6 +9,8 @@ export {
   NavigationEnd,
   NavigationError,
   NavigationStart,
+  RouteConfigLoadEnd,
+  RouteConfigLoadStart,
   type RouterEvent,
 } from "@/router/events.ts";
 export { convertToParamMap, type ParamMap } from "@/router/param-map.ts";

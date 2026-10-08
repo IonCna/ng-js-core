@@ -227,6 +227,75 @@ export class FakeTakenDirective implements AsyncValidator {
       expect(form.controls.email.dirty).toBe(true);
     });
 
+    it("un handler de cambio del mismo elemento (ng-change) ya ve el valor nuevo en el FormControl, como en Angular", async () => {
+      await boot("", "");
+      const { FormControl, FormGroup } = forms();
+      const form = new FormGroup({ email: new FormControl("") });
+      const seen: unknown[] = [];
+      const { element, scope } = app!.compile(
+        '<form form-group="form"><input form-control-name="email" ng-change="onChange()"></form>',
+        { form, onChange: () => seen.push(form.controls.email.value) },
+      );
+
+      type(input(element), "a");
+      scope.$digest();
+      type(input(element), "ab");
+      scope.$digest();
+      expect(seen).toEqual(["a", "ab"]);
+    });
+
+    it("un setValue dentro de valueChanges llega al input aunque devuelva el control a su valor anterior", async () => {
+      await boot("", "");
+      const { FormControl, FormGroup } = forms();
+      const form = new FormGroup({ digit: new FormControl("") });
+      form.controls.digit.valueChanges.subscribe((value: string) => {
+        const digit = value.replace(/\D/g, "").slice(0, 1);
+        if (digit !== value) form.controls.digit.setValue(digit, { emitEvent: false });
+      });
+      const { element, scope } = app!.compile('<form form-group="form"><input form-control-name="digit"></form>', { form });
+
+      type(input(element), "x");
+      scope.$digest();
+      expect(form.controls.digit.value).toBe("");
+      expect(input(element).value).toBe("");
+
+      type(input(element), "57");
+      scope.$digest();
+      expect(form.controls.digit.value).toBe("5");
+      expect(input(element).value).toBe("5");
+    });
+
+    it("un setValue hecho desde código llega al input en ese mismo digest, sin depender de otro watcher", async () => {
+      await boot("", "");
+      const { FormControl, FormGroup } = forms();
+      const form = new FormGroup({ email: new FormControl("") });
+      const { element, scope } = app!.compile('<form form-group="form"><input form-control-name="email"></form>', { form });
+
+      form.controls.email.setValue("ada@example.com");
+      scope.$digest();
+      expect(input(element).value).toBe("ada@example.com");
+
+      form.controls.email.setValue("grace@example.com", { emitEvent: false });
+      scope.$digest();
+      expect(input(element).value).toBe("grace@example.com");
+    });
+
+    it("un reset() en el mismo turno en que se tipeó limpia el input (el control vuelve al valor del digest anterior)", async () => {
+      await boot("", "");
+      const { FormControl, FormGroup } = forms();
+      const form = new FormGroup({ email: new FormControl("") });
+      const { element, scope } = app!.compile('<form form-group="form"><input form-control-name="email"></form>', { form });
+
+      scope.$apply(() => {
+        type(input(element), "tipeado");
+        expect(form.controls.email.value).toBe("tipeado");
+        form.reset({ email: "" }, { emitEvent: false });
+      });
+
+      expect(form.controls.email.value).toBe("");
+      expect(input(element).value).toBe("");
+    });
+
     it("Validators.required se refleja en $error/$invalid del ngModel real; disable() deshabilita el input", async () => {
       await boot("", "");
       const { FormControl, FormGroup, Validators } = forms();

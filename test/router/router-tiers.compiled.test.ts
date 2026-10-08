@@ -102,6 +102,33 @@ export class AppModule {}
     expect(events).toContain("end");
   });
 
+  it("Tier 3: el componente de una ruta lee en `snapshot` su propia ruta, no la anterior", async () => {
+    app = await RouterApp.boot({
+      "app.module.ts": `${HEADER}
+// Dos rutas hermanas con el mismo componente: el componente se crea de nuevo en cada una y lee el snapshot al crearse.
+@Component({ selector: "t3-tab", template: "<p>{{ $ctrl.status }} {{ $ctrl.id }}</p>" })
+export class TabPage {
+  private readonly snapshot = inject(ActivatedRoute).snapshot;
+  readonly status = this.snapshot.data["status"];
+  readonly id = this.snapshot.params["id"];
+}
+const routes: Routes = [
+  { path: "pending/:id", component: TabPage, data: { status: "pending" } },
+  { path: "applied/:id", component: TabPage, data: { status: "applied" } },
+];
+@NgModule({ imports: [CommonModule, RouterModule.forRoot(routes)], declarations: [AppRoot, TabPage], bootstrap: [AppRoot] })
+export class AppModule {}
+`,
+    });
+
+    await app.navigate("/pending/1");
+    expect(app.text).toBe("pending 1");
+    await app.navigate("/applied/2");
+    expect(app.text).toBe("applied 2");
+    await app.navigate("/pending/3");
+    expect(app.text).toBe("pending 3");
+  });
+
   it("Tier 4: canActivateChild protege los hijos pero no el padre, e inyecta servicios con inject()", async () => {
     app = await RouterApp.boot({
       "app.module.ts": `${HEADER}

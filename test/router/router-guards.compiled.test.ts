@@ -112,6 +112,89 @@ const routes: Routes = [
 export class AppModule {}
 `;
 
+  it("canActivateChild recibe el snapshot de cada hija que se activa (su data y la heredada con emptyOnly), no el de la ruta que lo declara", async () => {
+    app = await boot(`
+@Component({ selector: "cs-home", template: "<h1>home</h1>" })
+export class CsHome {}
+@Component({ selector: "cs-shell", template: "<h2>shell</h2><ui-view></ui-view>" })
+export class CsShell {}
+@Component({ selector: "cs-open", template: "<h3>open</h3>" })
+export class CsOpen {}
+@Component({ selector: "cs-admin", template: "<h3>admin</h3><ui-view></ui-view>" })
+export class CsAdmin {}
+@Component({ selector: "cs-index", template: "<h4>index</h4>" })
+export class CsIndex {}
+@Component({ selector: "cs-detail", template: "<h4>detail</h4>" })
+export class CsDetail {}
+export const seen: unknown[] = [];
+(globalThis as any).seen = seen;
+const byRole = (route) => { seen.push({ ...route.data, id: route.params.id }); return route.data.role !== "admin"; };
+const routes: Routes = [
+  { path: "", component: CsHome },
+  {
+    path: "shell",
+    component: CsShell,
+    data: { role: "shell" },
+    canActivateChild: [byRole],
+    children: [
+      { path: "open", component: CsOpen, data: { role: "any" } },
+      {
+        path: "admin",
+        component: CsAdmin,
+        data: { role: "admin" },
+        children: [{ path: "", component: CsIndex }],
+      },
+      { path: "plain", component: CsAdmin, children: [{ path: "detail/:id", component: CsDetail, data: { leaf: true } }] },
+    ],
+  },
+];
+@NgModule({ imports: [CommonModule, RouterModule.forRoot(routes)], declarations: [AppRoot, CsHome, CsShell, CsOpen, CsAdmin, CsIndex, CsDetail], bootstrap: [AppRoot] })
+export class AppModule {}
+`);
+    const seen = app.app.global<unknown[]>("seen");
+
+    // La ruta que declara el guard no es su propia hija.
+    expect(await app.navigate("/shell")).toBe(true);
+    expect(seen).toEqual([]);
+
+    expect(await app.navigate("/shell/open")).toBe(true);
+    expect(seen).toEqual([{ role: "any", id: undefined }]);
+
+    // La hija se rechaza por SU data; la del padre (`role: "shell"`) no llega.
+    seen.length = 0;
+    expect(await app.navigate("/shell/admin")).toBe(false);
+    expect(seen[0]).toEqual({ role: "admin", id: undefined });
+    expect(app.text).not.toContain("admin");
+
+    // Una vez por hija activada, de la más cercana a la más profunda; sin `path` vacío no se hereda la data.
+    seen.length = 0;
+    expect(await app.navigate("/shell/plain/detail/7")).toBe(true);
+    expect(seen).toEqual([{ id: "7" }, { leaf: true, id: "7" }]);
+    expect(app.text).toContain("detail");
+  });
+
+  it("Router.config expone las rutas de forRoot, las mismas que se le pasaron", async () => {
+    app = await boot(`
+@Component({ selector: "rc-a", template: "<h1>a</h1>" })
+export class RcA {}
+@Component({ selector: "rc-b", template: "<h1>b</h1>" })
+export class RcB {}
+const routes: Routes = [
+  { path: "", component: RcA, data: { menu: "Inicio" } },
+  { path: "b", component: RcB, data: { menu: "B" }, children: [{ path: "c", component: RcA }] },
+];
+(globalThis as any).routes = routes;
+@NgModule({ imports: [CommonModule, RouterModule.forRoot(routes)], declarations: [AppRoot, RcA, RcB], bootstrap: [AppRoot] })
+export class AppModule {}
+`);
+    const config = (app.router as unknown as { config: { path?: string; data?: unknown; children?: unknown[] }[] }).config;
+
+    expect(config.map((route) => route.path)).toEqual(["", "b"]);
+    expect(config.map((route) => route.data)).toEqual([{ menu: "Inicio" }, { menu: "B" }]);
+    expect(config[1]).toBe(app.app.global<unknown[]>("routes")[1]);
+    expect(config[1].children?.length).toBe(1);
+  });
+
   it("canMatch false bloquea la navegación (se queda donde estaba); true matchea", async () => {
     app = await boot(tier5);
     await app.navigate("/flagged").catch(() => undefined);

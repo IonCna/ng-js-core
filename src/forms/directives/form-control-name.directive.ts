@@ -32,7 +32,7 @@ function applyErrorKeys(ngModel: NgModelController, errors: ValidationErrors | n
  * acá el "accessor" es el propio `ngModel` nativo (formatters/parsers/eventos
  * DOM intactos, sin neutralizar nada):
  *
- *  - `control.value` → se escribe en la MISMA expresión de scope que el
+ *  - `control.value` → en cada digest, si difiere de ella, se escribe en la MISMA expresión de scope que el
  *    `ng-model` sintético apunta (`$parse(...).assign`, igual que hace
  *    `ngModelSet` internamente) — NO se toca `ngModel.$modelValue`/`$render`
  *    a mano. **Bug real encontrado con un test**: escribir `$modelValue`
@@ -77,21 +77,43 @@ export class FormControlNameDirective {
     if (!ngModel) return;
 
     const modelExpr = this.$element.attr("ng-model");
-    const setModelExpr = modelExpr ? this.$parse(modelExpr).assign : undefined;
-    if (!setModelExpr) return;
+    const getModelExpr = modelExpr ? this.$parse(modelExpr) : undefined;
+    const setModelExpr = getModelExpr?.assign;
+    if (!getModelExpr || !setModelExpr) return;
 
     const seenErrorKeys = new Set<string>();
 
-    this.$scope.$watch(
-      () => control.value,
-      (value: unknown) => setModelExpr(this.$scope, value),
-    );
-    control.statusChanges.subscribe(() => {
+    // En Angular todo `setValue`/`reset` programático escribe en la vista. Por eso en cada digest se compara
+    // `control.value` contra lo que hoy tiene la expresión del `ng-model`, y no contra el valor que este watcher
+    // vio en el digest anterior: con esa comparación se perdía todo cambio que devolviera el control a su valor
+    // anterior dentro del mismo turno (tipear "x" y que un suscriptor de `valueChanges` lo corrija a "", o un
+    // `reset()` antes del digest), y el input se quedaba con lo tipeado.
+    //
+    // El watcher devuelve cuántas veces escribió: el watcher nativo de `ngModel` se registró antes y en cada pasada
+    // del digest corre primero, así que la escritura de esta pasada recién la ve en la siguiente. Si este watcher no
+    // se mostrara "sucio", un digest sin ningún otro cambio terminaba ahí y el input quedaba un digest atrasado.
+    let writes = 0;
+    this.$scope.$watch(() => {
+      const value: unknown = control.value;
+      if (!Object.is(getModelExpr(this.$scope), value)) {
+        setModelExpr(this.$scope, value);
+        writes += 1;
+      }
+      return writes;
+    });
+    const applyStatus = () => {
       applyErrorKeys(ngModel, control.errors, seenErrorKeys);
       this.$element.prop("disabled", control.disabled);
-    });
+    };
+    // `statusChanges` solo avisa cambios: el estado con el que llega el control se aplica acá.
+    applyStatus();
+    control.statusChanges.subscribe(applyStatus);
 
-    ngModel.$viewChangeListeners.push(() => {
+    // Va PRIMERO en la lista (`unshift`, no `push`): este `$postLink` corre después del `link` de cualquier otra
+    // directiva del elemento, así que con `push` un listener ajeno (`ng-change`) corría antes y leía en
+    // `control.value` el valor anterior. En Angular el value accessor actualiza el control antes de que corra el
+    // handler de la plantilla (`(input)`, `(ngModelChange)`): quien escucha el cambio ya ve el valor nuevo.
+    ngModel.$viewChangeListeners.unshift(() => {
       control.setValue(ngModel.$modelValue);
       control.markAsDirty();
     });

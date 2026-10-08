@@ -64,7 +64,11 @@ export class ActivatedRouteImpl extends ActivatedRoute {
     super();
     this.syncRoute();
     this.syncLocation();
-    $transitions.onSuccess({}, (transition) => this.syncRoute(transition));
+    // Con prioridad: UI-Router monta las vistas de la ruta nueva en otro `onSuccess` (`activateViews`, prioridad 0,
+    // registrado antes que este). Sin ella el componente de la ruta se construía con el `snapshot` de la ruta
+    // anterior — en Angular el `ActivatedRoute` que recibe ya es el de su ruta. `$state.$current`/`params` ya están
+    // al día: UI-Router los actualiza con prioridad 10000.
+    $transitions.onSuccess({}, (transition) => this.syncRoute(transition), { priority: 100 });
     $rootScope.$on("$locationChangeSuccess", () => this.syncLocation());
   }
 

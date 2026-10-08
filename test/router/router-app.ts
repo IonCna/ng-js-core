@@ -40,7 +40,10 @@ export class RouterApp {
 
   async navigate(url: string): Promise<boolean> {
     const result = this.router.navigateByUrl(url);
-    await this.settle(result);
+    // Una navegación que falla rechaza (como Angular) mientras `settle` todavía digiere: se marca manejada acá y
+    // el rechazo le llega igual a quien espera `navigate()`.
+    result.catch(() => undefined);
+    await this.settle();
     return result;
   }
 

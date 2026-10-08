@@ -89,7 +89,7 @@ function applyGlobalRedirects(translated: TranslatedRoutes): void {
 }
 
 interface UrlRouterProvider {
-  otherwise(rule: string | ((...args: unknown[]) => string)): void;
+  otherwise(rule: string | (($injector: angular.auto.IInjectorService) => string | void)): void;
 }
 
 // --- Opciones (`ExtraOptions` de Angular 16) ---------------------------------
@@ -318,13 +318,10 @@ export const RouterModule = {
     routerRegistry.mergeLazyChildrenStates(translated.lazyChildrenStates);
     routerRegistry.mergeRouteProviders(translated.routeProviders);
     routerRegistry.mergePathToName(translated.pathToName);
+    routerRegistry.addConfig(routes);
 
     const paramsInheritanceStrategy: ParamsInheritanceStrategy = config.paramsInheritanceStrategy ?? "emptyOnly";
-
-    // La URL `/` de la raíz la asigna el traductor (hoja de la cadena `path: ""`); acá no
-    // se fuerza: un layout raíz con hijos lleva `url: ""` a propósito (ver `walk`).
-    const root = states.find((state) => !state.name?.includes("."));
-    const fallbackUrl = (typeof root?.url === "string" && root.url) || "/";
+    routerRegistry.paramsInheritanceStrategy = paramsInheritanceStrategy;
 
     const useHash = config.useHash === true;
     // El router depende de `@angular/common` (`CommonModule`): trae `PlatformLocation` + `APP_BASE_HREF` +
@@ -363,9 +360,11 @@ export const RouterModule = {
       applyGlobalRedirects(translated); // redirects cruzados forRoot↔forChild — el registro ya está completo
       for (const state of states) $stateProvider.state({ ...state }); // clon: UI-Router muta la decl (quita lazyLoad); no compartir entre bootstraps
 
-      // La ruta `**` (si hay) matchea via su param greedy `/{ngjsCatchAll:.+}`.
-      // `otherwise` solo cubre la URL raíz sin match → va a la raíz.
-      $urlRouterProvider.otherwise(fallbackUrl);
+      // La ruta `**` (si hay) matchea via su param greedy `/{ngjsCatchAll:.+}`. Sin ella, una URL que ninguna ruta
+      // matchea es una navegación que falla (`NavigationError`), como en Angular — no un salto a la raíz.
+      $urlRouterProvider.otherwise(($injector: angular.auto.IInjectorService) => {
+        $injector.get<RouterImpl>(injectionTokenName(Router)).handleUnmatchedUrl();
+      });
     };
     configureStates.$inject = ["$stateProvider", "$urlRouterProvider", "$locationProvider", "$urlServiceProvider"];
 
@@ -457,6 +456,7 @@ export const RouterModule = {
       routerRegistry.mergeLazyChildrenStates(translated.lazyChildrenStates);
       routerRegistry.mergeRouteProviders(translated.routeProviders);
       routerRegistry.mergePathToName(translated.pathToName);
+      routerRegistry.addConfig(routes);
     }
 
     const mod = angular.module(nextModuleName("ngjs.router.child"), ["ui.router"]);

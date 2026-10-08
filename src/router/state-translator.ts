@@ -1,5 +1,6 @@
 import { type Ng1StateDeclaration, ParamType } from "@uirouter/angularjs";
 import type angular from "angular";
+import { Subject } from "rxjs";
 import { runInInjectionContext } from "@/core/di/injection-context.ts";
 import { InjectorImpl } from "@/core/di/injector.ts";
 import type { Provider } from "@/core/di/provider.ts";
@@ -7,6 +8,7 @@ import { RuntimeProviders } from "@/core/di/runtime-providers.ts";
 import { CompiledType } from "@/core/metadata/compiled-type.ts";
 import { ComponentRegistrar } from "@/core/platform/component-registrar.ts";
 import { ConfigProviderFactory } from "@/core/platform/config-providers.ts";
+import { RouteConfigLoadEnd, RouteConfigLoadStart } from "@/router/events.ts";
 import { LazyNgModuleLoader } from "@/router/lazy-ng-module-loader.ts";
 import type {
   ActivatedRouteSnapshot,
@@ -22,6 +24,7 @@ import type {
   Routes,
 } from "@/router/route.ts";
 import { resolveRouteComponentInstance } from "@/router/route-component-registry.ts";
+import { mergeStaticData } from "@/router/route-title.ts";
 import { routerRegistry } from "@/router/router-registry.ts";
 
 export interface GuardBinding {
@@ -30,6 +33,11 @@ export interface GuardBinding {
   data: Data;
   /** `true` → aplica a los descendientes de `stateName` (`canActivateChild`), no al estado en sí. */
   forChildren?: boolean;
+  /**
+   * `true` → es un `canActivateChild`: corre una vez por cada ruta hija que la navegación activa, con el snapshot
+   * de ESA hija (Angular: `childRoute`). Sin esto el guard recibe la `data` de la ruta que lo declara.
+   */
+  childSnapshot?: boolean;
 }
 
 export interface DeactivateBinding {
@@ -160,6 +168,25 @@ class AppLazyRoutes {
 
 export const appLazyRoutes = new AppLazyRoutes();
 
+/**
+ * `RouteConfigLoadStart`/`RouteConfigLoadEnd` **por app** (`$injector`): los emite cada carga lazy y `Router` los
+ * reenvía por `Router.events`. Por app por lo mismo que `AppLazyRoutes`.
+ */
+class RouteConfigLoadEvents {
+  private readonly byInjector = new WeakMap<object, Subject<RouteConfigLoadStart | RouteConfigLoadEnd>>();
+
+  of($injector: object): Subject<RouteConfigLoadStart | RouteConfigLoadEnd> {
+    let events = this.byInjector.get($injector);
+    if (!events) {
+      events = new Subject();
+      this.byInjector.set($injector, events);
+    }
+    return events;
+  }
+}
+
+export const routeConfigLoadEvents = new RouteConfigLoadEvents();
+
 /** `.run` que suma las rutas lazy de un árbol (`forRoot`/`forChild`) a las de la app. */
 export function wireLazyRoutes(entries: LazyRouteEntry[]) {
   const run = ($injector: object) => appLazyRoutes.add($injector, entries);
@@ -175,7 +202,13 @@ class LazyRoute implements LazyRouteEntry {
   ) {}
 
   load(context: LazyLoadContext): Promise<void> {
-    return lazyLoadMemo.run(context.$injector, this.stateName, () => this.handler(context));
+    // El memo corre esto una sola vez por carga real (navegación, preload o intención sobre un link), como Angular.
+    return lazyLoadMemo.run(context.$injector, this.stateName, async () => {
+      const events = routeConfigLoadEvents.of(context.$injector);
+      events.next(new RouteConfigLoadStart(this.route));
+      await this.handler(context);
+      events.next(new RouteConfigLoadEnd(this.route));
+    });
   }
 
   isLoaded($injector: object): boolean {
@@ -334,9 +367,17 @@ export interface StateRegistryLike {
   register(state: Ng1StateDeclaration): unknown;
 }
 
+/** Un estado de UI-Router tal como viene en un `PathNode`: `path` es su cadena raíz → él. */
+interface GuardStateNode {
+  name: string;
+  data?: Data;
+  path?: { name: string; data?: Data }[];
+}
+
 interface GuardTransition {
   to(): { name: string };
   params(): Record<string, string>;
+  treeChanges(which: "entering"): { state: GuardStateNode }[];
   injector(): { get(token: string): unknown };
 }
 
@@ -389,13 +430,53 @@ export function wireGuardHook($transitions: TransitionsLike, guard: GuardBinding
   const criteria = guard.forChildren ? { to: `${guard.stateName}.**` } : { entering: guard.stateName };
   $transitions.onBefore(criteria, (transition: GuardTransition) => {
     if (guard.forChildren && transition.to().name === guard.stateName) return true;
+    const $injector = transition.injector().get("$injector");
+    if (guard.childSnapshot) {
+      const snapshots = enteringChildSnapshots(transition, guard.stateName);
+      return runInRouteContext($injector, guard.stateName, () => runGuardsForEach(guard.canActivate, snapshots));
+    }
     const snapshot = {
       params: transition.params(),
       data: guard.data,
     } as ActivatedRouteSnapshot;
-    const $injector = transition.injector().get("$injector");
     return runInRouteContext($injector, guard.stateName, () => runGuards(guard.canActivate, snapshot));
   });
+}
+
+/** Sufijo de un *future state* (ruta `loadChildren` sin cargar). */
+const FUTURE_STATE_SUFFIX = /\.\*\*$/;
+
+/**
+ * El snapshot de cada ruta hija de `stateName` que la transición activa, de la más cercana a la más profunda.
+ * Su `data` es la de la hija con la herencia de `paramsInheritanceStrategy`, igual que `ActivatedRoute.data`.
+ */
+function enteringChildSnapshots(transition: GuardTransition, stateName: string): ActivatedRouteSnapshot[] {
+  const params = transition.params();
+  return transition
+    .treeChanges("entering")
+    .filter((node) => node.state.name.startsWith(`${stateName}.`))
+    .map((node) => {
+      const chain = (node.state.path ?? [node.state])
+        .filter((state) => state.name)
+        .map((state) => ({ name: state.name.replace(FUTURE_STATE_SUFFIX, ""), data: state.data }));
+      const data = mergeStaticData(chain, routerRegistry.emptyPathStates, routerRegistry.paramsInheritanceStrategy);
+      return { params, data };
+    });
+}
+
+/** `runGuards` para varios snapshots: síncrono mientras ningún guard sea async (ver `runGuards`). */
+function runGuardsForEach<T>(
+  guards: ((arg: T) => boolean | Promise<boolean>)[],
+  args: T[],
+): boolean | Promise<boolean> {
+  const pending: Promise<boolean>[] = [];
+  for (const arg of args) {
+    const result = runGuards(guards, arg);
+    if (result === false) return false;
+    if (result !== true) pending.push(result);
+  }
+  if (pending.length === 0) return true;
+  return Promise.all(pending).then((results) => results.every(Boolean));
 }
 
 /** `{ url, root }` plano desde el `transition` (Angular: `RouterStateSnapshot`). */
@@ -826,7 +907,13 @@ function walk(routes: Routes, ctx: WalkCtx): void {
       });
     }
     if (route.canActivateChild?.length) {
-      ctx.out.guards.push({ stateName: name, canActivate: route.canActivateChild, data, forChildren: true });
+      ctx.out.guards.push({
+        stateName: name,
+        canActivate: route.canActivateChild,
+        data,
+        forChildren: true,
+        childSnapshot: true,
+      });
     }
     if (route.canDeactivate?.length) {
       ctx.out.deactivateGuards.push({

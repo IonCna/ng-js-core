@@ -10,16 +10,20 @@ describe("etapa 15 — FormControl", () => {
     expect(control.errors).toBeNull();
   });
 
-  it("valueChanges es BehaviorSubject — un suscriptor tardío ve el valor actual sin esperar el próximo setValue", () => {
+  it("valueChanges y statusChanges emiten solo los cambios, como en Angular: suscribirse no trae el valor actual", () => {
     const control = new FormControl("a");
     control.setValue("b");
 
     const seen: string[] = [];
+    const statuses: string[] = [];
     control.valueChanges.subscribe((value) => seen.push(value));
-    expect(seen).toEqual(["b"]);
+    control.statusChanges.subscribe((status) => statuses.push(status));
+    expect(seen).toEqual([]);
+    expect(statuses).toEqual([]);
 
     control.setValue("c");
-    expect(seen).toEqual(["b", "c"]);
+    expect(seen).toEqual(["c"]);
+    expect(statuses).toEqual(["VALID"]);
   });
 
   it("setValue corre el validador sync y recalcula status/errors", () => {

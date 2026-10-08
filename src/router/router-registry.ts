@@ -1,5 +1,6 @@
 import type { Provider } from "@/core/di/provider.ts";
 import type { ResolveFn, Routes } from "@/router/route.ts";
+import type { ParamsInheritanceStrategy } from "@/router/route-title.ts";
 
 /**
  * Registro global del router — el "config único" que `@angular/router` arma con
@@ -32,6 +33,13 @@ class RouterRegistry {
   readonly routeProviders = new Map<string, Provider[]>();
   readonly pathToName = new Map<string, string>();
   /**
+   * `Router.config`: las `Routes` de `forRoot` y de cada `forChild` eager, en el orden en que se registran
+   * (Angular: el multi-provider `ROUTES` aplanado). Las de un `loadChildren` no entran, como en Angular.
+   */
+  readonly config: Routes = [];
+  /** `paramsInheritanceStrategy` de `forRoot` — con ella arma su `data` el snapshot de `canActivateChild`. */
+  paramsInheritanceStrategy: ParamsInheritanceStrategy = "emptyOnly";
+  /**
    * `Routes` de cada `RouterModule.forChild` por nombre de `angular.module` — un
    * `@NgModule` lazy (`loadChildren` → clase) las junta de sus `imports` y las
    * traduce rooteadas en la ruta padre (Angular: multi-provider `ROUTES`).
@@ -62,6 +70,10 @@ class RouterRegistry {
     for (const [key, value] of pathToName) this.pathToName.set(key, value);
   }
 
+  addConfig(routes: Routes): void {
+    this.config.push(...routes);
+  }
+
   registerChildRoutes(moduleName: string, routes: Routes): void {
     this.childRoutes.set(moduleName, routes);
   }
@@ -72,6 +84,8 @@ class RouterRegistry {
 
   reset(): void {
     this.childRoutes.clear();
+    this.config.length = 0;
+    this.paramsInheritanceStrategy = "emptyOnly";
     this.titles.clear();
     this.resolveKeys.clear();
     this.emptyPathStates.clear();
