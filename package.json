@@ -65,6 +65,11 @@
       "import": "./dist/animations/index.js",
       "default": "./dist/animations/index.js"
     },
+    "./animations/browser": {
+      "types": "./dist/animations/browser/index.d.ts",
+      "import": "./dist/animations/browser/index.js",
+      "default": "./dist/animations/browser/index.js"
+    },
     "./cdk/a11y": {
       "types": "./dist/cdk/a11y/index.d.ts",
       "import": "./dist/cdk/a11y/index.js",

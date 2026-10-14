@@ -1,8 +1,6 @@
-import angular from "angular";
-import { Injectable } from "@/core/di/injectable.ts";
-// Trae el augment de `@types/angular-animate` sobre el namespace `angular` (`$animateCss`).
-import "angular-animate";
 import { AnimationMetadataType } from "@/animations/animation-metadata.ts";
+import { type AnimationPlayer, NoopAnimationPlayer, ɵCallbackBag } from "@/animations/animation-player.ts";
+import type { AnimationDriver } from "@/animations/browser/animation-driver.ts";
 import type {
   AnimationAnimateMetadata,
   AnimationGroupMetadata,
@@ -13,114 +11,84 @@ import type {
   AnimationSequenceMetadata,
   AnimationStyleMetadata,
   ɵStyleData,
+  ɵStyleDataMap,
 } from "@/animations/dsl.ts";
-import { Inject } from "@/core/di/inject.ts";
+import { Injectable } from "@/core/di/injectable.ts";
 
 /**
  * API **imperativa** de animación — el par `AnimationBuilder` / `AnimationFactory`
- * / `AnimationPlayer` de `@angular/animations`, acá sobre `$animateCss` de
- * `ngAnimate`.
+ * / `AnimationPlayer` de `@angular/animations`.
  *
  * A diferencia de la DSL declarativa (`trigger`/`state` + `[@trigger]` en el
  * template), esto se usa desde código: `inject(AnimationBuilder).build(pasos)`
  * → `factory.create(elemento)` → `player.play()`. Sin máquina de estados; el
  * ciclo de vida (`play`/`finish`/`destroy`) lo maneja el consumidor.
  *
- * **Brechas** (ver `CONCEPTOS.md` "Animaciones"): `$animateCss` no expone control
- * de posición → `pause()` / `setPosition()` son no-op y `getPosition()` es
- * binario (0 ó 1). `keyframes()` sin `@keyframes` generado → se usa el último
- * frame como destino. `query()` / `stagger()` / `animateChild()` dentro de
- * `build()` se ignoran.
+ * Como en Angular, el builder solo **interpreta** la metadata (la aplana a
+ * segmentos de keyframes + tiempos); cada segmento lo **ejecuta** el
+ * `AnimationDriver` provisto por DI (`ngjs-core/animations/browser`).
+ *
+ * **Brechas**: `query()` / `stagger()` / `animateChild()` y `group`/`sequence`
+ * anidados dentro de `build()` se ignoran. Pausa, posición y keyframes
+ * intermedios dependen del driver (el de `$animateCss` no los da).
  */
-
-/** `$animateCss` de `ngAnimate` — tipos vía `@types/angular-animate` (augment de `"angular"`). */
-type IAnimateCssService = angular.animate.IAnimateCssService;
-type IAnimateCssRunner = angular.animate.IAnimateCssRunner;
-
-// --- Contrato de player -------------------------------------------------
-
-export interface AnimationPlayer {
-  play(): void;
-  pause(): void;
-  finish(): void;
-  reset(): void;
-  restart(): void;
-  destroy(): void;
-  init(): void;
-  hasStarted(): boolean;
-  onStart(fn: () => void): void;
-  onDone(fn: () => void): void;
-  onDestroy(fn: () => void): void;
-  setPosition(position: number): void;
-  getPosition(): number;
-  readonly totalTime: number;
-}
 
 export abstract class AnimationFactory {
   abstract create(element: unknown, options?: AnimationOptions): AnimationPlayer;
 }
 
-/**
- * Token DI (`$name`). El modo runtime lo bindea a `BrowserAnimationBuilder`
- * (con `ngAnimate`) o a un builder no-op (`NoopAnimationsModule`).
- */
+/** Token DI (`$name`). Los módulos de animación lo bindean a `BrowserAnimationBuilder`. */
 @Injectable()
 export abstract class AnimationBuilder {
   abstract build(animation: AnimationMetadata | AnimationMetadata[]): AnimationFactory;
 }
 
-// --- Aplanado de la metadata a segmentos de `$animateCss` -------------
+// --- Aplanado de la metadata a segmentos del driver ---------------------
 //
-// Un "segmento" = una llamada a `$animateCss(el, { from, to, duration, delay, easing })`.
-// Estos dos helpers los reusa también la directiva `[@trigger]` que genera el CLI.
+// Un "segmento" = una llamada a `driver.animate(el, keyframes, duration, delay, easing)`.
 
 export interface ɵAnimationSegment {
-  from: ɵStyleData | null;
-  to: ɵStyleData | null;
-  /** segundos (`$animateCss`: `1` = 1000ms). */
+  /** Estilos por `offset` (0→1). Un solo frame en offset 1 = "desde donde esté el elemento". */
+  keyframes: Array<ɵStyleDataMap>;
+  /** ms. */
   duration: number;
-  /** segundos. */
+  /** ms. */
   delay: number;
   easing: string | null;
 }
 
-/** `"300ms"` · `"0.3s ease-in"` · `"300ms 100ms ease-out"` · `300` (= ms) → segundos. */
+/** `"300ms"` · `"0.3s ease-in"` · `"300ms 100ms ease-out"` · `300` (= ms) → ms. */
 export function ɵparseAnimationTimings(timings: string | number): {
   duration: number;
   delay: number;
   easing: string | null;
 } {
-  if (typeof timings === "number") return { duration: timings / 1000, delay: 0, easing: null };
+  if (typeof timings === "number") return { duration: timings, delay: 0, easing: null };
 
   const TIME = /^(-?[\d.]+)(ms|s)?/;
-  const toSeconds = (value: string, unit?: string): number => {
+  const toMs = (value: string, unit?: string): number => {
     const n = Number.parseFloat(value);
-    return unit === "s" ? n : n / 1000; // bare number en un timing string = ms
+    return unit === "s" ? n * 1000 : n; // bare number en un timing string = ms
   };
 
   let rest = timings.trim();
   const durationMatch = rest.match(TIME);
   if (!durationMatch) return { duration: 0, delay: 0, easing: null };
-  const duration = toSeconds(durationMatch[1], durationMatch[2]);
+  const duration = toMs(durationMatch[1], durationMatch[2]);
   rest = rest.slice(durationMatch[0].length).trim();
 
   let delay = 0;
   const delayMatch = rest.match(TIME);
   if (delayMatch) {
-    delay = toSeconds(delayMatch[1], delayMatch[2]);
+    delay = toMs(delayMatch[1], delayMatch[2]);
     rest = rest.slice(delayMatch[0].length).trim();
   }
 
   return { duration, delay, easing: rest || null };
 }
 
-function styleTokensToMap(node: AnimationStyleMetadata | AnimationKeyframesSequenceMetadata | null): ɵStyleData | null {
+function styleTokensToMap(node: AnimationStyleMetadata | null): ɵStyleData | null {
   if (!node) return null;
-  if (node.type === AnimationMetadataType.Keyframes) {
-    // Brecha: sin `@keyframes` generado, el destino es el último frame.
-    const steps = node.steps;
-    return steps.length ? styleTokensToMap(steps[steps.length - 1]) : null;
-  }
   const styles = node.styles;
   if (styles === "*") return null;
   if (Array.isArray(styles)) {
@@ -131,8 +99,39 @@ function styleTokensToMap(node: AnimationStyleMetadata | AnimationKeyframesSeque
   return styles;
 }
 
+function toKeyframe(styles: ɵStyleData, offset: number): ɵStyleDataMap {
+  const keyframe: ɵStyleDataMap = new Map(Object.entries(styles));
+  keyframe.set("offset", offset);
+  return keyframe;
+}
+
 /**
- * Camina los pasos de `build()` y produce los segmentos de `$animateCss`. Un
+ * Los keyframes de un `animate()`: `from` (el `style()` acumulado antes) en
+ * offset 0 y el destino en offset 1; con `keyframes([...])`, un frame por paso —
+ * con su `offset` o repartidos parejo si no lo traen.
+ */
+function toKeyframes(
+  from: ɵStyleData | null,
+  target: AnimationStyleMetadata | AnimationKeyframesSequenceMetadata | null,
+): Array<ɵStyleDataMap> {
+  if (target?.type === AnimationMetadataType.Keyframes) {
+    const last = target.steps.length - 1;
+    return target.steps.map((step, index) => {
+      const styles = styleTokensToMap(step) ?? {};
+      const offset = step.offset ?? (styles.offset != null ? Number(styles.offset) : last ? index / last : 1);
+      return toKeyframe(index === 0 && from ? { ...from, ...styles } : styles, offset);
+    });
+  }
+
+  const frames: Array<ɵStyleDataMap> = [];
+  if (from) frames.push(toKeyframe(from, 0));
+  const to = styleTokensToMap(target);
+  if (to) frames.push(toKeyframe(to, 1));
+  return frames;
+}
+
+/**
+ * Camina los pasos de `build()` y produce los segmentos del driver. Un
  * `sequence([...])` corre en orden; un `group([...])` en paralelo; un
  * `style()` suelto acumula el `from` del próximo `animate()`.
  */
@@ -168,7 +167,7 @@ export function ɵflattenAnimationToSegments(steps: AnimationMetadata | Animatio
     if (node.type === AnimationMetadataType.Animate) {
       const animate = node as AnimationAnimateMetadata;
       const { duration, delay, easing } = ɵparseAnimationTimings(animate.timings);
-      segments.push({ from: pendingFrom, to: styleTokensToMap(animate.styles), duration, delay, easing });
+      segments.push({ keyframes: toKeyframes(pendingFrom, animate.styles), duration, delay, easing });
       pendingFrom = null;
     }
     // group/sequence anidados, query, stagger, animateChild, animateRef → brecha (se ignoran).
@@ -176,109 +175,50 @@ export function ɵflattenAnimationToSegments(steps: AnimationMetadata | Animatio
 
   // `[style({...})]` sin `animate` → aplicar el estilo de una (segmento instantáneo).
   if (pendingFrom && segments.length === 0) {
-    segments.push({ from: null, to: pendingFrom, duration: 0, delay: 0, easing: null });
+    segments.push({ keyframes: [toKeyframe(pendingFrom, 1)], duration: 0, delay: 0, easing: null });
   }
 
   return { segments, parallel };
 }
 
-// --- Player no-op (fallback y `NoopAnimationsModule`) -----------------
-
-class CallbackBag {
-  private readonly fns: Array<() => void> = [];
-  add(fn: () => void): void {
-    this.fns.push(fn);
-  }
-  flush(): void {
-    const pending = this.fns.splice(0);
-    for (const fn of pending) fn();
-  }
-}
+// --- Player / factory / builder sobre el `AnimationDriver` --------------
 
 /**
- * `AnimationPlayer` que no anima: aplica `onStart`, agenda `onDone` en una
- * microtask y termina. Lo devuelve `NoopAnimationsModule` y también el builder
- * real cuando la metadata no produce ningún segmento.
+ * Orquesta los segmentos: un player del driver por segmento, en cadena
+ * (`sequence`) o todos juntos (`group`). Pausa y posición se delegan en esos
+ * players — funcionan en la medida en que el driver las soporte.
  */
-export class NoopAnimationPlayer implements AnimationPlayer {
-  private started = false;
-  private finished = false;
-  private readonly startBag = new CallbackBag();
-  private readonly doneBag = new CallbackBag();
-  private readonly destroyBag = new CallbackBag();
-
-  constructor(public readonly totalTime = 0) {}
-
-  init(): void {}
-  hasStarted(): boolean {
-    return this.started;
-  }
-  onStart(fn: () => void): void {
-    this.startBag.add(fn);
-  }
-  onDone(fn: () => void): void {
-    this.doneBag.add(fn);
-  }
-  onDestroy(fn: () => void): void {
-    this.destroyBag.add(fn);
-  }
-
-  play(): void {
-    if (this.started) return;
-    this.started = true;
-    this.startBag.flush();
-    queueMicrotask(() => this.finish());
-  }
-
-  finish(): void {
-    if (this.finished) return;
-    this.finished = true;
-    this.doneBag.flush();
-  }
-
-  pause(): void {}
-  setPosition(): void {}
-  getPosition(): number {
-    return this.finished ? 1 : 0;
-  }
-  reset(): void {
-    this.started = false;
-    this.finished = false;
-  }
-  restart(): void {
-    this.reset();
-    this.play();
-  }
-  destroy(): void {
-    this.reset();
-    this.destroyBag.flush();
-  }
-}
-
-// --- Player / factory / builder sobre `$animateCss` ------------------
-
 class BrowserAnimationPlayer implements AnimationPlayer {
   readonly totalTime: number;
 
   private started = false;
   private finished = false;
-  private readonly runners: IAnimateCssRunner[] = [];
-  private readonly startBag = new CallbackBag();
-  private readonly doneBag = new CallbackBag();
-  private readonly destroyBag = new CallbackBag();
+  private paused = false;
+  /** Índice de segmento → su player, a medida que el driver los crea. */
+  private readonly players = new Map<number, AnimationPlayer>();
+  private readonly active = new Set<AnimationPlayer>();
+  /** Ventana de cada segmento dentro de `totalTime` (ms). */
+  private readonly starts: number[] = [];
+  private readonly spans: number[] = [];
+  private readonly startBag = new ɵCallbackBag();
+  private readonly doneBag = new ɵCallbackBag();
+  private readonly destroyBag = new ɵCallbackBag();
 
   constructor(
-    private readonly $animateCss: IAnimateCssService,
+    private readonly driver: AnimationDriver,
     private readonly element: Element,
     private readonly segments: ɵAnimationSegment[],
     private readonly parallel: boolean,
     private readonly initialDelay: number,
   ) {
-    const body = segments.reduce((acc, seg) => {
-      const ms = (seg.delay + seg.duration) * 1000;
-      return parallel ? Math.max(acc, ms) : acc + ms;
-    }, 0);
-    this.totalTime = initialDelay * 1000 + body;
+    let total = 0;
+    segments.forEach((seg, index) => {
+      const span = this.delayOf(index) + seg.duration;
+      this.starts.push(parallel ? 0 : total);
+      this.spans.push(span);
+      total = parallel ? Math.max(total, span) : total + span;
+    });
+    this.totalTime = total;
   }
 
   init(): void {}
@@ -296,62 +236,82 @@ class BrowserAnimationPlayer implements AnimationPlayer {
   }
 
   play(): void {
-    if (this.started) return;
+    if (this.started) {
+      if (this.paused) {
+        this.paused = false;
+        for (const player of this.active) player.play();
+      }
+      return;
+    }
     this.started = true;
     this.startBag.flush();
 
-    if (this.segments.length === 0) {
-      queueMicrotask(() => this.complete());
-      return;
-    }
-
-    const $el = angular.element(this.element as HTMLElement);
-    const startSegment = (seg: ɵAnimationSegment): Promise<unknown> => {
-      const runner = this.$animateCss($el, {
-        from: seg.from ?? undefined,
-        to: seg.to ?? undefined,
-        duration: seg.duration || undefined,
-        delay: seg.delay || this.consumeInitialDelay() || undefined,
-        easing: seg.easing ?? undefined,
+    const startSegment = (seg: ɵAnimationSegment, index: number): Promise<void> =>
+      new Promise((resolve) => {
+        const player = this.driver.animate(
+          this.element,
+          seg.keyframes,
+          seg.duration,
+          this.delayOf(index),
+          seg.easing,
+          [],
+        );
+        this.players.set(index, player);
+        this.active.add(player);
+        player.onDone(() => {
+          this.active.delete(player);
+          resolve();
+        });
+        player.play();
       });
-      this.runners.push(runner);
-      return Promise.resolve(runner.start());
-    };
     const settle = () => this.complete();
 
     if (this.parallel) {
       Promise.all(this.segments.map(startSegment)).then(settle, settle);
     } else {
       this.segments
-        .reduce((chain, seg) => chain.then(() => startSegment(seg)), Promise.resolve<unknown>(undefined))
+        .reduce((chain, seg, index) => chain.then(() => startSegment(seg, index)), Promise.resolve())
         .then(settle, settle);
     }
   }
 
   finish(): void {
-    for (const runner of this.runners) {
-      try {
-        runner.end();
-      } catch {
-        // `end()` sobre un runner ya terminado tira — no importa.
-      }
-    }
+    for (const player of [...this.players.values()]) player.finish();
     this.complete();
   }
 
   pause(): void {
-    // Brecha: `$animateCss` no da pausa/reanudación.
+    if (!this.started || this.finished) return;
+    this.paused = true;
+    for (const player of this.active) player.pause();
   }
-  setPosition(): void {}
+
+  setPosition(position: number): void {
+    const time = position * this.totalTime;
+    for (const [index, player] of this.players) {
+      const span = this.spans[index];
+      player.setPosition(span ? Math.min(1, Math.max(0, (time - this.starts[index]) / span)) : 1);
+    }
+  }
+
   getPosition(): number {
-    return this.finished ? 1 : 0;
+    if (this.finished) return 1;
+    if (!this.totalTime || this.players.size === 0) return 0;
+    // `sequence`: el segmento en curso; `group`: el más largo (como `AnimationGroupPlayer`).
+    let current = -1;
+    for (const index of this.players.keys()) {
+      if (current < 0 || (this.parallel ? this.spans[index] > this.spans[current] : index > current)) current = index;
+    }
+    const player = this.players.get(current) as AnimationPlayer;
+    return (this.starts[current] + player.getPosition() * this.spans[current]) / this.totalTime;
   }
 
   reset(): void {
     this.started = false;
     this.finished = false;
-    this.runners.length = 0;
-    this.delayConsumed = false;
+    this.paused = false;
+    this.players.clear();
+    this.active.clear();
   }
   restart(): void {
     this.reset();
@@ -359,6 +319,7 @@ class BrowserAnimationPlayer implements AnimationPlayer {
   }
   destroy(): void {
     this.finish();
+    for (const player of [...this.players.values()]) player.destroy();
     this.reset();
     this.destroyBag.flush();
   }
@@ -369,18 +330,15 @@ class BrowserAnimationPlayer implements AnimationPlayer {
     this.doneBag.flush();
   }
 
-  private delayConsumed = false;
-  /** El `delay` de `create(el, { delay })` se aplica solo al primer segmento. */
-  private consumeInitialDelay(): number {
-    if (this.delayConsumed || !this.initialDelay) return 0;
-    this.delayConsumed = true;
-    return this.initialDelay;
+  /** El `delay` de `create(el, { delay })` corre el arranque: del primer segmento en `sequence`, de todos en `group`. */
+  private delayOf(index: number): number {
+    return this.segments[index].delay + (this.parallel || index === 0 ? this.initialDelay : 0);
   }
 }
 
 class BrowserAnimationFactory extends AnimationFactory {
   constructor(
-    private readonly $animateCss: IAnimateCssService,
+    private readonly driver: AnimationDriver,
     private readonly segments: ɵAnimationSegment[],
     private readonly parallel: boolean,
   ) {
@@ -390,38 +348,24 @@ class BrowserAnimationFactory extends AnimationFactory {
   create(element: unknown, options?: AnimationOptions): AnimationPlayer {
     if (this.segments.length === 0) return new NoopAnimationPlayer();
     const rawDelay = options?.delay ?? 0;
-    const delay = typeof rawDelay === "number" ? rawDelay / 1000 : ɵparseAnimationTimings(rawDelay).duration;
-    return new BrowserAnimationPlayer(this.$animateCss, element as Element, this.segments, this.parallel, delay);
+    const delay = typeof rawDelay === "number" ? rawDelay : ɵparseAnimationTimings(rawDelay).duration;
+    return new BrowserAnimationPlayer(this.driver, element as Element, this.segments, this.parallel, delay);
   }
 }
 
 /**
- * `AnimationBuilder` sobre `$animateCss` de `ngAnimate`. Lo provee el módulo de
- * runtime cuando `ngAnimate` está cargado (`BrowserAnimationsModule` /
- * `provideAnimations()`).
+ * El `AnimationBuilder` del core: aplana la metadata y delega cada segmento en
+ * el `AnimationDriver`. Lo proveen `BrowserAnimationsModule` y
+ * `NoopAnimationsModule` — lo que cambia entre ambos es el driver.
  */
 @Injectable()
 export class BrowserAnimationBuilder extends AnimationBuilder {
-  constructor(@Inject("$animateCss") private readonly $animateCss: IAnimateCssService) {
+  constructor(private readonly driver: AnimationDriver) {
     super();
   }
 
   build(animation: AnimationMetadata | AnimationMetadata[]): AnimationFactory {
     const { segments, parallel } = ɵflattenAnimationToSegments(animation);
-    return new BrowserAnimationFactory(this.$animateCss, segments, parallel);
-  }
-}
-
-/** `AnimationBuilder` no-op — lo provee `NoopAnimationsModule`. */
-@Injectable()
-export class NoopAnimationBuilder extends AnimationBuilder {
-  build(): AnimationFactory {
-    return new NoopAnimationFactory();
-  }
-}
-
-class NoopAnimationFactory extends AnimationFactory {
-  create(): AnimationPlayer {
-    return new NoopAnimationPlayer();
+    return new BrowserAnimationFactory(this.driver, segments, parallel);
   }
 }

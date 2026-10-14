@@ -14,6 +14,7 @@
           "http/index": "src/http/index.ts",
           "forms/index": "src/forms/index.ts",
           "animations/index": "src/animations/index.ts",
+          "animations/browser/index": "src/animations/browser/index.ts",
           "platform-browser/index": "src/platform-browser/index.ts",
           "rxjs-interop/index": "src/rxjs-interop/index.ts",
           "cdk/a11y/index": "src/cdk/a11y/index.ts",

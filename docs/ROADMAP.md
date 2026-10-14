@@ -95,7 +95,7 @@ Fuera a propósito (no tendrían efecto sobre AngularJS): `encapsulation` (solo 
 - [x] router sobre UI-Router (`RouterModule.forRoot/forChild`, guards, resolvers, títulos, `loadComponent`,
   `loadChildren` con `@NgModule` compilado, preloading, scroll; `navigate`/`createUrlTree` con `relativeTo`, `..`,
   `queryParamsHandling` y `fragment` — sin parámetros de matriz, que UI-Router no separa del segmento)
-- [x] animaciones (`AnimationBuilder` sobre `$animateCss`)
+- [x] animaciones (`AnimationBuilder` sobre `AnimationDriver`; el driver por defecto usa `$animateCss`)
 - [x] i18n (`TranslateModule` sobre `angular-translate`, `TranslateService`, `registerLocaleData`)
 - [x] CDK: `a11y` (`A11yModule`, `LiveAnnouncer`, `FocusTrap`, `FocusMonitor`) y `layout` (`BreakpointObserver`)
 - [x] `platform-browser` (`Title`, `Meta`, `DomSanitizer`, renderer)

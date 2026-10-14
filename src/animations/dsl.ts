@@ -19,6 +19,8 @@ import { AnimationMetadataType } from "@/animations/animation-metadata.ts";
 
 /** Valores CSS de un `style({...})`. `"*"` = "el valor computado / auto". */
 export type ɵStyleData = { [key: string]: string | number };
+/** Un keyframe tal como lo recibe `AnimationDriver.animate()`: estilos + `offset`. */
+export type ɵStyleDataMap = Map<string, string | number>;
 export type AnimationStyleTokens = "*" | ɵStyleData | Array<"*" | ɵStyleData>;
 
 /** `"300ms"`, `"0.3s ease-in"`, `"300ms 100ms ease-out"`, o un número (= ms). */

@@ -247,6 +247,48 @@ export class Widget {
       expect(widget.captured).toBeNull();
     });
 
+    it("un ng-ref adentro de un ng-if: undefined en ngAfterViewInit, aparece y sale con el elemento, y al recrearse da el nodo nuevo; el setter recibe solo los cambios", async () => {
+      await boot(
+        `@Component({ selector: "widget", template: "<p ng-if='$ctrl.shown' ng-ref='thing'></p><i ng-if='$ctrl.extra' ng-ref='other'></i>" })
+export class Widget implements AfterViewInit {
+  shown = false;
+  extra = false;
+  seenAtInit: unknown = "sin correr";
+  received: (ElementRef | undefined)[] = [];
+  @ViewChild("thing", { read: ElementRef }) field?: ElementRef;
+  @ViewChild("thing", { read: ElementRef }) set viaSetter(ref: ElementRef | undefined) { this.received.push(ref); }
+  ngAfterViewInit(): void { this.seenAtInit = this.field; }
+}`,
+        "Widget",
+        "<widget></widget>",
+      );
+      type Ref = { nativeElement: Element } | undefined;
+      const widget = ctrl<{ shown: boolean; extra: boolean; seenAtInit: unknown; field: Ref; received: Ref[] }>("widget", "widget");
+      const show = (shown: boolean) => {
+        widget.shown = shown;
+        app!.digest();
+        return app!.document.querySelector("widget p");
+      };
+      expect(widget.seenAtInit).toBeUndefined();
+      expect(widget.received).toEqual([undefined]);
+
+      const first = show(true);
+      expect(widget.field?.nativeElement).toBe(first);
+
+      // Otro candidato entra a la vista: la query de "thing" no cambió, el setter no se vuelve a llamar.
+      widget.extra = true;
+      app!.digest();
+      expect(widget.received.length).toBe(2);
+
+      expect(show(false)).toBeNull();
+      expect(widget.field).toBeUndefined();
+
+      const second = show(true);
+      expect(second).not.toBe(first);
+      expect(widget.field?.nativeElement).toBe(second);
+      expect(widget.received.map((ref) => ref?.nativeElement)).toEqual([undefined, first, undefined, second]);
+    });
+
     it("en el elemento de un ng-repeat asigna en el scope de cada iteración (con ng-ref-read de un exportAs)", async () => {
       await boot(
         `@Directive({ selector: "[rowDir]", exportAs: "row" })

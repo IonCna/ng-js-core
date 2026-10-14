@@ -23,6 +23,7 @@ export class ViewQueryRegistry {
   private readonly candidates: Candidate[] = [];
   private readonly contentCandidates: Candidate[] = [];
   private readonly contentRoots = new Set<Node>();
+  private readonly elementRefs = new WeakMap<Node, ElementRefImpl<Node>>();
   private resolvedOnce = false;
 
   /** Reprograma un `resolve()` cuando cambian los candidatos después del primero. */
@@ -147,7 +148,7 @@ export class ViewQueryRegistry {
   private read(query: Query, candidate: Candidate, siblings: Candidate[]): unknown {
     const read = query.read;
     if (!read) return candidate.value;
-    if (read === ElementRef) return candidate.node ? new ElementRefImpl(candidate.node) : undefined;
+    if (read === ElementRef) return candidate.node ? this.elementRefOf(candidate.node) : undefined;
     // Un `TemplateRef` como candidato, o (más abajo) el que guarda una directiva sobre el `<ng-template>`.
     if (read === TemplateRef && candidate.value instanceof TemplateRef) return candidate.value;
     if (read === ViewContainerRef) {
@@ -168,6 +169,16 @@ export class ViewQueryRegistry {
           (sibling) => sibling !== candidate && sibling.node === candidate.node && sibling.value instanceof read,
         )?.value
       : undefined;
+  }
+
+  /** El mismo `ElementRef` por nodo en cada `resolve()`: quien compara el resultado no ve un cambio que no hubo. */
+  private elementRefOf(node: Node): ElementRefImpl<Node> {
+    let elementRef = this.elementRefs.get(node);
+    if (!elementRef) {
+      elementRef = new ElementRefImpl(node);
+      this.elementRefs.set(node, elementRef);
+    }
+    return elementRef;
   }
 
   /** Una propiedad de `value` que es instancia de `token` (ej. el `TemplateRef` que una directiva guardó). */

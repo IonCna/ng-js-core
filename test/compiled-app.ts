@@ -19,6 +19,7 @@ const ENTRIES: Record<string, string> = {
   "/common/http": "http/index.ts",
   "/forms": "forms/index.ts",
   "/animations": "animations/index.ts",
+  "/animations/browser": "animations/browser/index.ts",
   "/platform-browser": "platform-browser/index.ts",
   "/rxjs-interop": "rxjs-interop/index.ts",
   "/cdk/a11y": "cdk/a11y/index.ts",

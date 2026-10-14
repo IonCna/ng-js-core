@@ -1,6 +1,7 @@
 import angular from "angular";
 import "angular-animate";
-import { AnimationBuilder, BrowserAnimationBuilder, NoopAnimationBuilder } from "@/animations/animation-builder.ts";
+import { AnimationBuilder, BrowserAnimationBuilder } from "@/animations/animation-builder.ts";
+import { AnimationDriver, ɵAnimateCssDriver, ɵNoopAnimationDriver } from "@/animations/browser/animation-driver.ts";
 import type { Provider } from "@/core/di/provider.ts";
 import { NgModule } from "@/core/metadata/ng-module.ts";
 
@@ -8,7 +9,11 @@ const NgAnimateModule = angular.module("ngAnimate");
 
 @NgModule({
   imports: [NgAnimateModule],
-  providers: [{ provide: AnimationBuilder, useClass: BrowserAnimationBuilder }],
+  // Como en Angular: el builder es el mismo en ambos módulos; lo que cambia es el `AnimationDriver`.
+  providers: [
+    { provide: AnimationDriver, useClass: ɵAnimateCssDriver },
+    { provide: AnimationBuilder, useClass: BrowserAnimationBuilder },
+  ],
 })
 export class BrowserAnimationsModule {}
 
@@ -20,14 +25,23 @@ const NoopAnimateModule = angular.module("ng.js.animations.noop", ["ngAnimate"])
 
 @NgModule({
   imports: [NoopAnimateModule],
-  providers: [{ provide: AnimationBuilder, useClass: NoopAnimationBuilder }],
+  providers: [
+    { provide: AnimationDriver, useClass: ɵNoopAnimationDriver },
+    { provide: AnimationBuilder, useClass: BrowserAnimationBuilder },
+  ],
 })
 export class NoopAnimationsModule {}
 
 export function provideAnimations(): Provider[] {
-  return [{ provide: AnimationBuilder, useClass: BrowserAnimationBuilder }];
+  return [
+    { provide: AnimationDriver, useClass: ɵAnimateCssDriver },
+    { provide: AnimationBuilder, useClass: BrowserAnimationBuilder },
+  ];
 }
 
 export function provideNoopAnimations(): Provider[] {
-  return [{ provide: AnimationBuilder, useClass: NoopAnimationBuilder }];
+  return [
+    { provide: AnimationDriver, useClass: ɵNoopAnimationDriver },
+    { provide: AnimationBuilder, useClass: BrowserAnimationBuilder },
+  ];
 }

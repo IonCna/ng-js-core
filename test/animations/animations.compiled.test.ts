@@ -38,9 +38,10 @@ export class AppModule {}
     return [style({ opacity: 0 }), animate("120ms", style({ opacity: 1 }))];
   };
 
-  it("BrowserAnimationsModule trae ngAnimate y provee el AnimationBuilder real, que anima vía $animateCss", async () => {
+  it("BrowserAnimationsModule trae ngAnimate y provee el AnimationBuilder sobre el driver de $animateCss", async () => {
     await boot("BrowserAnimationsModule");
     expect(typeof app!.get("$animateCss")).toBe("function");
+    expect(app!.inject<object>("AnimationDriver").constructor.name).toBe("ɵAnimateCssDriver");
 
     const builder = app!.inject<Builder>("AnimationBuilder");
     expect(builder.constructor.name).toBe("BrowserAnimationBuilder");
@@ -58,11 +59,13 @@ export class AppModule {}
     expect(player.getPosition()).toBe(1);
   });
 
-  it("NoopAnimationsModule apaga $animate y provee el builder no-op; su player igual resuelve onDone", async () => {
+  it("NoopAnimationsModule apaga $animate y provee el driver no-op; el player igual resuelve onDone", async () => {
     await boot("NoopAnimationsModule");
     expect(app!.get<{ enabled(): boolean }>("$animate").enabled()).toBe(false);
-    const player = app!.inject<Builder>("AnimationBuilder").build(steps(app!)).create(app!.document.createElement("div"));
-    expect(player.constructor.name).toBe("NoopAnimationPlayer");
+    expect(app!.inject<object>("AnimationDriver").constructor.name).toBe("ɵNoopAnimationDriver");
+    const builder = app!.inject<Builder>("AnimationBuilder");
+    expect(builder.constructor.name).toBe("BrowserAnimationBuilder");
+    const player = builder.build(steps(app!)).create(app!.document.createElement("div"));
 
     let finished = false;
     player.onDone(() => {

@@ -35,10 +35,16 @@ export function decorateControllerViewChildQueries(
       if (node && CompiledType.isComponent(type)) registry.componentNode = node;
 
       const setterQueries = QueryInstaller.install(instance, CompiledType.def(type), registry);
+      // Un `@ViewChild`/`@ContentChild` sobre setter lo recibe solo cuando el resultado cambió (como en Angular: la
+      // query no está "dirty" si entró o salió otro candidato); un `QueryList` se reasigna en cada resolve.
+      const assigned = new Map<Query, unknown>();
       const resolve = () => {
         registry.resolve();
-        for (const { propertyName, query } of setterQueries)
+        for (const { propertyName, query } of setterQueries) {
+          if (query.def.first && assigned.has(query) && assigned.get(query) === query.value) continue;
+          assigned.set(query, query.value);
           (instance as Record<string, unknown>)[propertyName] = query.value;
+        }
       };
 
       if ($scope) {
@@ -160,16 +166,25 @@ class CandidatePublisher {
     }
   }
 
-  /** Un `ng-ref="nombre"` (el `#nombre` de Angular) como candidato con nombre, de vista y de contenido. */
-  static publishNamed(scope: angular.IScope, locator: string, value: unknown): void {
+  /**
+   * Un `ng-ref="nombre"` (el `#nombre` de Angular) como candidato con nombre, de vista y de contenido. Devuelve los
+   * registries donde quedó publicado, para sacarlo al destruirse su scope.
+   */
+  static publishNamed(scope: angular.IScope, locator: string, value: unknown): ViewQueryRegistry[] {
     const nativeElement =
       value && typeof value === "object" ? (value as { nativeElement?: unknown }).nativeElement : undefined;
     const node = nativeElement instanceof Node ? nativeElement : undefined;
+    const published: ViewQueryRegistry[] = [];
 
     for (const registry of [...QueryContext.scopeRegistries(scope), ...QueryContext.ancestorRegistries(scope)]) {
       registry.registerNamedCandidate(locator, value, node);
+      published.push(registry);
     }
-    for (const owner of QueryContext.contentOwners(scope)) owner.registerNamedContentCandidate(locator, value, node);
+    for (const owner of QueryContext.contentOwners(scope)) {
+      owner.registerNamedContentCandidate(locator, value, node);
+      published.push(owner);
+    }
+    return published;
   }
 }
 
@@ -211,9 +226,11 @@ export function decorateNgRefDirective(
             const templateRef = (controllers as NgRefRequires | undefined)?.ngTemplate;
             const value = NgRefValue.resolve(linkedAttrs.ngRefRead, linkedElement, elementRef, templateRef, $injector);
 
-            CandidatePublisher.publishNamed(scope, linkedAttrs.ngRef, value);
+            const published = CandidatePublisher.publishNamed(scope, linkedAttrs.ngRef, value);
             scope.$on("$destroy", () => {
               if (getter(scope) === value) setter(scope, null);
+              // El elemento sale de la vista (`ng-if`/`ng-repeat`): deja de ser candidato y las queries se re-resuelven.
+              for (const registry of published) registry.removeCandidate(value);
             });
             setter(scope, value);
           },

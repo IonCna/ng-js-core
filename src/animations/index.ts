@@ -1,7 +1,8 @@
 /**
  * `ngjs-core/animations` — superficie de `@angular/animations` (la DSL:
- * `trigger`/`state`/`style`/`animate`/…) + `AnimationBuilder`/`AnimationPlayer`
- * sobre `$animateCss` de `ngAnimate`.
+ * `trigger`/`state`/`style`/`animate`/…) + `AnimationBuilder`/`AnimationPlayer`.
+ * Quién ejecuta la animación lo decide el `AnimationDriver` de
+ * `ngjs-core/animations/browser` (por defecto, `$animateCss` de `ngAnimate`).
  *
  * Solo superficie de clase: la metadata que va en `@Component({ animations: [...] })`
  * y el input de `AnimationBuilder`. La sintaxis de template (`[@trigger]`,
@@ -9,17 +10,17 @@
  * `docs/ORDEN-DE-CONSTRUCCION.md`.
  */
 
-export type { AnimationPlayer, ɵAnimationSegment } from "@/animations/animation-builder.ts";
+export type { ɵAnimationSegment } from "@/animations/animation-builder.ts";
 export {
   AnimationBuilder,
   AnimationFactory,
   BrowserAnimationBuilder,
-  NoopAnimationBuilder,
-  NoopAnimationPlayer,
   ɵflattenAnimationToSegments,
   ɵparseAnimationTimings,
 } from "@/animations/animation-builder.ts";
 export { AnimationMetadataType } from "@/animations/animation-metadata.ts";
+export type { AnimationPlayer } from "@/animations/animation-player.ts";
+export { NoopAnimationPlayer } from "@/animations/animation-player.ts";
 export {
   BrowserAnimationsModule,
   NoopAnimationsModule,
@@ -48,6 +49,7 @@ export type {
   AnimationTriggerMetadata,
   TransitionExpr,
   ɵStyleData,
+  ɵStyleDataMap,
 } from "@/animations/dsl.ts";
 export {
   animate,
