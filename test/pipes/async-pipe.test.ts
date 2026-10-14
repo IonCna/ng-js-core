@@ -1,7 +1,7 @@
 import angular from "angular";
 import { Subject } from "rxjs";
 import { describe, expect, it } from "vitest";
-import { AsyncPipeImpl } from "@/pipes/async-pipe.ts";
+import { AsyncFilterPipe, AsyncPipeImpl } from "@/pipes/async-pipe.ts";
 
 function freshScope(): angular.IScope {
   const injector = angular.injector(["ng"]);
@@ -74,5 +74,50 @@ describe("etapa 11 — AsyncPipe (contra un $scope real)", () => {
 
     expect(pipe.transform(subject)).toBeNull(); // destruido: transform() ya no hace nada
     expect(subject.observed).toBe(false); // y de verdad se desuscribió del Subject
+  });
+});
+
+describe("etapa 11 — `| async` como filtro (AsyncFilterPipe, contra $compile real)", () => {
+  function compile(template: string, context: Record<string, unknown>) {
+    const filter = new AsyncFilterPipe();
+    angular.module("asyncFilterTest", []).filter("async", () => {
+      const fn = (input: unknown, scope: unknown) => filter.transform(input, scope);
+      return Object.assign(fn, { $stateful: true });
+    });
+    const injector = angular.injector(["ng", "asyncFilterTest"]);
+    const scope = Object.assign(injector.get<angular.IRootScopeService>("$rootScope").$new(), context);
+    const element = injector.get<angular.ICompileService>("$compile")(template)(scope);
+    scope.$digest();
+    return { element, scope, filter };
+  }
+
+  it("pinta cada emisión y re-renderiza un ng-repeat", () => {
+    const name$ = new Subject<string>();
+    const items$ = new Subject<number[]>();
+    const { element, scope } = compile(
+      '<div><p>{{ name$ | async:this }}</p><li ng-repeat="n in items$ | async:this track by n">{{ n }}</li></div>',
+      { name$, items$ },
+    );
+    name$.next("Ana");
+    items$.next([1, 2]);
+    scope.$digest();
+    expect(element.find("p").text()).toBe("Ana");
+    expect(element.find("li").length).toBe(2);
+  });
+
+  it("se desuscribe cuando ng-if destruye su scope, y se vuelve a suscribir al mostrarse (como la vista de Angular)", () => {
+    const name$ = new Subject<string>();
+    const { scope } = compile('<div><p ng-if="show">{{ name$ | async:this }}</p></div>', { name$, show: true });
+    expect(name$.observed).toBe(true);
+    scope["show"] = false;
+    scope.$digest();
+    expect(name$.observed).toBe(false);
+    scope["show"] = true;
+    scope.$digest();
+    expect(name$.observed).toBe(true);
+  });
+
+  it("sin scope (template que no pasó por el compilador de templates) es error claro", () => {
+    expect(() => new AsyncFilterPipe().transform(new Subject())).toThrowError(/falta el scope/);
   });
 });

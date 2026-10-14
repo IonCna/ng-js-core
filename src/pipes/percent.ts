@@ -1,29 +1,23 @@
+import { Inject } from "@/core/di/inject.ts";
+import { LOCALE_ID } from "@/core/locale-id.ts";
 import { Pipe } from "@/core/metadata/pipe.ts";
+import { isEmptyNumber, parseDigitsInfo, strToNumber } from "@/pipes/number-format.ts";
 import type { PipeTransform } from "@/pipes/pipe-transform.ts";
 
-const DIGITS_INFO = /^(\d+)\.(\d+)-(\d+)$/;
-
-/** `"{minIntegerDigits}.{minFractionDigits}-{maxFractionDigits}"`, igual formato que `DecimalPipe`/`PercentPipe` reales — default `"1.0-0"`. */
-function parseDigitsInfo(digitsInfo: string | undefined): {
-  minimumFractionDigits: number;
-  maximumFractionDigits: number;
-} {
-  const match = DIGITS_INFO.exec(digitsInfo ?? "1.0-0");
-  if (!match) return { minimumFractionDigits: 0, maximumFractionDigits: 0 };
-
-  const [, , minFraction, maxFraction] = match;
-  return { minimumFractionDigits: Number(minFraction), maximumFractionDigits: Number(maxFraction) };
-}
-
-/** Sin filtro nativo en AngularJS (ver CONCEPTOS "Pipes") — `value * 100` + `"%"`, formateado con `Intl.NumberFormat`. */
+/** `PercentPipe` de Angular: `value * 100` + `"%"` con el formato del `LOCALE_ID`; `digitsInfo` por defecto `"1.0-0"`. */
 @Pipe({ name: "percent" })
-export class PercentPipe implements PipeTransform<number | string | null | undefined, string> {
-  transform(value?: number | string | null, digitsInfo?: string): string {
-    if (value == null || value === "") return "";
+export class PercentPipe implements PipeTransform<number | string | null | undefined, string | null> {
+  constructor(@Inject(LOCALE_ID) private readonly locale: string) {}
 
-    const num = typeof value === "number" ? value : Number(value);
-    if (Number.isNaN(num)) return "";
+  transform(value: number | string | null | undefined, digitsInfo?: string, locale?: string): string | null {
+    if (isEmptyNumber(value)) return null;
 
-    return new Intl.NumberFormat(undefined, { style: "percent", ...parseDigitsInfo(digitsInfo) }).format(num);
+    const num = strToNumber(value, "PercentPipe");
+    const digits = parseDigitsInfo(digitsInfo, {
+      minimumIntegerDigits: 1,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
+    return new Intl.NumberFormat(locale ?? this.locale, { style: "percent", ...digits }).format(num);
   }
 }

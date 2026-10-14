@@ -1,5 +1,6 @@
 import type angular from "angular";
 import { Injectable } from "@/core/di/injectable.ts";
+import { Pipe } from "@/core/metadata/pipe.ts";
 import type { PipeTransform } from "@/pipes/pipe-transform.ts";
 
 interface Unsubscribable {
@@ -94,5 +95,35 @@ export class AsyncPipeImpl extends AsyncPipe {
     this.destroyed = true;
     for (const entry of this.cache.values()) entry.teardown();
     this.cache.clear();
+  }
+}
+
+function isScope(value: unknown): value is angular.IScope {
+  return typeof value === "object" && value !== null && typeof (value as { $on?: unknown }).$on === "function";
+}
+
+/**
+ * `| async` en el template, como en Angular. Un filtro de AngularJS es uno solo para toda la app y no sabe en qué
+ * `$scope` se evalúa, así que `ng-js-template-compiler` escribe `x$ | async` como `x$ | async:this` (`this` en una
+ * expresión es el scope). Cada scope tiene su `AsyncPipeImpl`: se suscribe la primera vez, pinta cada emisión y se
+ * desuscribe cuando el scope se destruye (el componente, o el bloque de un `ng-if` / `ng-repeat`), como la vista de
+ * Angular. `pure: false` porque el observable es la misma referencia mientras su valor cambia.
+ */
+@Pipe({ name: "async", pure: false })
+export class AsyncFilterPipe implements PipeTransform<unknown, unknown> {
+  private readonly pipes = new WeakMap<angular.IScope, AsyncPipeImpl>();
+
+  transform(input: unknown, scope?: unknown): unknown {
+    if (!isScope(scope)) {
+      throw new Error(
+        "async: falta el scope; el template tiene que pasar por ng-js-template-compiler, que agrega `:this`.",
+      );
+    }
+    let pipe = this.pipes.get(scope);
+    if (!pipe) {
+      pipe = new AsyncPipeImpl(scope);
+      this.pipes.set(scope, pipe);
+    }
+    return pipe.transform(input);
   }
 }

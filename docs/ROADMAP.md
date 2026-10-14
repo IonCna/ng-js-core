@@ -92,6 +92,10 @@ Fuera a propósito (no tendrían efecto sobre AngularJS): `encapsulation` (solo 
   inyectables (`providedIn: "root"`), `nonNullable`/`defaultValue`, `FormRecord`/`fb.record`, `Untyped*`, `isForm*`,
   `addValidators`/`removeValidators`/`hasValidator`, `markAllAsTouched`
 - [x] async pipe (por instancia)
+- [x] `| async` en templates: filtro con un `AsyncPipeImpl` por scope; `ng-js-template-compiler` escribe `| async:this`
+- [x] `number` (`DecimalPipe`) y `currency` (`CurrencyPipe`) con la firma de Angular, reemplazan los filtros de AngularJS; `DEFAULT_CURRENCY_CODE`
+- [x] `slice`, `i18nPlural`, `i18nSelect`; `percent` con `LOCALE_ID`
+- [x] `TestBed` sin `initTestEnvironment()` trae `CommonModule` (como `BrowserDynamicTestingModule`)
 - [x] router sobre UI-Router (`RouterModule.forRoot/forChild`, guards, resolvers, títulos, `loadComponent`,
   `loadChildren` con `@NgModule` compilado, preloading, scroll; `navigate`/`createUrlTree` con `relativeTo`, `..`,
   `queryParamsHandling` y `fragment` — sin parámetros de matriz, que UI-Router no separa del segmento)

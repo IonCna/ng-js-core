@@ -1,5 +1,6 @@
 import angular from "angular";
 import type { InjectOptions } from "@/core/di/inject.ts";
+import { CommonModule } from "@/common/common.module.ts";
 import { runInInjectionContext } from "@/core/di/injection-context.ts";
 import { injectionTokenName } from "@/core/di/injector.ts";
 import type { Provider } from "@/core/di/provider.ts";
@@ -273,13 +274,22 @@ export class TestBedImpl {
     return this.$injector;
   }
 
+  /**
+   * Sin `initTestEnvironment()`, el entorno de Angular CLI (`BrowserDynamicTestingModule`): sus pipes (`async`,
+   * `number`, `currency`, …) están en todo componente de test sin importar `CommonModule`. Solo cuando `CommonModule`
+   * pasó por el compilador (los tests unitarios de `src/` construyen las clases a mano).
+   */
+  private static defaultEnvironment(): ModuleImport[] {
+    return (CommonModule as { ɵmod?: unknown }).ɵmod ? [CommonModule] : [];
+  }
+
   private instantiate(): angular.auto.IInjectorService {
     TestBedImpl.moduleCount += 1;
     const name = `ngjs.testing.${TestBedImpl.moduleCount}`;
     const module = angular.module(name, [
       RootProviders.module(name),
       NativeModule.name,
-      ...[...(this.environment ?? []), ...this.imports].map(TestingDeclarations.moduleName),
+      ...[...(this.environment ?? TestBedImpl.defaultEnvironment()), ...this.imports].map(TestingDeclarations.moduleName),
     ]);
     for (const type of this.declarations) TestingDeclarations.register(module, type);
 

@@ -84,4 +84,46 @@ export class PureCountPipe { transform(value: unknown[]): number { return value.
     expect(root.querySelector("h1")?.textContent).toBe("Hola Mundo");
     expect(app!.get<(name: string) => { $stateful?: boolean }>("$filter")("keyvalue").$stateful).toBe(true);
   });
+
+  it("number y currency de CommonModule reemplazan a los filtros de AngularJS: firma de Angular", async () => {
+    await boot(
+      "<p>{{ 95.46 | number: '1.0-0' }}</p><b>{{ 1234.5 | currency }}</b><i>{{ 10 | currency: 'USD': 'code' }}</i><s>{{ [1, 2, 3] | slice: 1 | json }}</s><u>{{ 2 | i18nPlural: { one: '# pedido', other: '# pedidos' } }}</u>",
+    );
+    const root = app!.document.querySelector("app-root")!;
+    expect(root.querySelector("p")?.textContent).toBe("95");
+    expect(root.querySelector("b")?.textContent).toBe("$1,234.50");
+    expect(root.querySelector("i")?.textContent).toBe("USD 10.00");
+    expect(root.querySelector("s")?.textContent?.replace(/\s/g, "")).toBe("[2,3]");
+    expect(root.querySelector("u")?.textContent).toBe("2 pedidos");
+  });
+
+  it("async:this (lo que escribe ng-js-template-compiler por `| async`) pinta cada emisión y es $stateful", async () => {
+    app = await CompiledApp.bootstrap(
+      {
+        "app.module.ts": `
+import { Component, NgModule } from "ngjs-core";
+import { CommonModule } from "ngjs-core/common";
+import { BehaviorSubject, of } from "rxjs";
+
+@Component({
+  selector: "app-root",
+  template: '<p>{{ $ctrl.name$ | async:this }}</p><li ng-repeat="n in $ctrl.items$ | async:this track by n">{{ n }}</li>',
+})
+export class AppComponent {
+  readonly name$ = new BehaviorSubject("Ana");
+  readonly items$ = of([1, 2]);
+}
+
+@NgModule({ imports: [CommonModule], declarations: [AppComponent], bootstrap: [AppComponent] })
+export class AppModule {}
+`,
+      },
+      "<app-root></app-root>",
+    );
+    app.digest();
+    const root = app.document.querySelector("app-root")!;
+    expect(root.querySelector("p")?.textContent).toBe("Ana");
+    expect(root.querySelectorAll("li").length).toBe(2);
+    expect(app.get<(name: string) => { $stateful?: boolean }>("$filter")("async").$stateful).toBe(true);
+  });
 });

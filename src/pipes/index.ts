@@ -1,5 +1,10 @@
-export { AsyncPipe, AsyncPipeImpl } from "./async-pipe.ts";
+export { AsyncFilterPipe, AsyncPipe, AsyncPipeImpl } from "./async-pipe.ts";
+export { CurrencyPipe } from "./currency.ts";
+export { DecimalPipe } from "./decimal.ts";
+export { I18nPluralPipe } from "./i18n-plural.ts";
+export { I18nSelectPipe } from "./i18n-select.ts";
 export { type KeyValue, KeyValuePipe } from "./key-value.ts";
 export { PercentPipe } from "./percent.ts";
 export type { PipeTransform } from "./pipe-transform.ts";
+export { SlicePipe } from "./slice.ts";
 export { TitleCasePipe } from "./title-case.ts";
