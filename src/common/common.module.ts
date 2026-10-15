@@ -10,6 +10,7 @@ import { BrowserViewportScroller, ViewportScroller } from "@/common/viewport-scr
 import { NgModule } from "@/core/metadata/ng-module.ts";
 import { AsyncFilterPipe } from "@/pipes/async-pipe.ts";
 import { CurrencyPipe } from "@/pipes/currency.ts";
+import { DatePipe } from "@/pipes/date.ts";
 import { DecimalPipe } from "@/pipes/decimal.ts";
 import { I18nPluralPipe } from "@/pipes/i18n-plural.ts";
 import { I18nSelectPipe } from "@/pipes/i18n-select.ts";
@@ -20,11 +21,12 @@ import { TitleCasePipe } from "@/pipes/title-case.ts";
 
 @NgModule({
   // `ng-content`/`ng-container`/`ng-template` son directivas nativas de `NativeModule` (las trae la plataforma).
-  // `number` y `currency` reemplazan a los filtros de AngularJS del mismo nombre: este módulo carga después de `ng`.
+  // `number`, `currency` y `date` reemplazan a los filtros de AngularJS del mismo nombre: este módulo carga después de `ng`.
   declarations: [
     NgTemplateOutlet,
     AsyncFilterPipe,
     CurrencyPipe,
+    DatePipe,
     DecimalPipe,
     I18nPluralPipe,
     I18nSelectPipe,

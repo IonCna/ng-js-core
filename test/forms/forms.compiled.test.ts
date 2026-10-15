@@ -316,6 +316,22 @@ export class FakeTakenDirective implements AsyncValidator {
       expect(input(element).disabled).toBe(true);
     });
 
+    it("disable()/enable() con emitEvent: false también llegan al input, como en Angular (registerOnDisabledChange)", async () => {
+      await boot("", "");
+      const { FormControl, FormGroup } = forms();
+      const form = new FormGroup({ term: new FormControl({ value: "", disabled: true }) });
+      const { element, scope } = app!.compile('<form form-group="form"><input form-control-name="term"></form>', { form });
+      expect(input(element).disabled).toBe(true);
+
+      form.controls.term.enable({ emitEvent: false });
+      scope.$digest();
+      expect(input(element).disabled).toBe(false);
+
+      form.controls.term.disable({ emitEvent: false });
+      scope.$digest();
+      expect(input(element).disabled).toBe(true);
+    });
+
     it("formArrayName resuelve un FormArray anidado y formControlName por índice", async () => {
       await boot("", "");
       const { FormArray, FormControl, FormGroup } = forms();

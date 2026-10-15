@@ -126,4 +126,14 @@ export class AppModule {}
     expect(root.querySelectorAll("li").length).toBe(2);
     expect(app.get<(name: string) => { $stateful?: boolean }>("$filter")("async").$stateful).toBe(true);
   });
+
+  it("date de CommonModule reemplaza al filtro de AngularJS y atiende las llamadas de ngb-js ($filter('date'))", async () => {
+    await boot("<p>{{ 0 | date: 'yyyy': 'UTC' }}</p><b>{{ '2015-06-15' | date: 'dd/MM/yyyy' }}</b>");
+    const root = app!.document.querySelector("app-root")!;
+    expect(root.querySelector("p")?.textContent).toBe("1970");
+    expect(root.querySelector("b")?.textContent).toBe("15/06/2015");
+    const dateFilter =
+      app!.get<(name: string) => (value: Date, format: string, timezone?: string) => string>("$filter")("date");
+    expect(dateFilter(new Date(Date.UTC(1970, 0, 1, 13)), "a", "UTC")).toBe("PM");
+  });
 });

@@ -3,6 +3,7 @@ import { Inject } from "@/core/di/inject.ts";
 import { Directive } from "@/core/metadata/directive.ts";
 import { Input } from "@/core/metadata/input.ts";
 import { findAncestorControl } from "@/forms/control-container.ts";
+import { FormControl } from "@/forms/form-control.ts";
 import type { ValidationErrors } from "@/forms/types.ts";
 
 interface NgModelController {
@@ -108,6 +109,13 @@ export class FormControlNameDirective {
     // `statusChanges` solo avisa cambios: el estado con el que llega el control se aplica acá.
     applyStatus();
     control.statusChanges.subscribe(applyStatus);
+    // `disable()`/`enable()` con `emitEvent: false` no pasan por `statusChanges`; Angular los lleva a la vista con
+    // `registerOnDisabledChange` (`setUpControl`), y aquí igual.
+    if (control instanceof FormControl) {
+      const onDisabledChange = (isDisabled: boolean) => this.$element.prop("disabled", isDisabled);
+      control.registerOnDisabledChange(onDisabledChange);
+      this.$scope.$on("$destroy", () => control._unregisterOnDisabledChange(onDisabledChange));
+    }
 
     // Va PRIMERO en la lista (`unshift`, no `push`): este `$postLink` corre después del `link` de cualquier otra
     // directiva del elemento, así que con `push` un listener ajeno (`ng-change`) corría antes y leía en

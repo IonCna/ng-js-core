@@ -77,6 +77,11 @@ export abstract class AbstractControl<TValue = any> {
   protected _pristine = true;
   protected _touched = false;
   protected _parent: AbstractControl | null = null;
+  /**
+   * @internal Quienes muestran el control (`formControlName`) y deben enterarse de `disable()`/`enable()`. Como en
+   * Angular, se avisa siempre, también con `emitEvent: false`: ese flag calla `valueChanges`/`statusChanges`, no la vista.
+   */
+  _onDisabledChange: Array<(isDisabled: boolean) => void> = [];
   protected _validator: ValidatorFn | null;
   protected _asyncValidator: AsyncValidatorFn | null;
   /** Los validadores tal como se pasaron (sin componer): los usan `addValidators`/`removeValidators`/`hasValidator`. */
@@ -273,6 +278,7 @@ export abstract class AbstractControl<TValue = any> {
     }
 
     if (this._parent && !opts.onlySelf) this._parent.updateValueAndValidity(opts);
+    this._onDisabledChange.forEach((changeFn) => changeFn(true));
   }
 
   enable(opts: ControlEventOptions = {}): void {
@@ -280,6 +286,7 @@ export abstract class AbstractControl<TValue = any> {
     this._forEachChild((control) => control.enable({ onlySelf: true, emitEvent: opts.emitEvent }));
     this.updateValueAndValidity({ onlySelf: true, emitEvent: opts.emitEvent });
     if (this._parent && !opts.onlySelf) this._parent.updateValueAndValidity(opts);
+    this._onDisabledChange.forEach((changeFn) => changeFn(false));
   }
 
   setErrors(errors: ValidationErrors | null, opts: { emitEvent?: boolean } = {}): void {

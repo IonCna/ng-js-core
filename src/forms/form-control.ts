@@ -48,6 +48,19 @@ export class FormControl<TValue = unknown> extends AbstractControl<TValue> {
     this.updateValueAndValidity({ onlySelf: true, emitEvent: false });
   }
 
+  /** Como `FormControl.registerOnDisabledChange` de Angular: `fn` corre en cada `disable()`/`enable()`. */
+  registerOnDisabledChange(fn: (isDisabled: boolean) => void): void {
+    this._onDisabledChange.push(fn);
+  }
+
+  /** @internal Como `_unregisterOnDisabledChange` de Angular. */
+  _unregisterOnDisabledChange(fn: (isDisabled: boolean) => void): boolean {
+    const index = this._onDisabledChange.indexOf(fn);
+    if (index === -1) return false;
+    this._onDisabledChange.splice(index, 1);
+    return true;
+  }
+
   setValue(value: TValue, opts: ControlEventOptions = {}): void {
     this._value = value;
     this.updateValueAndValidity(opts);

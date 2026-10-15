@@ -1,5 +1,6 @@
 export { AsyncFilterPipe, AsyncPipe, AsyncPipeImpl } from "./async-pipe.ts";
 export { CurrencyPipe } from "./currency.ts";
+export { DatePipe } from "./date.ts";
 export { DecimalPipe } from "./decimal.ts";
 export { I18nPluralPipe } from "./i18n-plural.ts";
 export { I18nSelectPipe } from "./i18n-select.ts";
