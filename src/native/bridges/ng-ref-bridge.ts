@@ -169,11 +169,10 @@ class CandidatePublisher {
   /**
    * Un `ng-ref="nombre"` (el `#nombre` de Angular) como candidato con nombre, de vista y de contenido. Devuelve los
    * registries donde quedó publicado, para sacarlo al destruirse su scope.
+   * `node` es el elemento que lleva el `ng-ref`, sea cual sea `value`: como en Angular, `read: ElementRef` sobre
+   * `#ref` en un componente da su elemento host aunque el valor de la referencia sea la instancia.
    */
-  static publishNamed(scope: angular.IScope, locator: string, value: unknown): ViewQueryRegistry[] {
-    const nativeElement =
-      value && typeof value === "object" ? (value as { nativeElement?: unknown }).nativeElement : undefined;
-    const node = nativeElement instanceof Node ? nativeElement : undefined;
+  static publishNamed(scope: angular.IScope, locator: string, value: unknown, node: Node): ViewQueryRegistry[] {
     const published: ViewQueryRegistry[] = [];
 
     for (const registry of [...QueryContext.scopeRegistries(scope), ...QueryContext.ancestorRegistries(scope)]) {
@@ -226,7 +225,7 @@ export function decorateNgRefDirective(
             const templateRef = (controllers as NgRefRequires | undefined)?.ngTemplate;
             const value = NgRefValue.resolve(linkedAttrs.ngRefRead, linkedElement, elementRef, templateRef, $injector);
 
-            const published = CandidatePublisher.publishNamed(scope, linkedAttrs.ngRef, value);
+            const published = CandidatePublisher.publishNamed(scope, linkedAttrs.ngRef, value, linkedNative!);
             scope.$on("$destroy", () => {
               if (getter(scope) === value) setter(scope, null);
               // El elemento sale de la vista (`ng-if`/`ng-repeat`): deja de ser candidato y las queries se re-resuelven.

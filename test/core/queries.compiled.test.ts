@@ -289,6 +289,33 @@ export class Widget implements AfterViewInit {
       expect(widget.received.map((ref) => ref?.nativeElement)).toEqual([undefined, first, undefined, second]);
     });
 
+    it("un ng-ref sobre un componente: sin read da la instancia; @ViewChild(\"nombre\", { read: ElementRef }) da su elemento host, también adentro de un ng-if", async () => {
+      await boot(
+        `@Component({ selector: "child", template: "child" })
+export class Child {}
+@Component({ selector: "widget", template: "<child ng-ref=always></child><child ng-if=.shown ng-ref=later></child>" })
+export class Widget {
+  shown = false;
+  @ViewChild("always") instance?: Child;
+  @ViewChild("always", { read: ElementRef }) host?: ElementRef;
+  @ViewChild("later", { read: ElementRef }) laterHost?: ElementRef;
+}`,
+        "Widget, Child",
+        "<widget></widget>",
+      );
+      type Ref = { nativeElement: Element } | undefined;
+      const widget = ctrl<{ shown: boolean; instance: unknown; host: Ref; laterHost: Ref }>("widget", "widget");
+      const children = () => app!.document.querySelectorAll("widget child");
+
+      expect(widget.instance).toBe(ctrl("widget child", "child"));
+      expect(widget.host?.nativeElement).toBe(children()[0]);
+      expect(widget.laterHost).toBeUndefined();
+
+      widget.shown = true;
+      app!.digest();
+      expect(widget.laterHost?.nativeElement).toBe(children()[1]);
+    });
+
     it("en el elemento de un ng-repeat asigna en el scope de cada iteración (con ng-ref-read de un exportAs)", async () => {
       await boot(
         `@Directive({ selector: "[rowDir]", exportAs: "row" })
